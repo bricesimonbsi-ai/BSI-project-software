@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,16 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateSousEtape, useUpdateSousEtape } from "@/features/voyages/use-sous-etapes";
 import type { VoyageSousEtape } from "@/types/database";
-import { Plus, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 
 export function SousEtapeDialog({
   etapeId,
   nextOrder,
   existing,
+  trigger,
 }: {
   etapeId: string;
   nextOrder: number;
   existing?: VoyageSousEtape;
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [city, setCity] = useState(existing?.city ?? "");
@@ -23,6 +25,9 @@ export function SousEtapeDialog({
   const [endDate, setEndDate] = useState(existing?.end_date ?? "");
   const [lodging, setLodging] = useState(existing?.lodging ?? "");
   const [activities, setActivities] = useState(existing?.activities ?? "");
+  const [distanceKm, setDistanceKm] = useState(existing?.distance_km?.toString() ?? "");
+  const [latitude, setLatitude] = useState(existing?.latitude?.toString() ?? "");
+  const [longitude, setLongitude] = useState(existing?.longitude?.toString() ?? "");
   const [transportMode, setTransportMode] = useState(existing?.transport_next_mode ?? "");
   const [transportDuration, setTransportDuration] = useState(existing?.transport_next_duration_hours?.toString() ?? "");
   const [transportCost, setTransportCost] = useState(existing?.transport_next_cost?.toString() ?? "");
@@ -34,12 +39,20 @@ export function SousEtapeDialog({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    const durationDays =
+      startDate && endDate
+        ? Math.max(0, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+        : existing?.duration_days ?? null;
     const payload = {
       city,
       start_date: startDate || null,
       end_date: endDate || null,
+      duration_days: durationDays,
       lodging: lodging || null,
       activities: activities || null,
+      distance_km: distanceKm ? Number(distanceKm) : null,
+      latitude: latitude ? Number(latitude) : null,
+      longitude: longitude ? Number(longitude) : null,
       transport_next_mode: transportMode || null,
       transport_next_duration_hours: transportDuration ? Number(transportDuration) : null,
       transport_next_cost: transportCost ? Number(transportCost) : null,
@@ -55,6 +68,9 @@ export function SousEtapeDialog({
         setEndDate("");
         setLodging("");
         setActivities("");
+        setDistanceKm("");
+        setLatitude("");
+        setLongitude("");
         setTransportMode("");
         setTransportDuration("");
         setTransportCost("");
@@ -69,11 +85,7 @@ export function SousEtapeDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {existing ? (
-          <Button variant="ghost" size="icon">
-            <Pencil className="h-4 w-4" />
-          </Button>
-        ) : (
+        {trigger ?? (
           <Button size="sm" variant="outline">
             <Plus className="mr-2 h-4 w-4" /> Ville
           </Button>
@@ -96,6 +108,20 @@ export function SousEtapeDialog({
             <div className="space-y-2">
               <Label>Départ</Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Distance depuis l'étape précédente (km)</Label>
+              <Input type="number" step="0.1" value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Latitude</Label>
+              <Input type="number" step="0.000001" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Longitude</Label>
+              <Input type="number" step="0.000001" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
             </div>
           </div>
           <div className="space-y-2">

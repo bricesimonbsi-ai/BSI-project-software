@@ -70,6 +70,8 @@ export type ProjectCollaborator = {
   created_at: string;
 };
 
+export type TodoCategory = "visa" | "vaccin" | "permis" | "materiel" | "itineraire" | "autre";
+
 export type Todo = {
   id: string;
   project_id: string | null;
@@ -77,6 +79,10 @@ export type Todo = {
   done: boolean;
   due_date: string | null;
   assignee_id: string | null;
+  category: TodoCategory | null;
+  auto_generated: boolean;
+  source_etape_id: string | null;
+  dedup_key: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -94,6 +100,9 @@ export type Voyage = {
   updated_at: string;
 };
 
+/** Code couleur climatique par mois (index 0 = janvier). */
+export type ClimateRating = "good" | "mid" | "bad";
+
 export type VoyageEtape = {
   id: string;
   voyage_id: string;
@@ -107,6 +116,9 @@ export type VoyageEtape = {
   security_notes: string | null;
   notes: string | null;
   order_index: number;
+  latitude: number | null;
+  longitude: number | null;
+  climate_by_month: ClimateRating[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -125,6 +137,9 @@ export type VoyageSousEtape = {
   transport_next_cost: number | null;
   transport_next_currency: string | null;
   order_index: number;
+  latitude: number | null;
+  longitude: number | null;
+  distance_km: number | null;
   created_at: string;
   updated_at: string;
 };

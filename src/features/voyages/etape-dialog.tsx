@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,10 +6,24 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateEtape, useUpdateEtape } from "@/features/voyages/use-etapes";
-import type { VoyageEtape } from "@/types/database";
-import { Plus, Pencil } from "lucide-react";
+import { CLIMATE_COLOR_CLASS, MONTH_LABELS } from "@/features/voyages/itinerary/itinerary-model";
+import { cn } from "@/lib/utils";
+import type { ClimateRating, VoyageEtape } from "@/types/database";
+import { Plus } from "lucide-react";
 
-export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: string; nextOrder: number; existing?: VoyageEtape }) {
+const RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
+
+export function EtapeDialog({
+  voyageId,
+  nextOrder,
+  existing,
+  trigger,
+}: {
+  voyageId: string;
+  nextOrder: number;
+  existing?: VoyageEtape;
+  trigger?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [countryRegion, setCountryRegion] = useState(existing?.country_region ?? "");
   const [arrivalDate, setArrivalDate] = useState(existing?.arrival_date ?? "");
@@ -20,9 +34,21 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
   const [intlPermitNeeded, setIntlPermitNeeded] = useState(existing?.intl_permit_needed ?? false);
   const [securityNotes, setSecurityNotes] = useState(existing?.security_notes ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [latitude, setLatitude] = useState(existing?.latitude?.toString() ?? "");
+  const [longitude, setLongitude] = useState(existing?.longitude?.toString() ?? "");
+  const [climate, setClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [submitting, setSubmitting] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
+
+  function cycleMonth(index: number) {
+    setClimate((prev) => {
+      const next = [...prev];
+      const currentIndex = RATING_CYCLE.indexOf(next[index]);
+      next[index] = RATING_CYCLE[(currentIndex + 1) % RATING_CYCLE.length];
+      return next;
+    });
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -37,6 +63,9 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
       intl_permit_needed: intlPermitNeeded,
       security_notes: securityNotes || null,
       notes: notes || null,
+      latitude: latitude ? Number(latitude) : null,
+      longitude: longitude ? Number(longitude) : null,
+      climate_by_month: climate,
     };
     try {
       if (existing) {
@@ -52,6 +81,9 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
         setIntlPermitNeeded(false);
         setSecurityNotes("");
         setNotes("");
+        setLatitude("");
+        setLongitude("");
+        setClimate(Array(12).fill("good"));
       }
       setOpen(false);
     } finally {
@@ -62,11 +94,7 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {existing ? (
-          <Button variant="ghost" size="icon">
-            <Pencil className="h-4 w-4" />
-          </Button>
-        ) : (
+        {trigger ?? (
           <Button>
             <Plus className="mr-2 h-4 w-4" /> Nouvelle étape
           </Button>
@@ -91,6 +119,16 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
               <Input type="number" min="0" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Latitude</Label>
+              <Input type="number" step="0.000001" placeholder="ex. 48.8566" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Longitude</Label>
+              <Input type="number" step="0.000001" placeholder="ex. 2.3522" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Checkbox checked={visaNeeded} onCheckedChange={(c) => setVisaNeeded(!!c)} id="visa" />
             <Label htmlFor="visa">Visa nécessaire</Label>
@@ -106,6 +144,22 @@ export function EtapeDialog({ voyageId, nextOrder, existing }: { voyageId: strin
           <div className="space-y-2">
             <Label>Mode de déplacement sur place</Label>
             <Input value={transportMode} onChange={(e) => setTransportMode(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
+            <div className="flex overflow-hidden rounded-md">
+              {climate.map((rating, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => cycleMonth(i)}
+                  title={MONTH_LABELS[i]}
+                  className={cn("h-8 flex-1 text-[0.65rem] font-semibold", CLIMATE_COLOR_CLASS[rating])}
+                >
+                  {MONTH_LABELS[i]}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Infos sécurité</Label>

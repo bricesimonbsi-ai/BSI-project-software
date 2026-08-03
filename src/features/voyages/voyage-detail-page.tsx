@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
-import { useEtapes } from "@/features/voyages/use-etapes";
-import {
-  useVoyageExpenses,
-  useVoyageBudgetSummary,
-  useEtapeBudgetSummaries,
-  PRE_DEPARTURE_CATEGORIES,
-} from "@/features/voyages/use-expenses";
+import { useVoyageExpenses, useVoyageBudgetSummary, PRE_DEPARTURE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { useProject, useUpdateProject } from "@/features/projects/use-projects";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -14,8 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { EtapeCard } from "@/features/voyages/etape-card";
-import { EtapeDialog } from "@/features/voyages/etape-dialog";
+import { ItineraryView } from "@/features/voyages/itinerary/itinerary-view";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { DocumentsPanel } from "@/features/projects/documents-panel";
@@ -31,10 +24,8 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const updateProject = useUpdateProject();
   const setAccentColor = useThemeStore((s) => s.setAccentColor);
 
-  const { data: etapes } = useEtapes(voyage?.id);
   const { data: preDepartureExpenses } = useVoyageExpenses(voyage?.id);
   const { data: budgetSummary } = useVoyageBudgetSummary(voyage?.id);
-  const { data: etapeSummaries } = useEtapeBudgetSummaries(voyage?.id);
 
   const [form, setForm] = useState({ start_date: "", end_date: "", adults_count: "1", children_count: "0", reference_currency: "EUR" });
 
@@ -156,21 +147,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="itinerary" className="space-y-4">
-          <div className="flex justify-end">
-            <EtapeDialog voyageId={voyage.id} nextOrder={etapes?.length ?? 0} />
-          </div>
-          <div className="space-y-3">
-            {(etapes ?? []).map((etape) => (
-              <EtapeCard
-                key={etape.id}
-                etape={etape}
-                projectId={projectId}
-                referenceCurrency={voyage.reference_currency}
-                budgetSummary={etapeSummaries?.find((s) => s.etape_id === etape.id)}
-              />
-            ))}
-            {etapes?.length === 0 && <p className="text-sm text-muted-foreground">Aucune étape ajoutée pour l'instant.</p>}
-          </div>
+          <ItineraryView voyageId={voyage.id} referenceCurrency={voyage.reference_currency} />
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-4">

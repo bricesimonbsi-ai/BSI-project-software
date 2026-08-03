@@ -50,3 +50,37 @@ export function useDeleteEtape(voyageId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
   });
 }
+
+/** Insère un nouveau pays/région à une position précise (bouton "+" entre deux bandeaux pays). */
+export function useInsertEtapeAt(voyageId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ atIndex, country_region }: { atIndex: number; country_region: string }) => {
+      const { data: existing, error: fetchError } = await supabase
+        .from("voyage_etapes")
+        .select("id, order_index")
+        .eq("voyage_id", voyageId)
+        .gte("order_index", atIndex)
+        .order("order_index", { ascending: true });
+      if (fetchError) throw fetchError;
+
+      await Promise.all(
+        (existing ?? []).map((row) =>
+          supabase
+            .from("voyage_etapes")
+            .update({ order_index: row.order_index + 1 })
+            .eq("id", row.id)
+            .then(({ error }) => {
+              if (error) throw error;
+            })
+        )
+      );
+
+      const { error: insertError } = await supabase
+        .from("voyage_etapes")
+        .insert({ voyage_id: voyageId, country_region, order_index: atIndex });
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+  });
+}

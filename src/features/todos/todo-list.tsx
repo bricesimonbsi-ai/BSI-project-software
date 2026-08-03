@@ -3,8 +3,18 @@ import { useTodos, useCreateTodo, useToggleTodo, useDeleteTodo } from "@/feature
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn, formatDate } from "@/lib/utils";
 import { Trash2, Plus } from "lucide-react";
+
+const categoryLabels: Record<string, string> = {
+  visa: "Visa",
+  vaccin: "Vaccin",
+  permis: "Permis intl.",
+  materiel: "Matériel",
+  itineraire: "Itinéraire",
+  autre: "Autre",
+};
 
 export function TodoList({ projectId }: { projectId?: string }) {
   const { data: todos, isLoading } = useTodos(projectId);
@@ -44,7 +54,14 @@ export function TodoList({ projectId }: { projectId?: string }) {
           <li key={todo.id} className="flex items-center gap-3 p-3">
             <Checkbox checked={todo.done} onCheckedChange={(checked) => toggleTodo.mutate({ id: todo.id, done: !!checked })} />
             <div className="flex-1">
-              <p className={cn("text-sm", todo.done && "text-muted-foreground line-through")}>{todo.title}</p>
+              <p className={cn("flex items-center gap-2 text-sm", todo.done && "text-muted-foreground line-through")}>
+                {todo.title}
+                {todo.auto_generated && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Auto{todo.category ? ` · ${categoryLabels[todo.category] ?? todo.category}` : ""}
+                  </Badge>
+                )}
+              </p>
               {todo.due_date && <p className="text-xs text-muted-foreground">Échéance : {formatDate(todo.due_date)}</p>}
             </div>
             <Button variant="ghost" size="icon" onClick={() => deleteTodo.mutate(todo.id)}>
