@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
+import { COUNTRIES } from "@/features/voyages/itinerary/countries-data";
 
 type PickerProps = {
   value: string;
@@ -9,34 +9,26 @@ type PickerProps = {
   placeholder?: string;
 };
 
-/** Liste des pays (nom + coordonnées GPS du centroïde) via l'API gratuite restcountries.com, mise en cache. */
-function useCountriesReference() {
-  return useQuery({
-    queryKey: ["countries-reference"],
-    staleTime: Infinity,
-    queryFn: async (): Promise<{ name: string; lat: number; lng: number }[]> => {
-      const res = await fetch("https://restcountries.com/v3.1/all?fields=name,latlng");
-      if (!res.ok) throw new Error("restcountries.com indisponible");
-      const data = (await res.json()) as Array<{ name?: { common?: string }; latlng?: number[] }>;
-      return data
-        .filter((c): c is { name: { common: string }; latlng: number[] } => !!c.name?.common && Array.isArray(c.latlng) && c.latlng.length === 2)
-        .map((c) => ({ name: c.name.common, lat: c.latlng[0], lng: c.latlng[1] }))
-        .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-    },
-  });
+/** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse). */
+export function findCountryByName(name: string) {
+  const q = name.trim().toLowerCase();
+  return COUNTRIES.find((c) => c.name.toLowerCase() === q);
 }
 
-/** Champ pays avec suggestions filtrées localement + remplissage auto des coordonnées GPS. */
+/** Emoji drapeau du pays s'il est reconnu dans la référence statique, sinon null. */
+export function getCountryFlag(name: string): string | null {
+  return findCountryByName(name)?.flag ?? null;
+}
+
+/** Champ pays avec suggestions filtrées localement (données embarquées, aucun appel réseau) + drapeau + GPS auto. */
 export function CountryPicker({ value, onChange, onSelect, placeholder }: PickerProps) {
-  const { data: countries } = useCountriesReference();
   const [open, setOpen] = useState(false);
 
   const filtered = useMemo(() => {
-    if (!countries) return [];
     const q = value.trim().toLowerCase();
-    const list = q ? countries.filter((c) => c.name.toLowerCase().includes(q)) : countries;
+    const list = q ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)) : COUNTRIES;
     return list.slice(0, 8);
-  }, [countries, value]);
+  }, [value]);
 
   return (
     <div className="relative">
@@ -56,16 +48,17 @@ export function CountryPicker({ value, onChange, onSelect, placeholder }: Picker
         <div className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-card shadow-lg">
           {filtered.map((c) => (
             <button
-              key={c.name}
+              key={c.cca2}
               type="button"
-              className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-secondary"
+              className="flex w-full items-center gap-2 truncate px-3 py-1.5 text-left text-sm hover:bg-secondary"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 onSelect(c.name, c.lat, c.lng);
                 setOpen(false);
               }}
             >
-              {c.name}
+              <span>{c.flag}</span>
+              <span>{c.name}</span>
             </button>
           ))}
         </div>
@@ -76,30 +69,41 @@ export function CountryPicker({ value, onChange, onSelect, placeholder }: Picker
 
 type NominatimResult = { display_name: string; lat: string; lon: string };
 
-/** Champ ville avec recherche via l'API de géocodage Nominatim (OpenStreetMap), gratuite et sans clé. */
-export function CityPicker({ value, onChange, onSelect, placeholder }: PickerProps) {
+/** Champ ville avec recherche via l'API de géocodage Nominatim (OpenStreetMap), gratuite et sans clé.
+ * Si `countryCode` est fourni, la recherche est restreinte à ce pays. */
+export function CityPicker({
+  value,
+  onChange,
+  onSelect,
+  placeholder,
+  countryCode,
+}: PickerProps & { countryCode?: string | null }) {
   const [results, setResults] = useState<{ label: string; lat: number; lon: number }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     if (value.trim().length < 3) {
       setResults([]);
+      setErrored(false);
       return;
     }
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       setLoading(true);
+      setErrored(false);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${encodeURIComponent(value)}`,
-          { signal: controller.signal }
-        );
-        if (!res.ok) return;
+        const params = new URLSearchParams({ format: "json", limit: "8", q: value });
+        if (countryCode) params.set("countrycodes", countryCode.toLowerCase());
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Nominatim indisponible");
         const data = (await res.json()) as NominatimResult[];
         setResults(data.map((d) => ({ label: d.display_name, lat: Number(d.lat), lon: Number(d.lon) })));
-      } catch {
-        // requête annulée ou réseau indisponible : la saisie manuelle reste possible.
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setErrored(true);
       } finally {
         setLoading(false);
       }
@@ -108,7 +112,7 @@ export function CityPicker({ value, onChange, onSelect, placeholder }: PickerPro
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [value]);
+  }, [value, countryCode]);
 
   return (
     <div className="relative">
@@ -124,9 +128,14 @@ export function CityPicker({ value, onChange, onSelect, placeholder }: PickerPro
         placeholder={placeholder ?? "Nom de la ville..."}
         autoComplete="off"
       />
-      {open && (loading || results.length > 0) && (
+      {open && (loading || errored || results.length > 0) && (
         <div className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-card shadow-lg">
           {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Recherche...</div>}
+          {!loading && errored && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              Service de recherche indisponible — saisie manuelle possible.
+            </div>
+          )}
           {results.map((r, i) => (
             <button
               key={i}

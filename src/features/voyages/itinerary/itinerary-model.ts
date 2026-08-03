@@ -133,27 +133,34 @@ export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Math.round(EARTH_RADIUS_KM * c * 10) / 10;
 }
 
+/** Parse une date "YYYY-MM-DD" comme un jour calendaire UTC pur, sans effet de fuseau horaire local. */
+function parseCalendarDateUTC(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
 /** Mois (0=janvier..11=décembre) réellement couverts par la période planifiée d'une étape. */
 export function getPlannedMonthIndices(arrivalDate: string | null, durationDays: number | null): Set<number> {
   const indices = new Set<number>();
   if (!arrivalDate) return indices;
-  const start = new Date(arrivalDate + "T00:00:00");
+  const start = parseCalendarDateUTC(arrivalDate);
   const end = new Date(start);
-  end.setDate(end.getDate() + Math.max(0, durationDays ?? 0));
+  end.setUTCDate(end.getUTCDate() + Math.max(0, durationDays ?? 0));
 
-  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
   let guard = 0;
   while (cursor <= end && guard < 36) {
-    indices.add(cursor.getMonth());
-    cursor.setMonth(cursor.getMonth() + 1);
+    indices.add(cursor.getUTCMonth());
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     guard++;
   }
   return indices;
 }
 
+/** Additionne des jours calendaires à une date "YYYY-MM-DD", en arithmétique UTC pure (aucun effet de fuseau horaire). */
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + days);
+  const d = parseCalendarDateUTC(dateStr);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 

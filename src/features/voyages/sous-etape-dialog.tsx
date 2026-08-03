@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape } from "@/features/voyages/use-sous-etapes";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
-import { CityPicker } from "@/features/voyages/itinerary/location-pickers";
+import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import type { VoyageSousEtape } from "@/types/database";
 import { Plus } from "lucide-react";
 
@@ -17,13 +17,16 @@ export function SousEtapeDialog({
   existing,
   trigger,
   previousPoint,
+  countryName,
 }: {
   etapeId: string;
   nextOrder: number;
   existing?: VoyageSousEtape;
   trigger?: ReactNode;
   previousPoint?: { lat: number; lng: number } | null;
+  countryName?: string;
 }) {
+  const countryCode = countryName ? findCountryByName(countryName)?.cca2 : undefined;
   const [open, setOpen] = useState(false);
   const [city, setCity] = useState(existing?.city ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? "");
@@ -106,6 +109,7 @@ export function SousEtapeDialog({
             <CityPicker
               value={city}
               onChange={setCity}
+              countryCode={countryCode}
               onSelect={(name, lat, lon) => {
                 setCity(name);
                 setLatitude(String(lat));

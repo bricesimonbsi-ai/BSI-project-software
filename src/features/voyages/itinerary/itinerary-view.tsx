@@ -9,7 +9,8 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard } from "lucide-react";
+import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useEtapes, useInsertEtapeAt, useReorderEtapes } from "@/features/voyages/use-etapes";
 import {
   useVoyageSousEtapes,
@@ -28,6 +29,7 @@ import {
   type CountryGroup,
 } from "@/features/voyages/itinerary/itinerary-model";
 import { MapView } from "@/features/voyages/itinerary/map-view";
+import { getCountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { CarbonDashboard } from "@/features/voyages/itinerary/carbon-dashboard";
 import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
@@ -38,6 +40,16 @@ import { toast } from "@/hooks/use-toast";
 import type { VoyageSousEtape } from "@/types/database";
 
 type Tab = "climat" | "dates" | "carte" | "carbone";
+
+/** Palette cyclique de couleurs par pays, pour distinguer visuellement chaque bandeau (façon maquette). */
+const COUNTRY_COLOR_CLASSES = [
+  "bg-emerald-500/10 border-l-4 border-l-emerald-500",
+  "bg-amber-500/10 border-l-4 border-l-amber-500",
+  "bg-rose-500/10 border-l-4 border-l-rose-500",
+  "bg-sky-500/10 border-l-4 border-l-sky-500",
+  "bg-violet-500/10 border-l-4 border-l-violet-500",
+  "bg-orange-500/10 border-l-4 border-l-orange-500",
+];
 
 function transportIcon(mode: string | null) {
   if (!mode) return null;
@@ -62,6 +74,7 @@ export function ItineraryView({
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const insertEtapeAt = useInsertEtapeAt(voyageId);
   const reorderEtapes = useReorderEtapes(voyageId);
+  const updateAnySousEtape = useUpdateSousEtape(voyageId);
   const countrySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const sousEtapesByEtape = useMemo(() => {
@@ -97,18 +110,38 @@ export function ItineraryView({
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
     reorderEtapes.mutate(reordered);
+
+    // Reconstruit la séquence globale dans le nouvel ordre et relance la cascade de dates :
+    // la toute première date de l'itinéraire (l'ancre) ne bouge jamais, tout le reste se recalcule.
+    const groupById = new Map(groups.map((g) => [g.etape.id, g]));
+    const newFlat = reordered.flatMap((id) => groupById.get(id)?.rows ?? []);
+    const anchor = flat.find((r) => r.globalIndex === 1)?.sousEtape.start_date ?? undefined;
+    if (newFlat.length > 0) {
+      const updates = cascadeDatesFrom(newFlat, newFlat[0].sousEtape.id, anchor ? { start_date: anchor } : {});
+      for (const u of updates) {
+        updateAnySousEtape.mutate({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+      }
+    }
   }
 
   return (
     <div className="space-y-3">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="climat">Tableau climatique</TabsTrigger>
-          <TabsTrigger value="dates">Mode dates</TabsTrigger>
-          <TabsTrigger value="carte">Carte</TabsTrigger>
-          <TabsTrigger value="carbone">Bilan carbone</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="climat">Tableau climatique</TabsTrigger>
+            <TabsTrigger value="dates">Mode dates</TabsTrigger>
+            <TabsTrigger value="carte">Carte</TabsTrigger>
+            <TabsTrigger value="carbone">Bilan carbone</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Button
+          size="sm"
+          onClick={() => handleInsertCountry(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
+        >
+          <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
+        </Button>
+      </div>
 
       {tab === "carte" && <MapView groups={groups} />}
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
@@ -149,7 +182,7 @@ export function ItineraryView({
               <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 6 : 4} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
-                  {groups.map((group) => (
+                  {groups.map((group, colorIndex) => (
                     <CountryBlock
                       key={group.etape.id}
                       group={group}
@@ -157,6 +190,7 @@ export function ItineraryView({
                       referenceCurrency={referenceCurrency}
                       onInsertCountryAfter={() => handleInsertCountry(group.etape.order_index + 1)}
                       allFlat={flat}
+                      colorIndex={colorIndex}
                     />
                   ))}
                 </SortableContext>
@@ -192,15 +226,18 @@ function CountryBlock({
   referenceCurrency,
   onInsertCountryAfter,
   allFlat,
+  colorIndex,
 }: {
   group: CountryGroup;
   tab: Tab;
   referenceCurrency: string;
   onInsertCountryAfter: () => void;
   allFlat: FlatRow[];
+  colorIndex: number;
 }) {
   const insertCityAt = useInsertSousEtapeAt(group.etape.id);
   const reorderCities = useReorderSousEtapes(group.etape.id);
+  const updateSousEtapeForReorder = useUpdateSousEtape(group.etape.id);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const {
     attributes: countryAttributes,
@@ -235,6 +272,32 @@ function CountryBlock({
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
     reorderCities.mutate(reordered);
+
+    // Reconstruit la séquence globale avec ce pays réordonné et relance la cascade de dates :
+    // la toute première date de l'itinéraire (l'ancre) ne bouge jamais, tout le reste se recalcule.
+    const idsInGroup = new Set(ids);
+    const newFlat: FlatRow[] = [];
+    let inserted = false;
+    for (const r of allFlat) {
+      if (idsInGroup.has(r.sousEtape.id)) {
+        if (!inserted) {
+          for (const id of reordered) {
+            const match = group.rows.find((gr) => gr.sousEtape.id === id);
+            if (match) newFlat.push(match);
+          }
+          inserted = true;
+        }
+      } else {
+        newFlat.push(r);
+      }
+    }
+    const anchor = allFlat.find((r) => r.globalIndex === 1)?.sousEtape.start_date ?? undefined;
+    if (newFlat.length > 0) {
+      const updates = cascadeDatesFrom(newFlat, newFlat[0].sousEtape.id, anchor ? { start_date: anchor } : {});
+      for (const u of updates) {
+        updateSousEtapeForReorder.mutate({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+      }
+    }
   }
 
   const colSpan = tab === "dates" ? 6 : 4;
@@ -244,7 +307,11 @@ function CountryBlock({
       <tr
         ref={setCountryNodeRef}
         style={countryStyle}
-        className={cn("group/country border-b border-border bg-accent/10 font-semibold", isCountryDragging && "opacity-50")}
+        className={cn(
+          "group/country border-b border-border font-semibold",
+          COUNTRY_COLOR_CLASSES[colorIndex % COUNTRY_COLOR_CLASSES.length],
+          isCountryDragging && "opacity-50"
+        )}
       >
         <td className="relative w-14 whitespace-nowrap px-3 py-3 text-center">
           <button
@@ -260,7 +327,10 @@ function CountryBlock({
           </Badge>
         </td>
         <td className="px-3 py-3">
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1.5">
+            {getCountryFlag(group.etape.country_region) && (
+              <span className="text-base">{getCountryFlag(group.etape.country_region)}</span>
+            )}
             {group.etape.country_region}
             {group.etape.visa_needed && (
               <Badge variant="outline" className="gap-1 text-xs">
@@ -405,6 +475,7 @@ function CityRow({
             nextOrder={0}
             existing={se}
             previousPoint={previousPoint}
+            countryName={row.etape.country_region}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>
