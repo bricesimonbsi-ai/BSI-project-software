@@ -10,7 +10,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil } from "lucide-react";
-import { useEtapes, useInsertEtapeAt } from "@/features/voyages/use-etapes";
+import { useEtapes, useInsertEtapeAt, useReorderEtapes } from "@/features/voyages/use-etapes";
 import {
   useVoyageSousEtapes,
   useInsertSousEtapeAt,
@@ -21,6 +21,7 @@ import {
   buildFlatRows,
   groupByCountry,
   cascadeDatesFrom,
+  getPlannedMonthIndices,
   CLIMATE_COLOR_CLASS,
   MONTH_LABELS,
   type FlatRow,
@@ -49,6 +50,8 @@ export function ItineraryView({
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const insertEtapeAt = useInsertEtapeAt(voyageId);
+  const reorderEtapes = useReorderEtapes(voyageId);
+  const countrySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const sousEtapesByEtape = useMemo(() => {
     const map = new Map<string, VoyageSousEtape[]>();
@@ -70,6 +73,19 @@ export function ItineraryView({
     } catch (err) {
       toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
     }
+  }
+
+  function handleCountryDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = groups.map((g) => g.etape.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = [...ids];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+    reorderEtapes.mutate(reordered);
   }
 
   return (
@@ -120,17 +136,21 @@ export function ItineraryView({
             </thead>
             <tbody>
               <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 6 : 4} />
-              {groups.map((group, gi) => (
-                <CountryBlock
-                  key={group.etape.id}
-                  group={group}
-                  tab={tab}
-                  referenceCurrency={referenceCurrency}
-                  onInsertCountryAfter={() => handleInsertCountry(group.etape.order_index + 1)}
-                  isLast={gi === groups.length - 1}
-                  allFlat={flat}
-                />
-              ))}
+              <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
+                <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
+                  {groups.map((group, gi) => (
+                    <CountryBlock
+                      key={group.etape.id}
+                      group={group}
+                      tab={tab}
+                      referenceCurrency={referenceCurrency}
+                      onInsertCountryAfter={() => handleInsertCountry(group.etape.order_index + 1)}
+                      isLast={gi === groups.length - 1}
+                      allFlat={flat}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </tbody>
           </table>
         </div>
@@ -174,6 +194,18 @@ function CountryBlock({
   const insertCityAt = useInsertSousEtapeAt(group.etape.id);
   const reorderCities = useReorderSousEtapes(group.etape.id);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const {
+    attributes: countryAttributes,
+    listeners: countryListeners,
+    setNodeRef: setCountryNodeRef,
+    transform: countryTransform,
+    transition: countryTransition,
+    isDragging: isCountryDragging,
+  } = useSortable({ id: group.etape.id });
+  const countryStyle = {
+    transform: CSS.Transform.toString(countryTransform),
+    transition: countryTransition,
+  };
 
   async function handleInsertCity(atIndex: number) {
     try {
@@ -201,8 +233,20 @@ function CountryBlock({
 
   return (
     <>
-      <tr className="border-b border-border bg-accent/10 font-semibold">
+      <tr
+        ref={setCountryNodeRef}
+        style={countryStyle}
+        className={cn("group/country border-b border-border bg-accent/10 font-semibold", isCountryDragging && "opacity-50")}
+      >
         <td className="relative w-10 px-2 py-1.5 text-center">
+          <button
+            {...countryAttributes}
+            {...countryListeners}
+            className="absolute -left-4 top-1/2 -translate-y-1/2 cursor-grab text-muted-foreground opacity-0 group-hover/country:opacity-60"
+            title="Glisser pour réordonner le pays"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
           <Badge variant="secondary" className="text-[0.65rem]">
             {group.stepRangeLabel}
           </Badge>
@@ -418,10 +462,18 @@ function CityRow({
 
 function ClimateBand({ row }: { etape: VoyageSousEtape; row: FlatRow }) {
   const ratings = row.etape.climate_by_month ?? Array(12).fill("good");
+  const planned = getPlannedMonthIndices(row.etape.arrival_date, row.etape.duration_days);
   return (
     <div className="flex h-6 overflow-hidden rounded-sm">
       {ratings.map((r, i) => (
-        <div key={i} className={cn("flex-1", CLIMATE_COLOR_CLASS[r] ?? "bg-muted")} />
+        <div
+          key={i}
+          className={cn(
+            "flex-1",
+            CLIMATE_COLOR_CLASS[r] ?? "bg-muted",
+            planned.has(i) && "ring-2 ring-inset ring-black dark:ring-white"
+          )}
+        />
       ))}
     </div>
   );

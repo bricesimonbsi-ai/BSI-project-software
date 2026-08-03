@@ -109,6 +109,24 @@ export const CLIMATE_COLOR_CLASS: Record<string, string> = {
 
 export const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
+/** Mois (0=janvier..11=décembre) réellement couverts par la période planifiée d'une étape. */
+export function getPlannedMonthIndices(arrivalDate: string | null, durationDays: number | null): Set<number> {
+  const indices = new Set<number>();
+  if (!arrivalDate) return indices;
+  const start = new Date(arrivalDate + "T00:00:00");
+  const end = new Date(start);
+  end.setDate(end.getDate() + Math.max(0, durationDays ?? 0));
+
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  let guard = 0;
+  while (cursor <= end && guard < 36) {
+    indices.add(cursor.getMonth());
+    cursor.setMonth(cursor.getMonth() + 1);
+    guard++;
+  }
+  return indices;
+}
+
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() + days);

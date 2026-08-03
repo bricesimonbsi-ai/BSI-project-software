@@ -84,3 +84,20 @@ export function useInsertEtapeAt(voyageId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
   });
 }
+
+/** Réordonne les pays d'un voyage (glisser-déposer) : réattribue order_index 0..N-1 dans l'ordre fourni. */
+export function useReorderEtapes(voyageId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      await Promise.all(
+        orderedIds.map((id, index) =>
+          supabase.from("voyage_etapes").update({ order_index: index }).eq("id", id).then(({ error }) => {
+            if (error) throw error;
+          })
+        )
+      );
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+  });
+}
