@@ -153,7 +153,6 @@ export function ItineraryView({
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="w-14 px-3 py-3 text-center">Étape</th>
                 <th className="px-3 py-3">Destination</th>
-                <th className="px-3 py-3">Distance / transport</th>
                 {tab === "dates" && (
                   <>
                     <th className="px-3 py-3">Du</th>
@@ -165,7 +164,7 @@ export function ItineraryView({
               </tr>
               {tab === "climat" && (
                 <tr className="border-b border-border">
-                  <td colSpan={3}></td>
+                  <td colSpan={2}></td>
                   <td className="px-3 py-2">
                     <div className="flex">
                       {MONTH_LABELS.map((m, i) => (
@@ -179,7 +178,7 @@ export function ItineraryView({
               )}
             </thead>
             <tbody>
-              <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 6 : 4} />
+              <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 5 : 3} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
                   {groups.map((group, colorIndex) => (
@@ -300,7 +299,7 @@ function CountryBlock({
     }
   }
 
-  const colSpan = tab === "dates" ? 6 : 4;
+  const colSpan = tab === "dates" ? 5 : 3;
 
   return (
     <>
@@ -327,23 +326,28 @@ function CountryBlock({
           </Badge>
         </td>
         <td className="px-3 py-3">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex flex-wrap items-center gap-1.5">
             {getCountryFlag(group.etape.country_region) && (
-              <span className="text-base">{getCountryFlag(group.etape.country_region)}</span>
+              <span className="text-lg leading-none">{getCountryFlag(group.etape.country_region)}</span>
             )}
             {group.etape.country_region}
+            {group.totalKm > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">
+                · {Math.round(group.totalKm).toLocaleString("fr-FR")} km
+              </span>
+            )}
             {group.etape.visa_needed && (
-              <Badge variant="outline" className="gap-1 text-xs">
+              <Badge className="gap-1 border-blue-500/30 bg-blue-500/15 text-xs text-blue-700 dark:text-blue-300">
                 <Stamp className="h-3 w-3" /> Visa
               </Badge>
             )}
             {group.etape.vaccines && (
-              <Badge variant="outline" className="gap-1 text-xs">
+              <Badge className="gap-1 border-emerald-500/30 bg-emerald-500/15 text-xs text-emerald-700 dark:text-emerald-300">
                 <Syringe className="h-3 w-3" /> {group.etape.vaccines}
               </Badge>
             )}
             {group.etape.intl_permit_needed && (
-              <Badge variant="outline" className="gap-1 text-xs">
+              <Badge className="gap-1 border-violet-500/30 bg-violet-500/15 text-xs text-violet-700 dark:text-violet-300">
                 <IdCard className="h-3 w-3" /> Permis intl.
               </Badge>
             )}
@@ -355,7 +359,6 @@ function CountryBlock({
             />
           </span>
         </td>
-        <td className="px-3 py-3 text-sm font-bold">{group.totalKm > 0 ? `${Math.round(group.totalKm).toLocaleString("fr-FR")} km` : ""}</td>
         {tab === "dates" && (
           <>
             <td className="px-3 py-3"></td>
@@ -427,7 +430,7 @@ function CityRow({
     previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
       ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
       : null;
-  const TransportIcon = transportIcon(row.incomingMode);
+  const colSpan = tab === "dates" ? 5 : 3;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -453,7 +456,11 @@ function CityRow({
   }
 
   return (
-    <tr ref={setNodeRef} style={style} className={cn("group border-b border-border last:border-0", isDragging && "opacity-50")}>
+    <>
+      {row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode) && (
+        <TransitRow row={row} referenceCurrency={referenceCurrency} colSpan={colSpan} />
+      )}
+      <tr ref={setNodeRef} style={style} className={cn("group border-b border-border last:border-0", isDragging && "opacity-50")}>
       <td className="relative w-14 px-3 py-2.5 text-center">
         <button
           onClick={onInsertAfter}
@@ -480,16 +487,6 @@ function CityRow({
           />
         </span>
       </td>
-      <td className="px-3 py-2.5 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          {TransportIcon && <TransportIcon className="h-3.5 w-3.5 flex-shrink-0" />}
-          <span>
-            {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : "—"}
-            {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
-          </span>
-        </span>
-      </td>
-
       {tab === "dates" && (
         <>
           <td className="px-3 py-2">
@@ -534,6 +531,30 @@ function CityRow({
           <ClimateBand etape={se} row={row} />
         </td>
       )}
+      </tr>
+    </>
+  );
+}
+
+function TransitRow({
+  row,
+  referenceCurrency,
+  colSpan,
+}: {
+  row: FlatRow;
+  referenceCurrency: string;
+  colSpan: number;
+}) {
+  const TransportIcon = transportIcon(row.incomingMode);
+  return (
+    <tr className="border-b border-dashed border-border/60 bg-muted/50">
+      <td colSpan={colSpan} className="px-3 py-1 text-center text-xs text-muted-foreground">
+        <span className="inline-flex items-center justify-center gap-1.5">
+          {TransportIcon && <TransportIcon className="h-3.5 w-3.5 flex-shrink-0 text-sky-600 dark:text-sky-400" />}
+          {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : ""}
+          {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
+        </span>
+      </td>
     </tr>
   );
 }
