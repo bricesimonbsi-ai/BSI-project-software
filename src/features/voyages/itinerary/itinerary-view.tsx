@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil } from "lucide-react";
+import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard } from "lucide-react";
 import { useEtapes, useInsertEtapeAt, useReorderEtapes } from "@/features/voyages/use-etapes";
 import {
   useVoyageSousEtapes,
@@ -33,11 +33,22 @@ import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import type { VoyageSousEtape } from "@/types/database";
 
 type Tab = "climat" | "dates" | "carte" | "carbone";
+
+function transportIcon(mode: string | null) {
+  if (!mode) return null;
+  const m = mode.toLowerCase();
+  if (m.includes("avion")) return Plane;
+  if (m.includes("train")) return TrainFront;
+  if (m.includes("bus")) return Bus;
+  if (m.includes("voiture")) return Car;
+  if (m.includes("ferry") || m.includes("bateau")) return Ship;
+  return MoveRight;
+}
 
 export function ItineraryView({
   voyageId,
@@ -107,25 +118,25 @@ export function ItineraryView({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="w-10 px-2 py-2 text-center">Étape</th>
-                <th className="px-2 py-2">Destination</th>
-                <th className="px-2 py-2">Distance / transport</th>
+                <th className="w-14 px-3 py-3 text-center">Étape</th>
+                <th className="px-3 py-3">Destination</th>
+                <th className="px-3 py-3">Distance / transport</th>
                 {tab === "dates" && (
                   <>
-                    <th className="px-2 py-2">Du</th>
-                    <th className="px-2 py-2">Au</th>
-                    <th className="px-2 py-2">Nuits</th>
+                    <th className="px-3 py-3">Du</th>
+                    <th className="px-3 py-3">Au</th>
+                    <th className="px-3 py-3">Nuits</th>
                   </>
                 )}
-                {tab === "climat" && <th className="px-2 py-2">Climat</th>}
+                {tab === "climat" && <th className="px-3 py-3">Climat</th>}
               </tr>
               {tab === "climat" && (
                 <tr className="border-b border-border">
                   <td colSpan={3}></td>
-                  <td className="px-2 py-1">
+                  <td className="px-3 py-2">
                     <div className="flex">
                       {MONTH_LABELS.map((m, i) => (
-                        <span key={i} className="flex-1 text-center text-[0.62rem] font-semibold text-muted-foreground">
+                        <span key={i} className="flex-1 text-center text-[0.7rem] font-semibold text-muted-foreground">
                           {m}
                         </span>
                       ))}
@@ -138,14 +149,13 @@ export function ItineraryView({
               <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 6 : 4} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
-                  {groups.map((group, gi) => (
+                  {groups.map((group) => (
                     <CountryBlock
                       key={group.etape.id}
                       group={group}
                       tab={tab}
                       referenceCurrency={referenceCurrency}
                       onInsertCountryAfter={() => handleInsertCountry(group.etape.order_index + 1)}
-                      isLast={gi === groups.length - 1}
                       allFlat={flat}
                     />
                   ))}
@@ -166,7 +176,7 @@ function AddButton({ onClick, colSpan }: { onClick: () => void; colSpan: number 
         <button
           onClick={onClick}
           title="Ajouter un pays ici"
-          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.6rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
+          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.65rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
         >
           +
         </button>
@@ -181,14 +191,12 @@ function CountryBlock({
   tab,
   referenceCurrency,
   onInsertCountryAfter,
-  isLast,
   allFlat,
 }: {
   group: CountryGroup;
   tab: Tab;
   referenceCurrency: string;
   onInsertCountryAfter: () => void;
-  isLast: boolean;
   allFlat: FlatRow[];
 }) {
   const insertCityAt = useInsertSousEtapeAt(group.etape.id);
@@ -238,7 +246,7 @@ function CountryBlock({
         style={countryStyle}
         className={cn("group/country border-b border-border bg-accent/10 font-semibold", isCountryDragging && "opacity-50")}
       >
-        <td className="relative w-10 px-2 py-1.5 text-center">
+        <td className="relative w-14 whitespace-nowrap px-3 py-3 text-center">
           <button
             {...countryAttributes}
             {...countryListeners}
@@ -247,26 +255,26 @@ function CountryBlock({
           >
             <GripVertical className="h-3.5 w-3.5" />
           </button>
-          <Badge variant="secondary" className="text-[0.65rem]">
+          <Badge variant="secondary" className="whitespace-nowrap text-xs">
             {group.stepRangeLabel}
           </Badge>
         </td>
-        <td className="px-2 py-1.5">
+        <td className="px-3 py-3">
           <span className="inline-flex items-center gap-1">
             {group.etape.country_region}
             {group.etape.visa_needed && (
-              <Badge variant="outline" className="text-[0.6rem]">
-                Visa
+              <Badge variant="outline" className="gap-1 text-xs">
+                <Stamp className="h-3 w-3" /> Visa
               </Badge>
             )}
             {group.etape.vaccines && (
-              <Badge variant="outline" className="text-[0.6rem]">
-                {group.etape.vaccines}
+              <Badge variant="outline" className="gap-1 text-xs">
+                <Syringe className="h-3 w-3" /> {group.etape.vaccines}
               </Badge>
             )}
             {group.etape.intl_permit_needed && (
-              <Badge variant="outline" className="text-[0.6rem]">
-                Permis intl.
+              <Badge variant="outline" className="gap-1 text-xs">
+                <IdCard className="h-3 w-3" /> Permis intl.
               </Badge>
             )}
             <EtapeDialog
@@ -277,20 +285,20 @@ function CountryBlock({
             />
           </span>
         </td>
-        <td className="px-2 py-1.5 text-xs font-bold">{group.totalKm > 0 ? `${Math.round(group.totalKm).toLocaleString("fr-FR")} km` : ""}</td>
+        <td className="px-3 py-3 text-sm font-bold">{group.totalKm > 0 ? `${Math.round(group.totalKm).toLocaleString("fr-FR")} km` : ""}</td>
         {tab === "dates" && (
           <>
-            <td className="px-2 py-1.5"></td>
-            <td className="px-2 py-1.5"></td>
-            <td className="px-2 py-1.5 text-xs font-bold">{group.totalNights > 0 ? `${group.totalNights} nuits` : ""}</td>
+            <td className="px-3 py-3"></td>
+            <td className="px-3 py-3"></td>
+            <td className="px-3 py-3 text-sm font-bold">{group.totalNights > 0 ? `${group.totalNights} nuits` : ""}</td>
           </>
         )}
-        {tab === "climat" && <td className="px-2 py-1.5"></td>}
+        {tab === "climat" && <td className="px-3 py-3"></td>}
       </tr>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
-          {group.rows.map((row, ri) => (
+          {group.rows.map((row) => (
             <CityRow
               key={row.sousEtape.id}
               row={row}
@@ -299,15 +307,12 @@ function CountryBlock({
               etapeId={group.etape.id}
               allFlat={allFlat}
               onInsertAfter={() => handleInsertCity(row.sousEtape.order_index + 1)}
-              hideAddButton={isLast && ri === group.rows.length - 1}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      {!isLast && (
-        <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
-      )}
+      <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
     </>
   );
 }
@@ -319,7 +324,7 @@ function AddButtonRow({ colSpan, onClick, title }: { colSpan: number; onClick: (
         <button
           onClick={onClick}
           title={title}
-          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.6rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
+          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.65rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
         >
           +
         </button>
@@ -336,7 +341,6 @@ function CityRow({
   etapeId,
   allFlat,
   onInsertAfter,
-  hideAddButton,
 }: {
   row: FlatRow;
   tab: Tab;
@@ -344,11 +348,16 @@ function CityRow({
   etapeId: string;
   allFlat: FlatRow[];
   onInsertAfter: () => void;
-  hideAddButton: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
   const updateSousEtape = useUpdateSousEtape(etapeId);
   const se = row.sousEtape;
+  const previousRow = allFlat.find((r) => r.globalIndex === row.globalIndex - 1);
+  const previousPoint =
+    previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
+      ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
+      : null;
+  const TransportIcon = transportIcon(row.incomingMode);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -363,75 +372,73 @@ function CityRow({
     }
   }
 
-  async function handleDateChange(field: "start_date" | "end_date", value: string) {
-    if (field === "start_date") {
-      const updates = cascadeDatesFrom(allFlat, se.id, { start_date: value });
-      for (const u of updates) {
-        await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
-      }
-    } else {
-      // Recalcule la durée à partir de la nouvelle date de fin, puis propage.
-      const start = se.start_date ?? value;
-      const days = Math.max(0, Math.round((new Date(value).getTime() - new Date(start).getTime()) / 86400000));
-      const updates = cascadeDatesFrom(allFlat, se.id, { duration_days: days });
-      for (const u of updates) {
-        await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
-      }
+  /** Seule la toute première ville de l'itinéraire a une date de début librement éditable :
+   * toutes les suivantes sont calculées (= date de fin de la précédente), ce qui rend tout
+   * chevauchement de dates entre villes impossible par construction. */
+  async function handleFirstStartDateChange(value: string) {
+    const updates = cascadeDatesFrom(allFlat, se.id, { start_date: value });
+    for (const u of updates) {
+      await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
     }
   }
 
   return (
     <tr ref={setNodeRef} style={style} className={cn("group border-b border-border last:border-0", isDragging && "opacity-50")}>
-      <td className="relative w-10 px-2 py-1 text-center">
-        {!hideAddButton && (
-          <button
-            onClick={onInsertAfter}
-            title="Ajouter une ville ici"
-            className="absolute -left-4 bottom-0 z-10 flex h-4 w-4 translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.6rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
-          >
-            +
-          </button>
-        )}
-        <button {...attributes} {...listeners} className="cursor-grab text-muted-foreground opacity-0 group-hover:opacity-60" title="Glisser pour réordonner">
+      <td className="relative w-14 px-3 py-2.5 text-center">
+        <button
+          onClick={onInsertAfter}
+          title="Ajouter une ville ici"
+          className="absolute -left-4 bottom-0 z-10 flex h-4 w-4 translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.65rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
+        >
+          +
+        </button>
+        <span className="text-xs font-medium text-muted-foreground">{row.globalIndex}</span>
+        <button {...attributes} {...listeners} className="ml-1 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-60" title="Glisser pour réordonner">
           <GripVertical className="mx-auto h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="py-1 pl-6 pr-2">
+      <td className="py-2.5 pl-6 pr-3">
         <span className="inline-flex items-center gap-1.5">
           {se.city}
           <SousEtapeDialog
             etapeId={etapeId}
             nextOrder={0}
             existing={se}
+            previousPoint={previousPoint}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>
       </td>
-      <td className="px-2 py-1 text-xs text-muted-foreground">
-        {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : "—"}
-        {row.incomingMode ? ` ${row.incomingMode}` : ""}
-        {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
+      <td className="px-3 py-2.5 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          {TransportIcon && <TransportIcon className="h-3.5 w-3.5 flex-shrink-0" />}
+          <span>
+            {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : "—"}
+            {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
+          </span>
+        </span>
       </td>
 
       {tab === "dates" && (
         <>
-          <td className="px-2 py-1">
-            <input
-              type="date"
-              defaultValue={se.start_date ?? ""}
-              onBlur={(e) => e.target.value && handleDateChange("start_date", e.target.value)}
-              className="rounded border border-border bg-background px-1.5 py-0.5 text-xs"
-            />
+          <td className="px-3 py-2">
+            {row.globalIndex === 1 ? (
+              <input
+                type="date"
+                defaultValue={se.start_date ?? ""}
+                onBlur={(e) => e.target.value && handleFirstStartDateChange(e.target.value)}
+                className="rounded border border-border bg-background px-1.5 py-0.5 text-xs"
+              />
+            ) : (
+              <span className="text-xs text-muted-foreground" title="Calculée automatiquement (= fin de la ville précédente)">
+                {formatDate(se.start_date)}
+              </span>
+            )}
           </td>
-          <td className="px-2 py-1">
-            <input
-              type="date"
-              defaultValue={se.end_date ?? ""}
-              onBlur={(e) => e.target.value && handleDateChange("end_date", e.target.value)}
-              className="rounded border border-border bg-background px-1.5 py-0.5 text-xs"
-            />
+          <td className="px-3 py-2">
+            <span className="text-xs text-muted-foreground">{formatDate(se.end_date)}</span>
           </td>
-          <td className="px-2 py-1">
+          <td className="px-3 py-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5">
               <button
                 onClick={() => handleNightsChange(-1)}
@@ -452,7 +459,7 @@ function CityRow({
       )}
 
       {tab === "climat" && (
-        <td className="min-w-[260px] px-2 py-1">
+        <td className="min-w-[300px] px-3 py-2">
           <ClimateBand etape={se} row={row} />
         </td>
       )}
@@ -464,7 +471,7 @@ function ClimateBand({ row }: { etape: VoyageSousEtape; row: FlatRow }) {
   const ratings = row.etape.climate_by_month ?? Array(12).fill("good");
   const planned = getPlannedMonthIndices(row.etape.arrival_date, row.etape.duration_days);
   return (
-    <div className="flex h-6 overflow-hidden rounded-sm">
+    <div className="flex h-7 overflow-hidden rounded-sm">
       {ratings.map((r, i) => (
         <div
           key={i}

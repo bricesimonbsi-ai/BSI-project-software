@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateEtape, useUpdateEtape } from "@/features/voyages/use-etapes";
-import { CLIMATE_COLOR_CLASS, MONTH_LABELS } from "@/features/voyages/itinerary/itinerary-model";
+import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
+import { CountryPicker } from "@/features/voyages/itinerary/location-pickers";
 import { cn } from "@/lib/utils";
 import type { ClimateRating, VoyageEtape } from "@/types/database";
 import { Plus } from "lucide-react";
@@ -107,7 +109,15 @@ export function EtapeDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Pays / région</Label>
-            <Input required value={countryRegion} onChange={(e) => setCountryRegion(e.target.value)} />
+            <CountryPicker
+              value={countryRegion}
+              onChange={setCountryRegion}
+              onSelect={(name, lat, lng) => {
+                setCountryRegion(name);
+                setLatitude(String(lat));
+                setLongitude(String(lng));
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -143,7 +153,18 @@ export function EtapeDialog({
           </div>
           <div className="space-y-2">
             <Label>Mode de déplacement sur place</Label>
-            <Input value={transportMode} onChange={(e) => setTransportMode(e.target.value)} />
+            <Select value={transportMode} onValueChange={setTransportMode}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir un mode" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRANSPORT_MODE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>

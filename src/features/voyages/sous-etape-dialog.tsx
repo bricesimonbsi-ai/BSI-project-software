@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape } from "@/features/voyages/use-sous-etapes";
+import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
+import { CityPicker } from "@/features/voyages/itinerary/location-pickers";
 import type { VoyageSousEtape } from "@/types/database";
 import { Plus } from "lucide-react";
 
@@ -13,11 +16,13 @@ export function SousEtapeDialog({
   nextOrder,
   existing,
   trigger,
+  previousPoint,
 }: {
   etapeId: string;
   nextOrder: number;
   existing?: VoyageSousEtape;
   trigger?: ReactNode;
+  previousPoint?: { lat: number; lng: number } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [city, setCity] = useState(existing?.city ?? "");
@@ -98,7 +103,18 @@ export function SousEtapeDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Ville</Label>
-            <Input required value={city} onChange={(e) => setCity(e.target.value)} />
+            <CityPicker
+              value={city}
+              onChange={setCity}
+              onSelect={(name, lat, lon) => {
+                setCity(name);
+                setLatitude(String(lat));
+                setLongitude(String(lon));
+                if (previousPoint) {
+                  setDistanceKm(String(haversineDistanceKm(previousPoint.lat, previousPoint.lng, lat, lon)));
+                }
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -135,7 +151,18 @@ export function SousEtapeDialog({
           <div className="space-y-2">
             <Label>Transport vers l'étape suivante</Label>
             <div className="grid grid-cols-3 gap-2">
-              <Input placeholder="Mode" value={transportMode} onChange={(e) => setTransportMode(e.target.value)} />
+              <Select value={transportMode} onValueChange={setTransportMode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRANSPORT_MODE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 placeholder="Durée (h)"
                 type="number"

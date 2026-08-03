@@ -67,7 +67,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   ) ?? 0;
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-6xl space-y-6">
       <div>
         <p className="text-sm text-muted-foreground">Voyages</p>
         <h1 className="text-2xl font-bold">{project.title}</h1>

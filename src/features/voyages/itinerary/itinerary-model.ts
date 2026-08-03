@@ -109,6 +109,30 @@ export const CLIMATE_COLOR_CLASS: Record<string, string> = {
 
 export const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
+/** Options de mode de transport, partagées entre les dialogues de saisie et l'affichage du tableau. */
+export const TRANSPORT_MODE_OPTIONS: { value: string; label: string }[] = [
+  { value: "avion", label: "Avion" },
+  { value: "train", label: "Train" },
+  { value: "bus", label: "Bus" },
+  { value: "voiture", label: "Voiture" },
+  { value: "ferry", label: "Ferry / bateau" },
+  { value: "autre", label: "Autre" },
+];
+
+/** Rayon moyen de la Terre (km) pour la formule de Haversine. */
+const EARTH_RADIUS_KM = 6371;
+
+/** Distance à vol d'oiseau (km) entre deux points GPS, formule de Haversine (sans API externe). */
+export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(EARTH_RADIUS_KM * c * 10) / 10;
+}
+
 /** Mois (0=janvier..11=décembre) réellement couverts par la période planifiée d'une étape. */
 export function getPlannedMonthIndices(arrivalDate: string | null, durationDays: number | null): Set<number> {
   const indices = new Set<number>();
