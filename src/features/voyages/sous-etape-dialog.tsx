@@ -4,12 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDeleteSousEtape } from "@/features/voyages/use-sous-etapes";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
-import type { VoyageSousEtape } from "@/types/database";
-import { Plus, Trash2 } from "lucide-react";
+import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
+import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
+import { toast } from "@/hooks/use-toast";
+import type { ClimateRating, VoyageSousEtape } from "@/types/database";
+import { Plus, Trash2, Sparkles } from "lucide-react";
 
 export function SousEtapeDialog({
   etapeId,
@@ -20,6 +24,7 @@ export function SousEtapeDialog({
   previousRowId,
   countryName,
   insertAtIndex,
+  isFirstOverall,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
@@ -31,6 +36,11 @@ export function SousEtapeDialog({
   previousRowId?: string;
   countryName?: string;
   insertAtIndex?: number;
+  /** Vrai uniquement pour la toute première ville de l'ensemble de l'itinéraire (l'ancre) :
+   * c'est la seule dont la date de début est librement modifiable ici. Pour toutes les autres,
+   * la date se déduit automatiquement de la ville précédente (voir l'auto-guérison dans
+   * ItineraryView) — seul le nombre de nuits reste éditable. */
+  isFirstOverall?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -41,6 +51,7 @@ export function SousEtapeDialog({
   const [city, setCity] = useState(existing?.city ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? "");
   const [endDate, setEndDate] = useState(existing?.end_date ?? "");
+  const [nights, setNights] = useState(existing?.duration_days?.toString() ?? "");
   const [lodging, setLodging] = useState(existing?.lodging ?? "");
   const [activities, setActivities] = useState(existing?.activities ?? "");
   const [distanceKm, setDistanceKm] = useState(existing?.distance_km?.toString() ?? "");
@@ -50,6 +61,9 @@ export function SousEtapeDialog({
   const [transportDuration, setTransportDuration] = useState(existing?.transport_next_duration_hours?.toString() ?? "");
   const [transportCost, setTransportCost] = useState(existing?.transport_next_cost?.toString() ?? "");
   const [transportCurrency, setTransportCurrency] = useState(existing?.transport_next_currency ?? "");
+  const [useCityClimate, setUseCityClimate] = useState(existing?.climate_by_month != null);
+  const [cityClimate, setCityClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
+  const [suggestingClimate, setSuggestingClimate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const createSousEtape = useCreateSousEtape(etapeId);
@@ -58,23 +72,51 @@ export function SousEtapeDialog({
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
 
+  async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
+    const lat = latOverride ?? Number(latitude);
+    const lon = lonOverride ?? Number(longitude);
+    if (!lat || !lon) return;
+    setSuggestingClimate(true);
+    try {
+      const suggested = await estimateClimateByMonth(lat, lon);
+      setCityClimate(suggested);
+      setUseCityClimate(true);
+      toast({
+        title: "Climat suggéré",
+        description: "Basé sur l'historique météo réel (Open-Meteo) pour cette ville précisément, à ajuster si besoin.",
+      });
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSuggestingClimate(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    const durationDays =
-      startDate && endDate
-        ? Math.max(0, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
-        : existing?.duration_days ?? null;
+    // Seule l'ancre (toute première ville de l'itinéraire) a une date de début libre : tout
+    // le reste ne doit exposer que le nombre de nuits, la date étant déduite automatiquement
+    // (voir l'auto-guérison dans ItineraryView) pour garantir la continuité du calendrier.
+    const datePayload = isFirstOverall
+      ? {
+          start_date: startDate || null,
+          end_date: endDate || null,
+          duration_days:
+            startDate && endDate
+              ? Math.max(0, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+              : existing?.duration_days ?? null,
+        }
+      : { duration_days: nights ? Number(nights) : existing?.duration_days ?? null };
     const payload = {
       city,
-      start_date: startDate || null,
-      end_date: endDate || null,
-      duration_days: durationDays,
+      ...datePayload,
       lodging: lodging || null,
       activities: activities || null,
       distance_km: distanceKm ? Number(distanceKm) : null,
       latitude: latitude ? Number(latitude) : null,
       longitude: longitude ? Number(longitude) : null,
+      climate_by_month: useCityClimate ? cityClimate : null,
       transport_next_mode: transportMode || null,
       transport_next_duration_hours: transportDuration ? Number(transportDuration) : null,
       transport_next_cost: transportCost ? Number(transportCost) : null,
@@ -92,6 +134,7 @@ export function SousEtapeDialog({
         setCity("");
         setStartDate("");
         setEndDate("");
+        setNights("");
         setLodging("");
         setActivities("");
         setDistanceKm("");
@@ -101,6 +144,8 @@ export function SousEtapeDialog({
         setTransportDuration("");
         setTransportCost("");
         setTransportCurrency("");
+        setUseCityClimate(false);
+        setCityClimate(Array(12).fill("good"));
       }
       setOpen(false);
     } finally {
@@ -153,6 +198,7 @@ export function SousEtapeDialog({
                       distance_km: haversineDistanceKm(previousPoint.lat, previousPoint.lng, lat, lon),
                     });
                   }
+                  handleSuggestClimate(lat, lon);
                 }}
               />
             </div>
@@ -167,20 +213,52 @@ export function SousEtapeDialog({
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Arrivée</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          {isFirstOverall ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Arrivée</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Départ</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
             </div>
+          ) : (
             <div className="space-y-2">
-              <Label>Départ</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Label>Nombre de nuits</Label>
+              <Input type="number" min="0" value={nights} onChange={(e) => setNights(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Les dates d'arrivée et de départ se déduisent automatiquement de la ville précédente dans l'itinéraire
+                (visible dans le tableau) — seule la toute première ville du voyage a une date fixée manuellement.
+              </p>
             </div>
-          </div>
+          )}
           <p className="text-xs text-muted-foreground">
             La distance depuis l'étape précédente est calculée automatiquement (visible dans le tableau) à partir des
             coordonnées GPS choisies via le champ Ville ci-dessus.
           </p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Checkbox checked={useCityClimate} onCheckedChange={(c) => setUseCityClimate(!!c)} id="cityClimate" />
+                <Label htmlFor="cityClimate">Climat propre à cette ville (sinon celui du pays)</Label>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={() => handleSuggestClimate()} disabled={suggestingClimate}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                {suggestingClimate ? "Analyse..." : "Suggérer (Open-Meteo)"}
+              </Button>
+            </div>
+            {useCityClimate && (
+              <>
+                <ClimateMonthPicker value={cityClimate} onChange={setCityClimate} />
+                <p className="text-xs text-muted-foreground">
+                  Suggéré automatiquement dès le choix de la ville, d'après l'historique météo réel des 5 dernières
+                  années (Open-Meteo) sur ses coordonnées GPS précises — plus fin que le climat du pays.
+                </p>
+              </>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Logement (texte libre ou lien)</Label>

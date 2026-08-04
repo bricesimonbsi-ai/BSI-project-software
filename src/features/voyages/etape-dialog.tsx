@@ -7,15 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateEtape, useUpdateEtape, useInsertEtapeAt, useDeleteEtape } from "@/features/voyages/use-etapes";
-import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
+import { TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag, CountryPicker } from "@/features/voyages/itinerary/location-pickers";
+import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import type { ClimateRating, VoyageEtape } from "@/types/database";
 import { Plus, Trash2, Lock, Sparkles } from "lucide-react";
-
-const RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
 
 export function EtapeDialog({
   voyageId,
@@ -61,17 +59,10 @@ export function EtapeDialog({
   const insertEtapeAt = useInsertEtapeAt(voyageId);
   const deleteEtape = useDeleteEtape(voyageId);
 
-  function cycleMonth(index: number) {
-    setClimate((prev) => {
-      const next = [...prev];
-      const currentIndex = RATING_CYCLE.indexOf(next[index]);
-      next[index] = RATING_CYCLE[(currentIndex + 1) % RATING_CYCLE.length];
-      return next;
-    });
-  }
-
-  async function handleSuggestClimate() {
-    if (!latitude || !longitude) {
+  async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
+    const lat = latOverride ?? Number(latitude);
+    const lon = lonOverride ?? Number(longitude);
+    if (!lat || !lon) {
       toast({
         title: "Coordonnées manquantes",
         description: "Choisis d'abord le pays via la liste déroulante pour obtenir ses coordonnées GPS.",
@@ -81,7 +72,7 @@ export function EtapeDialog({
     }
     setSuggestingClimate(true);
     try {
-      const suggested = await estimateClimateByMonth(Number(latitude), Number(longitude));
+      const suggested = await estimateClimateByMonth(lat, lon);
       setClimate(suggested);
       toast({ title: "Climat suggéré", description: "Basé sur l'historique météo réel (Open-Meteo), à ajuster si besoin." });
     } catch (err) {
@@ -182,6 +173,7 @@ export function EtapeDialog({
                   setCountryRegion(name);
                   setLatitude(String(lat));
                   setLongitude(String(lng));
+                  handleSuggestClimate(lat, lng);
                 }}
               />
             )}
@@ -246,27 +238,15 @@ export function EtapeDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
-              <Button type="button" size="sm" variant="outline" onClick={handleSuggestClimate} disabled={suggestingClimate}>
+              <Button type="button" size="sm" variant="outline" onClick={() => handleSuggestClimate()} disabled={suggestingClimate}>
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 {suggestingClimate ? "Analyse..." : "Suggérer (Open-Meteo)"}
               </Button>
             </div>
-            <div className="flex overflow-hidden rounded-md">
-              {climate.map((rating, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => cycleMonth(i)}
-                  title={MONTH_LABELS[i]}
-                  className={cn("h-8 flex-1 text-[0.65rem] font-semibold", CLIMATE_COLOR_CLASS[rating])}
-                >
-                  {MONTH_LABELS[i]}
-                </button>
-              ))}
-            </div>
+            <ClimateMonthPicker value={climate} onChange={setClimate} />
             <p className="text-xs text-muted-foreground">
-              Suggestion basée sur l'historique météo réel des 5 dernières années (Open-Meteo, gratuit, sans clé) —
-              une estimation à ajuster si besoin, pas une prévision.
+              Suggéré automatiquement dès le choix du pays, d'après l'historique météo réel des 5 dernières années
+              (Open-Meteo, gratuit, sans clé) — une estimation à ajuster si besoin, pas une prévision.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">

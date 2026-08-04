@@ -121,6 +121,29 @@ export function ItineraryView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat]);
 
+  /**
+   * Auto-guérison des dates : la seule date librement modifiable est celle de la toute
+   * première ville de l'itinéraire (l'ancre) ; tout le reste doit être une simple cascade
+   * (début de la ville N = fin de la ville N-1), y compris au changement de pays, pour
+   * qu'il n'y ait jamais de chevauchement NI de trou dans le calendrier. Comme le dialogue
+   * d'édition permet historiquement de saisir des dates libres sur n'importe quelle ville
+   * (ce qui casse cette continuité), on recalcule systématiquement toute la séquence à partir
+   * de l'ancre et des nuits de chacune, et on corrige en base ce qui diverge.
+   */
+  useEffect(() => {
+    if (flat.length === 0) return;
+    const anchorId = flat[0].sousEtape.id;
+    const updates = cascadeDatesFrom(flat, anchorId, {});
+    for (const update of updates) {
+      const row = flat.find((r) => r.sousEtape.id === update.id)?.sousEtape;
+      if (!row) continue;
+      if (row.start_date !== update.start_date || row.end_date !== update.end_date) {
+        updateAnySousEtape.mutate({ id: update.id, start_date: update.start_date, end_date: update.end_date, duration_days: update.duration_days });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat]);
+
   function handleCountryDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -456,6 +479,7 @@ function CountryBlock({
             : null
         }
         previousRowId={creatingCityAt !== null && creatingCityAt > 0 ? group.rows[creatingCityAt - 1]?.sousEtape.id : undefined}
+        isFirstOverall={colorIndex === 0 && creatingCityAt === 0}
       />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
@@ -572,6 +596,7 @@ function CityRow({
             previousPoint={previousPoint}
             previousRowId={previousRow?.sousEtape.id}
             countryName={row.etape.country_region}
+            isFirstOverall={row.globalIndex === 1}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>
@@ -635,7 +660,7 @@ function CityRow({
 }
 
 function ClimateBand({ row }: { etape: VoyageSousEtape; row: FlatRow }) {
-  const ratings = row.etape.climate_by_month ?? Array(12).fill("good");
+  const ratings = row.sousEtape.climate_by_month ?? row.etape.climate_by_month ?? Array(12).fill("good");
   const planned = getPlannedMonthIndices(row.etape.arrival_date, row.etape.duration_days);
   return (
     <div className="flex h-7 overflow-hidden rounded-sm">

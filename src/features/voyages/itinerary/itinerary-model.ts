@@ -1,4 +1,4 @@
-import type { VoyageEtape, VoyageSousEtape } from "@/types/database";
+import type { ClimateRating, VoyageEtape, VoyageSousEtape } from "@/types/database";
 
 export type FlatRow = {
   etape: VoyageEtape;
@@ -117,6 +117,9 @@ export const CLIMATE_COLOR_CLASS: Record<string, string> = {
 };
 
 export const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+/** Ordre de cycle au clic sur une case du tableau climatique. */
+export const CLIMATE_RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
 
 /** Options de mode de transport, partagées entre les dialogues de saisie et l'affichage du tableau. */
 export const TRANSPORT_MODE_OPTIONS: { value: string; label: string }[] = [

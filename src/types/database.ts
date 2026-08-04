@@ -140,6 +140,7 @@ export type VoyageSousEtape = {
   latitude: number | null;
   longitude: number | null;
   distance_km: number | null;
+  climate_by_month: ClimateRating[] | null;
   created_at: string;
   updated_at: string;
 };
