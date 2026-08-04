@@ -88,6 +88,8 @@ export type Todo = {
   updated_at: string;
 };
 
+export type TravelStyle = "economique" | "standard" | "confort";
+
 export type Voyage = {
   id: string;
   project_id: string;
@@ -96,6 +98,19 @@ export type Voyage = {
   adults_count: number;
   children_count: number;
   reference_currency: string;
+  lodging_count: number | null;
+  travel_style: TravelStyle | null;
+  budget_target_per_person: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VoyageTraveler = {
+  id: string;
+  voyage_id: string;
+  name: string;
+  avatar_emoji: string | null;
+  order_index: number;
   created_at: string;
   updated_at: string;
 };
@@ -149,6 +164,7 @@ export type VoyageExpense = {
   id: string;
   voyage_id: string | null;
   sous_etape_id: string | null;
+  traveler_id: string | null;
   category: ExpenseCategory;
   planned: boolean;
   amount: number;
@@ -205,6 +221,21 @@ export type VoyageEtapeBudgetSummary = {
   total_actual: number | null;
 };
 
+export type VoyageCategoryBudgetSummary = {
+  voyage_id: string;
+  category: ExpenseCategory;
+  total_planned: number | null;
+  total_actual: number | null;
+};
+
+export type VoyageTravelerExpenseSummary = {
+  traveler_id: string;
+  voyage_id: string;
+  name: string;
+  total_planned: number | null;
+  total_actual: number | null;
+};
+
 type Table<Row, InsertShape = Partial<Row>> = {
   Row: Row;
   Insert: InsertShape;
@@ -224,6 +255,7 @@ export type Database = {
       voyage_etapes: Table<VoyageEtape>;
       voyage_sous_etapes: Table<VoyageSousEtape>;
       voyage_expenses: Table<VoyageExpense>;
+      voyage_travelers: Table<VoyageTraveler>;
       documents: Table<DocumentRow>;
       notifications: Table<NotificationRow>;
       notification_preferences: Table<NotificationPreferences>;
@@ -231,6 +263,8 @@ export type Database = {
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };
       voyage_etape_budget_summary: { Row: VoyageEtapeBudgetSummary; Relationships: [] };
+      voyage_category_budget_summary: { Row: VoyageCategoryBudgetSummary; Relationships: [] };
+      voyage_traveler_expense_summary: { Row: VoyageTravelerExpenseSummary; Relationships: [] };
     };
     Functions: Record<string, never>;
     Enums: Record<string, never>;

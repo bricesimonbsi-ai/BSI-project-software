@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CurrencySelect } from "@/features/voyages/currency-select";
 import { useCreateExpense } from "@/features/voyages/use-expenses";
+import { useTravelers } from "@/features/voyages/use-travelers";
 import type { ExpenseCategory } from "@/types/database";
 import { Plus } from "lucide-react";
 
@@ -14,11 +15,15 @@ export function ExpenseFormDialog({
   categories,
   referenceCurrency,
   invalidateKey,
+  voyageId,
 }: {
   scope: { voyageId?: string; sousEtapeId?: string };
   categories: { value: ExpenseCategory; label: string }[];
   referenceCurrency: string;
   invalidateKey: unknown[];
+  /** Voyage auquel rattacher la liste des voyageurs (nécessaire même pour une dépense
+   * scope="sousEtapeId", puisque les voyageurs sont définis au niveau du voyage). */
+  voyageId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<ExpenseCategory>(categories[0].value);
@@ -28,8 +33,10 @@ export function ExpenseFormDialog({
   const [rate, setRate] = useState("1");
   const [description, setDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState("");
+  const [travelerId, setTravelerId] = useState<string>("none");
   const [submitting, setSubmitting] = useState(false);
   const createExpense = useCreateExpense(scope, invalidateKey);
+  const { data: travelers } = useTravelers(voyageId);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -43,10 +50,12 @@ export function ExpenseFormDialog({
         manual_rate_to_reference: currency === referenceCurrency ? 1 : Number(rate),
         description: description || undefined,
         expense_date: expenseDate || undefined,
+        traveler_id: travelerId === "none" ? null : travelerId,
       });
       setOpen(false);
       setAmount("");
       setDescription("");
+      setTravelerId("none");
     } finally {
       setSubmitting(false);
     }
@@ -117,6 +126,24 @@ export function ExpenseFormDialog({
             <Label>Description</Label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+          {travelers && travelers.length > 0 && (
+            <div className="space-y-2">
+              <Label>Rattacher à une personne (optionnel)</Label>
+              <Select value={travelerId} onValueChange={setTravelerId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Dépense commune</SelectItem>
+                  {travelers.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Ajout..." : "Ajouter"}

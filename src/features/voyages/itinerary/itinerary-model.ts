@@ -110,6 +110,11 @@ export function estimateCo2Kg(distanceKm: number | null, mode: string | null): n
   return Math.round(distanceKm * guessEmissionFactor(mode));
 }
 
+/** Empreinte carbone totale (kg CO2) de tout l'itinéraire, tous trajets confondus. */
+export function estimateTotalCo2Kg(flat: FlatRow[]): number {
+  return flat.reduce((sum, row) => sum + estimateCo2Kg(row.incomingDistanceKm, row.incomingMode), 0);
+}
+
 export const CLIMATE_COLOR_CLASS: Record<string, string> = {
   good: "bg-emerald-500/25 dark:bg-emerald-400/25",
   mid: "bg-amber-500/25 dark:bg-amber-400/25",

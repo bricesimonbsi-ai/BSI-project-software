@@ -7,10 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDeleteSousEtape } from "@/features/voyages/use-sous-etapes";
+import { useSousEtapeExpenses, ON_SITE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
 import { CurrencySelect } from "@/features/voyages/currency-select";
+import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
+import { ExpenseList } from "@/features/voyages/expense-list";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { toast } from "@/hooks/use-toast";
 import type { ClimateRating, VoyageSousEtape } from "@/types/database";
@@ -26,6 +29,8 @@ export function SousEtapeDialog({
   countryName,
   insertAtIndex,
   isFirstOverall,
+  voyageId,
+  referenceCurrency,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
@@ -42,6 +47,9 @@ export function SousEtapeDialog({
    * la date se déduit automatiquement de la ville précédente (voir l'auto-guérison dans
    * ItineraryView) — seul le nombre de nuits reste éditable. */
   isFirstOverall?: boolean;
+  /** Nécessaires pour la section "Dépenses sur place" (voyageurs à rattacher, devise). */
+  voyageId?: string;
+  referenceCurrency?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -72,6 +80,7 @@ export function SousEtapeDialog({
   const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
+  const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
 
   async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
     const lat = latOverride ?? Number(latitude);
@@ -296,6 +305,25 @@ export function SousEtapeDialog({
             </div>
             <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} />
           </div>
+          {existing && (
+            <div className="space-y-2 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Dépenses sur place (logement, nourriture, activités, transport local)</Label>
+                <ExpenseFormDialog
+                  scope={{ sousEtapeId: existing.id }}
+                  categories={ON_SITE_CATEGORIES}
+                  referenceCurrency={referenceCurrency ?? "EUR"}
+                  invalidateKey={["sous-etape-expenses", existing.id]}
+                  voyageId={voyageId}
+                />
+              </div>
+              <ExpenseList
+                expenses={onSiteExpenses ?? []}
+                invalidateKey={["sous-etape-expenses", existing.id]}
+                voyageId={voyageId}
+              />
+            </div>
+          )}
           <DialogFooter className="flex items-center justify-between sm:justify-between">
             {existing ? (
               <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>

@@ -480,6 +480,8 @@ function CountryBlock({
         }
         previousRowId={creatingCityAt !== null && creatingCityAt > 0 ? group.rows[creatingCityAt - 1]?.sousEtape.id : undefined}
         isFirstOverall={colorIndex === 0 && creatingCityAt === 0}
+        voyageId={group.etape.voyage_id}
+        referenceCurrency={referenceCurrency}
       />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
@@ -597,6 +599,8 @@ function CityRow({
             previousRowId={previousRow?.sousEtape.id}
             countryName={row.etape.country_region}
             isFirstOverall={row.globalIndex === 1}
+            voyageId={row.etape.voyage_id}
+            referenceCurrency={referenceCurrency}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>

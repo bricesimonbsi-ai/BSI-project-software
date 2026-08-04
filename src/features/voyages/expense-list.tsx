@@ -1,4 +1,5 @@
 import { useDeleteExpense } from "@/features/voyages/use-expenses";
+import { useTravelers } from "@/features/voyages/use-travelers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -22,8 +23,18 @@ const categoryLabels: Record<ExpenseCategory, string> = {
   transport_local: "Transport local",
 };
 
-export function ExpenseList({ expenses, invalidateKey }: { expenses: VoyageExpense[]; invalidateKey: unknown[] }) {
+export function ExpenseList({
+  expenses,
+  invalidateKey,
+  voyageId,
+}: {
+  expenses: VoyageExpense[];
+  invalidateKey: unknown[];
+  voyageId?: string;
+}) {
   const deleteExpense = useDeleteExpense(invalidateKey);
+  const { data: travelers } = useTravelers(voyageId);
+  const travelerName = (id: string | null) => (id ? travelers?.find((t) => t.id === id)?.name : undefined);
 
   if (expenses.length === 0) {
     return <p className="text-sm text-muted-foreground">Aucune dépense pour l'instant.</p>;
@@ -37,6 +48,7 @@ export function ExpenseList({ expenses, invalidateKey }: { expenses: VoyageExpen
             <p className="text-sm font-medium">
               {categoryLabels[expense.category]}
               {expense.description ? ` — ${expense.description}` : ""}
+              {travelerName(expense.traveler_id) ? ` · ${travelerName(expense.traveler_id)}` : ""}
             </p>
             <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
           </div>

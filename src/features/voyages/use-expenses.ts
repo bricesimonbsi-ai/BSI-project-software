@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
-import type { ExpenseCategory, VoyageExpense, VoyageBudgetSummary, VoyageEtapeBudgetSummary } from "@/types/database";
+import type {
+  ExpenseCategory,
+  VoyageExpense,
+  VoyageBudgetSummary,
+  VoyageEtapeBudgetSummary,
+  VoyageCategoryBudgetSummary,
+  VoyageTravelerExpenseSummary,
+} from "@/types/database";
 
 export const PRE_DEPARTURE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: "equipement", label: "Équipement" },
@@ -67,6 +74,7 @@ export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: strin
       manual_rate_to_reference: number;
       description?: string;
       expense_date?: string;
+      traveler_id?: string | null;
     }) => {
       if (!session) throw new Error("Non authentifié");
       const { error } = await supabase.from("voyage_expenses").insert({
@@ -81,6 +89,8 @@ export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: strin
       queryClient.invalidateQueries({ queryKey: invalidateKey });
       queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
       queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["voyage-traveler-expense-summary"] });
     },
   });
 }
@@ -96,6 +106,8 @@ export function useDeleteExpense(invalidateKey: unknown[]) {
       queryClient.invalidateQueries({ queryKey: invalidateKey });
       queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
       queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["voyage-traveler-expense-summary"] });
     },
   });
 }
@@ -123,6 +135,38 @@ export function useEtapeBudgetSummaries(voyageId: string | undefined) {
     queryFn: async (): Promise<VoyageEtapeBudgetSummary[]> => {
       const { data, error } = await supabase
         .from("voyage_etape_budget_summary")
+        .select("*")
+        .eq("voyage_id", voyageId as string);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Totaux (prévisionnel/réel) par grande catégorie de dépense, avant-départ et sur place confondues. */
+export function useVoyageCategoryBudgetSummary(voyageId: string | undefined) {
+  return useQuery({
+    queryKey: ["voyage-category-budget-summary", voyageId],
+    enabled: !!voyageId,
+    queryFn: async (): Promise<VoyageCategoryBudgetSummary[]> => {
+      const { data, error } = await supabase
+        .from("voyage_category_budget_summary")
+        .select("*")
+        .eq("voyage_id", voyageId as string);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Dépenses réelles/prévisionnelles rattachées à chaque voyageur (quand renseigné sur la dépense). */
+export function useVoyageTravelerExpenseSummary(voyageId: string | undefined) {
+  return useQuery({
+    queryKey: ["voyage-traveler-expense-summary", voyageId],
+    enabled: !!voyageId,
+    queryFn: async (): Promise<VoyageTravelerExpenseSummary[]> => {
+      const { data, error } = await supabase
+        .from("voyage_traveler_expense_summary")
         .select("*")
         .eq("voyage_id", voyageId as string);
       if (error) throw error;
