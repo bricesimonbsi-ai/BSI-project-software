@@ -10,6 +10,7 @@ import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDelete
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
+import { CurrencySelect } from "@/features/voyages/currency-select";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { toast } from "@/hooks/use-toast";
 import type { ClimateRating, VoyageSousEtape } from "@/types/database";
@@ -60,7 +61,7 @@ export function SousEtapeDialog({
   const [transportMode, setTransportMode] = useState(existing?.transport_next_mode ?? "");
   const [transportDuration, setTransportDuration] = useState(existing?.transport_next_duration_hours?.toString() ?? "");
   const [transportCost, setTransportCost] = useState(existing?.transport_next_cost?.toString() ?? "");
-  const [transportCurrency, setTransportCurrency] = useState(existing?.transport_next_currency ?? "");
+  const [transportCurrency, setTransportCurrency] = useState(existing?.transport_next_currency ?? "EUR");
   const [useCityClimate, setUseCityClimate] = useState(existing?.climate_by_month != null);
   const [cityClimate, setCityClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [suggestingClimate, setSuggestingClimate] = useState(false);
@@ -143,7 +144,7 @@ export function SousEtapeDialog({
         setTransportMode("");
         setTransportDuration("");
         setTransportCost("");
-        setTransportCurrency("");
+        setTransportCurrency("EUR");
         setUseCityClimate(false);
         setCityClimate(Array(12).fill("good"));
       }
@@ -293,12 +294,7 @@ export function SousEtapeDialog({
               />
               <Input placeholder="Coût" type="number" step="0.01" value={transportCost} onChange={(e) => setTransportCost(e.target.value)} />
             </div>
-            <Input
-              placeholder="Devise du coût de transport"
-              value={transportCurrency}
-              onChange={(e) => setTransportCurrency(e.target.value.toUpperCase())}
-              maxLength={3}
-            />
+            <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} />
           </div>
           <DialogFooter className="flex items-center justify-between sm:justify-between">
             {existing ? (

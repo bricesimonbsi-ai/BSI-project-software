@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ItineraryView } from "@/features/voyages/itinerary/itinerary-view";
+import { CurrencySelect } from "@/features/voyages/currency-select";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { DocumentsPanel } from "@/features/projects/documents-panel";
@@ -119,10 +120,9 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Devise de référence</Label>
-                  <Input
+                  <CurrencySelect
                     value={form.reference_currency}
-                    maxLength={3}
-                    onChange={(e) => setForm({ ...form, reference_currency: e.target.value.toUpperCase() })}
+                    onChange={(v) => setForm({ ...form, reference_currency: v })}
                   />
                 </div>
               </div>

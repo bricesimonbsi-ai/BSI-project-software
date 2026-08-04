@@ -10,6 +10,15 @@ type PickerProps = {
   placeholder?: string;
 };
 
+/** Normalise une chaîne pour une recherche insensible aux accents/majuscules (ex. "cote d'ivoire" ~ "Côte d'Ivoire"). */
+function normalizeForSearch(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 /** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse). */
 export function findCountryByName(name: string) {
   const q = name.trim().toLowerCase();
@@ -41,9 +50,19 @@ export function CountryPicker({ value, onChange, onSelect, placeholder }: Picker
   const [open, setOpen] = useState(false);
 
   const filtered = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    const list = q ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)) : COUNTRIES;
-    return list.slice(0, 8);
+    const q = normalizeForSearch(value);
+    if (!q) return COUNTRIES.slice(0, 8);
+    const matches = COUNTRIES.map((c) => ({ c, name: normalizeForSearch(c.name) }))
+      .filter(({ name }) => name.includes(q))
+      // Priorité aux noms qui COMMENCENT par la recherche, puis à la position du match :
+      // taper "fra" doit faire remonter "France" avant "Afrique du Sud".
+      .sort((a, b) => {
+        const aStarts = a.name.startsWith(q) ? 0 : 1;
+        const bStarts = b.name.startsWith(q) ? 0 : 1;
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.name.indexOf(q) - b.name.indexOf(q);
+      });
+    return matches.slice(0, 10).map(({ c }) => c);
   }, [value]);
 
   return (
@@ -94,13 +113,13 @@ export function CityPicker({
   placeholder,
   countryCode,
 }: PickerProps & { countryCode?: string | null }) {
-  const [results, setResults] = useState<{ label: string; lat: number; lon: number }[]>([]);
+  const [results, setResults] = useState<{ label: string; lat: number; lon: number; name: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errored, setErrored] = useState(false);
 
   useEffect(() => {
-    if (value.trim().length < 3) {
+    if (value.trim().length < 2) {
       setResults([]);
       setErrored(false);
       return;
@@ -110,14 +129,24 @@ export function CityPicker({
       setLoading(true);
       setErrored(false);
       try {
-        const params = new URLSearchParams({ format: "json", limit: "8", q: value });
+        const params = new URLSearchParams({ format: "json", limit: "10", q: value });
         if (countryCode) params.set("countrycodes", countryCode.toLowerCase());
         const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error("Nominatim indisponible");
         const data = (await res.json()) as NominatimResult[];
-        setResults(data.map((d) => ({ label: d.display_name, lat: Number(d.lat), lon: Number(d.lon) })));
+        // Nominatim trie par "importance" (popularité) plutôt que par pertinence du préfixe :
+        // re-trie côté client pour faire remonter les noms qui commencent par la recherche.
+        const q = normalizeForSearch(value);
+        const ranked = data
+          .map((d) => ({ label: d.display_name, lat: Number(d.lat), lon: Number(d.lon), name: normalizeForSearch(d.display_name.split(",")[0]) }))
+          .sort((a, b) => {
+            const aStarts = a.name.startsWith(q) ? 0 : 1;
+            const bStarts = b.name.startsWith(q) ? 0 : 1;
+            return aStarts - bStarts;
+          });
+        setResults(ranked);
       } catch (err) {
         if ((err as Error).name !== "AbortError") setErrored(true);
       } finally {

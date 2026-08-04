@@ -40,8 +40,6 @@ export function EtapeDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [countryRegion, setCountryRegion] = useState(existing?.country_region ?? "");
-  const [arrivalDate, setArrivalDate] = useState(existing?.arrival_date ?? "");
-  const [durationDays, setDurationDays] = useState(existing?.duration_days?.toString() ?? "");
   const [visaNeeded, setVisaNeeded] = useState(existing?.visa_needed ?? false);
   const [vaccines, setVaccines] = useState(existing?.vaccines ?? "");
   const [transportMode, setTransportMode] = useState(existing?.transport_mode ?? "");
@@ -87,8 +85,6 @@ export function EtapeDialog({
     setSubmitting(true);
     const payload = {
       country_region: countryRegion,
-      arrival_date: arrivalDate || null,
-      duration_days: durationDays ? Number(durationDays) : null,
       visa_needed: visaNeeded,
       vaccines: vaccines || null,
       transport_mode: transportMode || null,
@@ -109,8 +105,6 @@ export function EtapeDialog({
       }
       if (!existing) {
         setCountryRegion("");
-        setArrivalDate("");
-        setDurationDays("");
         setVisaNeeded(false);
         setVaccines("");
         setTransportMode("");
@@ -183,16 +177,6 @@ export function EtapeDialog({
                 villes pour pouvoir choisir un autre pays.
               </p>
             )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Date d'arrivée</Label>
-              <Input type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Durée (jours)</Label>
-              <Input type="number" min="0" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} />
-            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

@@ -642,7 +642,7 @@ function CityRow({
 
       {tab === "climat" && (
         <td className="min-w-[300px] px-3 py-2">
-          <ClimateBand etape={se} row={row} />
+          <ClimateBand row={row} />
         </td>
       )}
       <td className="px-2 py-2.5 text-center">
@@ -659,9 +659,9 @@ function CityRow({
   );
 }
 
-function ClimateBand({ row }: { etape: VoyageSousEtape; row: FlatRow }) {
+function ClimateBand({ row }: { row: FlatRow }) {
   const ratings = row.sousEtape.climate_by_month ?? row.etape.climate_by_month ?? Array(12).fill("good");
-  const planned = getPlannedMonthIndices(row.etape.arrival_date, row.etape.duration_days);
+  const planned = getPlannedMonthIndices(row.sousEtape.start_date, row.sousEtape.duration_days);
   return (
     <div className="flex h-7 overflow-hidden rounded-sm">
       {ratings.map((r, i) => (

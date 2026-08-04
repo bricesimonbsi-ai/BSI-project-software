@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { CurrencySelect } from "@/features/voyages/currency-select";
 import { useCreateExpense } from "@/features/voyages/use-expenses";
 import type { ExpenseCategory } from "@/types/database";
 import { Plus } from "lucide-react";
@@ -85,7 +86,7 @@ export function ExpenseFormDialog({
             </div>
             <div className="space-y-2">
               <Label>Devise</Label>
-              <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />
+              <CurrencySelect value={currency} onChange={setCurrency} />
             </div>
           </div>
           {currency !== referenceCurrency && (
