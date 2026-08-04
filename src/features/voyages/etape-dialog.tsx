@@ -8,10 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateEtape, useUpdateEtape, useInsertEtapeAt, useDeleteEtape } from "@/features/voyages/use-etapes";
 import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
-import { CountryPicker } from "@/features/voyages/itinerary/location-pickers";
+import { CountryFlag, CountryPicker } from "@/features/voyages/itinerary/location-pickers";
 import { cn } from "@/lib/utils";
 import type { ClimateRating, VoyageEtape } from "@/types/database";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Lock } from "lucide-react";
 
 const RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
 
@@ -21,6 +21,7 @@ export function EtapeDialog({
   existing,
   trigger,
   insertAtIndex,
+  lockCountry,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
@@ -29,6 +30,9 @@ export function EtapeDialog({
   existing?: VoyageEtape;
   trigger?: ReactNode | null;
   insertAtIndex?: number;
+  /** Verrouille le champ pays quand des villes sont déjà associées à cette étape : changer de
+   * pays sous des villes existantes n'a pas de sens (visa/climat/permis dépendent du pays). */
+  lockCountry?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -138,15 +142,31 @@ export function EtapeDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Pays / région</Label>
-            <CountryPicker
-              value={countryRegion}
-              onChange={setCountryRegion}
-              onSelect={(name, lat, lng) => {
-                setCountryRegion(name);
-                setLatitude(String(lat));
-                setLongitude(String(lng));
-              }}
-            />
+            {lockCountry ? (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                <CountryFlag name={countryRegion} className="text-base" />
+                <span className="flex-1">{countryRegion}</span>
+                <span title="Verrouillé : des villes sont déjà associées">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
+              </div>
+            ) : (
+              <CountryPicker
+                value={countryRegion}
+                onChange={setCountryRegion}
+                onSelect={(name, lat, lng) => {
+                  setCountryRegion(name);
+                  setLatitude(String(lat));
+                  setLongitude(String(lng));
+                }}
+              />
+            )}
+            {lockCountry && (
+              <p className="text-xs text-muted-foreground">
+                Le pays ne peut pas être changé tant que des villes sont associées à cette étape. Supprime d'abord toutes les
+                villes pour pouvoir choisir un autre pays.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

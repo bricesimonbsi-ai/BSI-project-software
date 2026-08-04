@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -23,6 +23,7 @@ import {
   groupByCountry,
   cascadeDatesFrom,
   buildReorderUpdates,
+  recomputeDistances,
   getPlannedMonthIndices,
   CLIMATE_COLOR_CLASS,
   MONTH_LABELS,
@@ -101,6 +102,24 @@ export function ItineraryView({
 
   const flat = useMemo(() => buildFlatRows(etapes ?? [], sousEtapesByEtape), [etapes, sousEtapesByEtape]);
   const groups = useMemo(() => groupByCountry(etapes ?? [], flat), [etapes, flat]);
+
+  /**
+   * Auto-guérison : à chaque changement de données (édition, ajout, suppression, glisser-déposer),
+   * recalcule les distances GPS de toute la séquence et corrige en base celles qui divergent —
+   * y compris les valeurs historiques erronées saisies avant la correction du bug d'inversion
+   * origine/destination. Converge naturellement (les mutations n'écrivent que ce qui diverge).
+   */
+  useEffect(() => {
+    if (flat.length < 2) return;
+    const byId = new Map(flat.map((r) => [r.sousEtape.id, r.sousEtape.distance_km]));
+    for (const update of recomputeDistances(flat)) {
+      const current = byId.get(update.id);
+      if (current == null || Math.abs(current - update.distance_km) > 0.05) {
+        updateAnySousEtape.mutate(update);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat]);
 
   function handleCountryDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -367,6 +386,7 @@ function CountryBlock({
               voyageId={group.etape.voyage_id}
               nextOrder={0}
               existing={group.etape}
+              lockCountry={group.rows.length > 0}
               trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 hover:opacity-100 group-hover:opacity-60" />}
             />
           </span>
@@ -534,7 +554,7 @@ function CityRow({
       <td className="relative py-2.5 pl-6 pr-3">
         {hasIncoming && (
           <span
-            className="absolute -top-[0.7rem] left-6 z-10 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-card px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground shadow-sm"
+            className="absolute -top-[0.7rem] right-3 z-10 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-card px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground shadow-sm"
             title="Trajet depuis l'étape précédente"
           >
             <ArrowDownRight className="h-3 w-3 text-muted-foreground/70" />

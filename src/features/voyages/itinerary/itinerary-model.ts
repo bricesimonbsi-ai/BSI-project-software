@@ -210,7 +210,7 @@ export function cascadeDatesFrom(
  * trajet), affiché décalé d'une ligne comme "distance entrante" sur la ville de DESTINATION
  * (voir buildFlatRows). Toute écriture doit donc cibler la ligne d'origine, pas la destination.
  */
-function recomputeDistances(flat: FlatRow[]): Array<{ id: string; distance_km: number }> {
+export function recomputeDistances(flat: FlatRow[]): Array<{ id: string; distance_km: number }> {
   const updates: Array<{ id: string; distance_km: number }> = [];
   for (let i = 0; i < flat.length - 1; i++) {
     const origin = flat[i].sousEtape;
