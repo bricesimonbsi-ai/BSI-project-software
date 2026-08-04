@@ -9,12 +9,11 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus } from "lucide-react";
+import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEtapes, useInsertEtapeAt, useReorderEtapes } from "@/features/voyages/use-etapes";
+import { useEtapes, useReorderEtapes } from "@/features/voyages/use-etapes";
 import {
   useVoyageSousEtapes,
-  useInsertSousEtapeAt,
   useReorderSousEtapes,
   useUpdateSousEtape,
 } from "@/features/voyages/use-sous-etapes";
@@ -22,6 +21,7 @@ import {
   buildFlatRows,
   groupByCountry,
   cascadeDatesFrom,
+  buildReorderUpdates,
   getPlannedMonthIndices,
   CLIMATE_COLOR_CLASS,
   MONTH_LABELS,
@@ -36,7 +36,6 @@ import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
 import type { VoyageSousEtape } from "@/types/database";
 
 type Tab = "climat" | "dates" | "carte" | "carbone";
@@ -62,6 +61,18 @@ function transportIcon(mode: string | null) {
   return MoveRight;
 }
 
+/** Couleur distincte par mode de transport, pour retrouver le code couleur de la maquette. */
+function transportIconColorClass(mode: string | null): string {
+  if (!mode) return "text-muted-foreground";
+  const m = mode.toLowerCase();
+  if (m.includes("avion")) return "text-sky-600 dark:text-sky-400";
+  if (m.includes("train")) return "text-violet-600 dark:text-violet-400";
+  if (m.includes("bus")) return "text-amber-600 dark:text-amber-400";
+  if (m.includes("voiture")) return "text-slate-600 dark:text-slate-400";
+  if (m.includes("ferry") || m.includes("bateau")) return "text-cyan-600 dark:text-cyan-400";
+  return "text-muted-foreground";
+}
+
 export function ItineraryView({
   voyageId,
   referenceCurrency,
@@ -70,9 +81,9 @@ export function ItineraryView({
   referenceCurrency: string;
 }) {
   const [tab, setTab] = useState<Tab>("dates");
+  const [creatingCountryAt, setCreatingCountryAt] = useState<number | null>(null);
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
-  const insertEtapeAt = useInsertEtapeAt(voyageId);
   const reorderEtapes = useReorderEtapes(voyageId);
   const updateAnySousEtape = useUpdateSousEtape(voyageId);
   const countrySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -88,16 +99,7 @@ export function ItineraryView({
   }, [allSousEtapes]);
 
   const flat = useMemo(() => buildFlatRows(etapes ?? [], sousEtapesByEtape), [etapes, sousEtapesByEtape]);
-  const groups = useMemo(() => groupByCountry(flat), [flat]);
-
-  async function handleInsertCountry(atIndex: number) {
-    try {
-      await insertEtapeAt.mutateAsync({ atIndex, country_region: "Nouveau pays" });
-      toast({ title: "Pays ajouté", description: "Clique dessus pour renseigner ses informations." });
-    } catch (err) {
-      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
-    }
-  }
+  const groups = useMemo(() => groupByCountry(etapes ?? [], flat), [etapes, flat]);
 
   function handleCountryDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -116,11 +118,8 @@ export function ItineraryView({
     const groupById = new Map(groups.map((g) => [g.etape.id, g]));
     const newFlat = reordered.flatMap((id) => groupById.get(id)?.rows ?? []);
     const anchor = flat.find((r) => r.globalIndex === 1)?.sousEtape.start_date ?? undefined;
-    if (newFlat.length > 0) {
-      const updates = cascadeDatesFrom(newFlat, newFlat[0].sousEtape.id, anchor ? { start_date: anchor } : {});
-      for (const u of updates) {
-        updateAnySousEtape.mutate({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
-      }
+    for (const u of buildReorderUpdates(newFlat, anchor)) {
+      updateAnySousEtape.mutate(u);
     }
   }
 
@@ -137,11 +136,20 @@ export function ItineraryView({
         </Tabs>
         <Button
           size="sm"
-          onClick={() => handleInsertCountry(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
+          onClick={() => setCreatingCountryAt(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
         >
           <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
         </Button>
       </div>
+
+      <EtapeDialog
+        voyageId={voyageId}
+        nextOrder={0}
+        trigger={null}
+        open={creatingCountryAt !== null}
+        onOpenChange={(o) => !o && setCreatingCountryAt(null)}
+        insertAtIndex={creatingCountryAt ?? 0}
+      />
 
       {tab === "carte" && <MapView groups={groups} />}
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
@@ -178,7 +186,7 @@ export function ItineraryView({
               )}
             </thead>
             <tbody>
-              <AddButton onClick={() => handleInsertCountry(0)} colSpan={tab === "dates" ? 5 : 3} />
+              <AddButton onClick={() => setCreatingCountryAt(0)} colSpan={tab === "dates" ? 5 : 3} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
                   {groups.map((group, colorIndex) => (
@@ -187,7 +195,7 @@ export function ItineraryView({
                       group={group}
                       tab={tab}
                       referenceCurrency={referenceCurrency}
-                      onInsertCountryAfter={() => handleInsertCountry(group.etape.order_index + 1)}
+                      onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
                       allFlat={flat}
                       colorIndex={colorIndex}
                     />
@@ -234,7 +242,8 @@ function CountryBlock({
   allFlat: FlatRow[];
   colorIndex: number;
 }) {
-  const insertCityAt = useInsertSousEtapeAt(group.etape.id);
+  const [creatingCityAt, setCreatingCityAt] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const reorderCities = useReorderSousEtapes(group.etape.id);
   const updateSousEtapeForReorder = useUpdateSousEtape(group.etape.id);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -250,15 +259,6 @@ function CountryBlock({
     transform: CSS.Transform.toString(countryTransform),
     transition: countryTransition,
   };
-
-  async function handleInsertCity(atIndex: number) {
-    try {
-      await insertCityAt.mutateAsync({ atIndex, city: "Nouvelle ville" });
-      toast({ title: "Ville ajoutée", description: "Clique dessus pour renseigner ses informations." });
-    } catch (err) {
-      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
-    }
-  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -291,11 +291,8 @@ function CountryBlock({
       }
     }
     const anchor = allFlat.find((r) => r.globalIndex === 1)?.sousEtape.start_date ?? undefined;
-    if (newFlat.length > 0) {
-      const updates = cascadeDatesFrom(newFlat, newFlat[0].sousEtape.id, anchor ? { start_date: anchor } : {});
-      for (const u of updates) {
-        updateSousEtapeForReorder.mutate({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
-      }
+    for (const u of buildReorderUpdates(newFlat, anchor)) {
+      updateSousEtapeForReorder.mutate(u);
     }
   }
 
@@ -327,6 +324,14 @@ function CountryBlock({
         </td>
         <td className="px-3 py-3">
           <span className="inline-flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="text-muted-foreground hover:text-foreground"
+              title={collapsed ? "Déplier les villes" : "Replier les villes"}
+            >
+              <ChevronRight className={cn("h-4 w-4 transition-transform", !collapsed && "rotate-90")} />
+            </button>
             {getCountryFlag(group.etape.country_region) && (
               <span className="text-lg leading-none">{getCountryFlag(group.etape.country_region)}</span>
             )}
@@ -369,21 +374,51 @@ function CountryBlock({
         {tab === "climat" && <td className="px-3 py-3"></td>}
       </tr>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
-          {group.rows.map((row) => (
-            <CityRow
-              key={row.sousEtape.id}
-              row={row}
-              tab={tab}
-              referenceCurrency={referenceCurrency}
-              etapeId={group.etape.id}
-              allFlat={allFlat}
-              onInsertAfter={() => handleInsertCity(row.sousEtape.order_index + 1)}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
+      {!collapsed && group.rows.length === 0 && (
+        <tr className="border-b border-border">
+          <td colSpan={colSpan} className="px-3 py-2 pl-9 text-xs">
+            <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => setCreatingCityAt(0)}>
+              + Ajouter une ville
+            </button>
+          </td>
+        </tr>
+      )}
+
+      {!collapsed && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
+            {group.rows.map((row) => (
+              <CityRow
+                key={row.sousEtape.id}
+                row={row}
+                tab={tab}
+                referenceCurrency={referenceCurrency}
+                etapeId={group.etape.id}
+                allFlat={allFlat}
+                onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+      )}
+
+      <SousEtapeDialog
+        etapeId={group.etape.id}
+        nextOrder={0}
+        trigger={null}
+        open={creatingCityAt !== null}
+        onOpenChange={(o) => !o && setCreatingCityAt(null)}
+        insertAtIndex={creatingCityAt ?? 0}
+        countryName={group.etape.country_region}
+        previousPoint={
+          creatingCityAt !== null && creatingCityAt > 0
+            ? (() => {
+                const prev = group.rows[creatingCityAt - 1]?.sousEtape;
+                return prev?.latitude != null && prev?.longitude != null ? { lat: prev.latitude, lng: prev.longitude } : null;
+              })()
+            : null
+        }
+      />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
     </>
@@ -430,7 +465,6 @@ function CityRow({
     previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
       ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
       : null;
-  const colSpan = tab === "dates" ? 5 : 3;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -455,12 +489,11 @@ function CityRow({
     }
   }
 
+  const TransportIcon = transportIcon(row.incomingMode);
+  const hasIncoming = row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode);
+
   return (
-    <>
-      {row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode) && (
-        <TransitRow row={row} referenceCurrency={referenceCurrency} colSpan={colSpan} />
-      )}
-      <tr ref={setNodeRef} style={style} className={cn("group border-b border-border last:border-0", isDragging && "opacity-50")}>
+    <tr ref={setNodeRef} style={style} className={cn("group relative border-b border-border last:border-0", isDragging && "opacity-50")}>
       <td className="relative w-14 px-3 py-2.5 text-center">
         <button
           onClick={onInsertAfter}
@@ -474,7 +507,18 @@ function CityRow({
           <GripVertical className="mx-auto h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="py-2.5 pl-6 pr-3">
+      <td className="relative py-2.5 pl-6 pr-3">
+        {hasIncoming && (
+          <span
+            className="absolute -top-[0.7rem] left-6 z-10 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-card px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground shadow-sm"
+            title="Trajet depuis l'étape précédente"
+          >
+            <ArrowDownRight className="h-3 w-3 text-muted-foreground/70" />
+            {TransportIcon && <TransportIcon className={cn("h-3.5 w-3.5", transportIconColorClass(row.incomingMode))} />}
+            {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : ""}
+            {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
+          </span>
+        )}
         <span className="inline-flex items-center gap-1.5">
           {se.city}
           <SousEtapeDialog
@@ -531,30 +575,6 @@ function CityRow({
           <ClimateBand etape={se} row={row} />
         </td>
       )}
-      </tr>
-    </>
-  );
-}
-
-function TransitRow({
-  row,
-  referenceCurrency,
-  colSpan,
-}: {
-  row: FlatRow;
-  referenceCurrency: string;
-  colSpan: number;
-}) {
-  const TransportIcon = transportIcon(row.incomingMode);
-  return (
-    <tr className="border-b border-dashed border-border/60 bg-muted/50">
-      <td colSpan={colSpan} className="px-3 py-1 text-center text-xs text-muted-foreground">
-        <span className="inline-flex items-center justify-center gap-1.5">
-          {TransportIcon && <TransportIcon className="h-3.5 w-3.5 flex-shrink-0 text-sky-600 dark:text-sky-400" />}
-          {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : ""}
-          {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
-        </span>
-      </td>
     </tr>
   );
 }

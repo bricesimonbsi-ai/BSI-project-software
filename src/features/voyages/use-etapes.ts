@@ -55,7 +55,10 @@ export function useDeleteEtape(voyageId: string) {
 export function useInsertEtapeAt(voyageId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ atIndex, country_region }: { atIndex: number; country_region: string }) => {
+    mutationFn: async ({
+      atIndex,
+      ...input
+    }: Partial<VoyageEtape> & { atIndex: number; country_region: string }) => {
       const { data: existing, error: fetchError } = await supabase
         .from("voyage_etapes")
         .select("id, order_index")
@@ -78,7 +81,7 @@ export function useInsertEtapeAt(voyageId: string) {
 
       const { error: insertError } = await supabase
         .from("voyage_etapes")
-        .insert({ voyage_id: voyageId, country_region, order_index: atIndex });
+        .insert({ ...input, voyage_id: voyageId, order_index: atIndex });
       if (insertError) throw insertError;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),

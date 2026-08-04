@@ -58,7 +58,10 @@ export function useCreateSousEtape(etapeId: string) {
 export function useInsertSousEtapeAt(etapeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ atIndex, city }: { atIndex: number; city: string }) => {
+    mutationFn: async ({
+      atIndex,
+      ...input
+    }: Partial<VoyageSousEtape> & { atIndex: number; city: string }) => {
       const { data: existing, error: fetchError } = await supabase
         .from("voyage_sous_etapes")
         .select("id, order_index")
@@ -81,7 +84,7 @@ export function useInsertSousEtapeAt(etapeId: string) {
 
       const { error: insertError } = await supabase
         .from("voyage_sous_etapes")
-        .insert({ etape_id: etapeId, city, order_index: atIndex });
+        .insert({ ...input, etape_id: etapeId, order_index: atIndex });
       if (insertError) throw insertError;
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),

@@ -53,28 +53,37 @@ export function buildFlatRows(etapes: VoyageEtape[], sousEtapesByEtape: Map<stri
   return flat;
 }
 
-export function groupByCountry(flat: FlatRow[]): CountryGroup[] {
-  const groups: CountryGroup[] = [];
-  let current: CountryGroup | null = null;
-
+/**
+ * Regroupe les lignes plates par pays, à partir de la liste des étapes elle-même (pas
+ * seulement des lignes) : un pays fraîchement créé sans aucune ville doit rester visible
+ * dans le tableau (bandeau avec 0 ville), pas disparaître silencieusement.
+ */
+export function groupByCountry(etapes: VoyageEtape[], flat: FlatRow[]): CountryGroup[] {
+  const sortedEtapes = [...etapes].sort((a, b) => a.order_index - b.order_index);
+  const rowsByEtape = new Map<string, FlatRow[]>();
   for (const row of flat) {
-    if (!current || current.etape.id !== row.etape.id) {
-      current = { etape: row.etape, rows: [], totalKm: 0, totalNights: 0, stepRangeLabel: "" };
-      groups.push(current);
+    const list = rowsByEtape.get(row.etape.id) ?? [];
+    list.push(row);
+    rowsByEtape.set(row.etape.id, list);
+  }
+
+  return sortedEtapes.map((etape) => {
+    const rows = rowsByEtape.get(etape.id) ?? [];
+    let totalKm = 0;
+    let totalNights = 0;
+    for (const row of rows) {
+      totalKm += row.incomingDistanceKm ?? 0;
+      totalNights += row.sousEtape.duration_days ?? 0;
     }
-    current.rows.push(row);
-    current.totalKm += row.incomingDistanceKm ?? 0;
-    current.totalNights += row.sousEtape.duration_days ?? 0;
-  }
-
-  for (const group of groups) {
-    const indices = group.rows.map((r) => r.globalIndex);
-    const min = Math.min(...indices);
-    const max = Math.max(...indices);
-    group.stepRangeLabel = min === max ? String(min) : `${min}–${max}`;
-  }
-
-  return groups;
+    let stepRangeLabel = "";
+    if (rows.length > 0) {
+      const indices = rows.map((r) => r.globalIndex);
+      const min = Math.min(...indices);
+      const max = Math.max(...indices);
+      stepRangeLabel = min === max ? String(min) : `${min}–${max}`;
+    }
+    return { etape, rows, totalKm, totalNights, stepRangeLabel };
+  });
 }
 
 /** Facteurs d'émission indicatifs (kg CO2 / km / personne), sans appel à une API externe. */
@@ -192,4 +201,44 @@ export function cascadeDatesFrom(
   }
 
   return updates;
+}
+
+/** Recalcule la distance (km) de chaque ville par rapport à la précédente dans la séquence donnée, quand les deux ont des coordonnées GPS. */
+function recomputeDistances(flat: FlatRow[]): Array<{ id: string; distance_km: number }> {
+  const updates: Array<{ id: string; distance_km: number }> = [];
+  for (let i = 1; i < flat.length; i++) {
+    const row = flat[i].sousEtape;
+    const prev = flat[i - 1].sousEtape;
+    if (row.latitude != null && row.longitude != null && prev.latitude != null && prev.longitude != null) {
+      updates.push({ id: row.id, distance_km: haversineDistanceKm(prev.latitude, prev.longitude, row.latitude, row.longitude) });
+    }
+  }
+  return updates;
+}
+
+/**
+ * Après un glisser-déposer (ville ou pays), recalcule à la fois les dates en cascade (à partir
+ * de l'ancre fournie) et les distances GPS entre villes consécutives dans le nouvel ordre, pour
+ * que le tableau reste toujours cohérent après un réordonnancement.
+ */
+export function buildReorderUpdates(
+  newFlat: FlatRow[],
+  anchorStartDate: string | undefined
+): Array<{ id: string; start_date?: string; end_date?: string; duration_days?: number; distance_km?: number }> {
+  if (newFlat.length === 0) return [];
+  const dateUpdates = cascadeDatesFrom(newFlat, newFlat[0].sousEtape.id, anchorStartDate ? { start_date: anchorStartDate } : {});
+  const dateById = new Map(dateUpdates.map((u) => [u.id, u]));
+  const distanceUpdates = recomputeDistances(newFlat);
+  const distanceById = new Map(distanceUpdates.map((u) => [u.id, u.distance_km]));
+
+  const ids = new Set<string>([...dateById.keys(), ...distanceById.keys()]);
+  return Array.from(ids).map((id) => {
+    const dateU = dateById.get(id);
+    const distance = distanceById.get(id);
+    return {
+      id,
+      ...(dateU ? { start_date: dateU.start_date, end_date: dateU.end_date, duration_days: dateU.duration_days } : {}),
+      ...(distance !== undefined ? { distance_km: distance } : {}),
+    };
+  });
 }

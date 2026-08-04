@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateSousEtape, useUpdateSousEtape } from "@/features/voyages/use-sous-etapes";
+import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt } from "@/features/voyages/use-sous-etapes";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import type { VoyageSousEtape } from "@/types/database";
@@ -18,16 +18,24 @@ export function SousEtapeDialog({
   trigger,
   previousPoint,
   countryName,
+  insertAtIndex,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: {
   etapeId: string;
   nextOrder: number;
   existing?: VoyageSousEtape;
-  trigger?: ReactNode;
+  trigger?: ReactNode | null;
   previousPoint?: { lat: number; lng: number } | null;
   countryName?: string;
+  insertAtIndex?: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const countryCode = countryName ? findCountryByName(countryName)?.cca2 : undefined;
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [city, setCity] = useState(existing?.city ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? "");
   const [endDate, setEndDate] = useState(existing?.end_date ?? "");
@@ -43,6 +51,7 @@ export function SousEtapeDialog({
   const [submitting, setSubmitting] = useState(false);
   const createSousEtape = useCreateSousEtape(etapeId);
   const updateSousEtape = useUpdateSousEtape(etapeId);
+  const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -69,8 +78,12 @@ export function SousEtapeDialog({
     try {
       if (existing) {
         await updateSousEtape.mutateAsync({ id: existing.id, ...payload });
+      } else if (insertAtIndex !== undefined) {
+        await insertSousEtapeAt.mutateAsync({ ...payload, atIndex: insertAtIndex });
       } else {
         await createSousEtape.mutateAsync({ ...payload, order_index: nextOrder });
+      }
+      if (!existing) {
         setCity("");
         setStartDate("");
         setEndDate("");
@@ -92,13 +105,15 @@ export function SousEtapeDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button size="sm" variant="outline">
-            <Plus className="mr-2 h-4 w-4" /> Ville
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="outline">
+              <Plus className="mr-2 h-4 w-4" /> Ville
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{existing ? "Modifier la sous-étape" : "Nouvelle sous-étape (ville)"}</DialogTitle>
@@ -130,11 +145,7 @@ export function SousEtapeDialog({
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Distance depuis l'étape précédente (km)</Label>
-              <Input type="number" step="0.1" value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} />
-            </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Latitude</Label>
               <Input type="number" step="0.000001" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
@@ -144,6 +155,10 @@ export function SousEtapeDialog({
               <Input type="number" step="0.000001" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            La distance depuis l'étape précédente est calculée automatiquement (visible dans le tableau) à partir des
+            coordonnées GPS choisies via le champ Ville ci-dessus.
+          </p>
           <div className="space-y-2">
             <Label>Logement (texte libre ou lien)</Label>
             <Textarea value={lodging} onChange={(e) => setLodging(e.target.value)} />

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateEtape, useUpdateEtape } from "@/features/voyages/use-etapes";
+import { useCreateEtape, useUpdateEtape, useInsertEtapeAt } from "@/features/voyages/use-etapes";
 import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryPicker } from "@/features/voyages/itinerary/location-pickers";
 import { cn } from "@/lib/utils";
@@ -20,13 +20,21 @@ export function EtapeDialog({
   nextOrder,
   existing,
   trigger,
+  insertAtIndex,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: {
   voyageId: string;
   nextOrder: number;
   existing?: VoyageEtape;
-  trigger?: ReactNode;
+  trigger?: ReactNode | null;
+  insertAtIndex?: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [countryRegion, setCountryRegion] = useState(existing?.country_region ?? "");
   const [arrivalDate, setArrivalDate] = useState(existing?.arrival_date ?? "");
   const [durationDays, setDurationDays] = useState(existing?.duration_days?.toString() ?? "");
@@ -42,6 +50,7 @@ export function EtapeDialog({
   const [submitting, setSubmitting] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
+  const insertEtapeAt = useInsertEtapeAt(voyageId);
 
   function cycleMonth(index: number) {
     setClimate((prev) => {
@@ -72,8 +81,12 @@ export function EtapeDialog({
     try {
       if (existing) {
         await updateEtape.mutateAsync({ id: existing.id, ...payload });
+      } else if (insertAtIndex !== undefined) {
+        await insertEtapeAt.mutateAsync({ ...payload, atIndex: insertAtIndex });
       } else {
         await createEtape.mutateAsync({ ...payload, order_index: nextOrder });
+      }
+      if (!existing) {
         setCountryRegion("");
         setArrivalDate("");
         setDurationDays("");
@@ -95,13 +108,15 @@ export function EtapeDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="mr-2 h-4 w-4" /> Nouvelle étape
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> Nouvelle étape
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{existing ? "Modifier l'étape" : "Nouvelle étape (pays/région)"}</DialogTitle>
