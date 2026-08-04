@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { COUNTRIES } from "@/features/voyages/itinerary/countries-data";
+import { cn } from "@/lib/utils";
 
 type PickerProps = {
   value: string;
@@ -18,6 +19,21 @@ export function findCountryByName(name: string) {
 /** Emoji drapeau du pays s'il est reconnu dans la référence statique, sinon null. */
 export function getCountryFlag(name: string): string | null {
   return findCountryByName(name)?.flag ?? null;
+}
+
+/** Code ISO 3166-1 alpha-2 du pays s'il est reconnu, sinon null (pour l'image de drapeau réelle). */
+export function getCountryCca2(name: string): string | null {
+  return findCountryByName(name)?.cca2 ?? null;
+}
+
+/**
+ * Vrai drapeau (image SVG via le package flag-icons, embarqué au build, aucun appel réseau),
+ * fiable sur toutes les plateformes contrairement à l'emoji (rendu en deux lettres sur Windows).
+ */
+export function CountryFlag({ name, className }: { name: string; className?: string }) {
+  const cca2 = getCountryCca2(name);
+  if (!cca2) return null;
+  return <span className={cn("fi", `fi-${cca2.toLowerCase()}`, className)} title={name} />;
 }
 
 /** Champ pays avec suggestions filtrées localement (données embarquées, aucun appel réseau) + drapeau + GPS auto. */
@@ -57,7 +73,7 @@ export function CountryPicker({ value, onChange, onSelect, placeholder }: Picker
                 setOpen(false);
               }}
             >
-              <span>{c.flag}</span>
+              <span className={cn("fi", `fi-${c.cca2.toLowerCase()}`)} />
               <span>{c.name}</span>
             </button>
           ))}

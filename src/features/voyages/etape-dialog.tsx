@@ -6,12 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateEtape, useUpdateEtape, useInsertEtapeAt } from "@/features/voyages/use-etapes";
+import { useCreateEtape, useUpdateEtape, useInsertEtapeAt, useDeleteEtape } from "@/features/voyages/use-etapes";
 import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryPicker } from "@/features/voyages/itinerary/location-pickers";
 import { cn } from "@/lib/utils";
 import type { ClimateRating, VoyageEtape } from "@/types/database";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 const RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
 
@@ -48,9 +48,11 @@ export function EtapeDialog({
   const [longitude, setLongitude] = useState(existing?.longitude?.toString() ?? "");
   const [climate, setClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
   const insertEtapeAt = useInsertEtapeAt(voyageId);
+  const deleteEtape = useDeleteEtape(voyageId);
 
   function cycleMonth(index: number) {
     setClimate((prev) => {
@@ -106,6 +108,18 @@ export function EtapeDialog({
     }
   }
 
+  async function handleDelete() {
+    if (!existing) return;
+    if (!window.confirm(`Supprimer le pays "${existing.country_region}" et toutes ses villes ? Cette action est irréversible.`)) return;
+    setDeleting(true);
+    try {
+      await deleteEtape.mutateAsync(existing.id);
+      setOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger !== null && (
@@ -117,7 +131,7 @@ export function EtapeDialog({
           )}
         </DialogTrigger>
       )}
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{existing ? "Modifier l'étape" : "Nouvelle étape (pays/région)"}</DialogTitle>
         </DialogHeader>
@@ -154,32 +168,36 @@ export function EtapeDialog({
               <Input type="number" step="0.000001" placeholder="ex. 2.3522" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox checked={visaNeeded} onCheckedChange={(c) => setVisaNeeded(!!c)} id="visa" />
-            <Label htmlFor="visa">Visa nécessaire</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <Checkbox checked={visaNeeded} onCheckedChange={(c) => setVisaNeeded(!!c)} id="visa" />
+              <Label htmlFor="visa">Visa nécessaire</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox checked={intlPermitNeeded} onCheckedChange={(c) => setIntlPermitNeeded(!!c)} id="permit" />
+              <Label htmlFor="permit">Permis international nécessaire</Label>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox checked={intlPermitNeeded} onCheckedChange={(c) => setIntlPermitNeeded(!!c)} id="permit" />
-            <Label htmlFor="permit">Permis international nécessaire</Label>
-          </div>
-          <div className="space-y-2">
-            <Label>Vaccins recommandés</Label>
-            <Input value={vaccines} onChange={(e) => setVaccines(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Mode de déplacement sur place</Label>
-            <Select value={transportMode} onValueChange={setTransportMode}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choisir un mode" />
-              </SelectTrigger>
-              <SelectContent>
-                {TRANSPORT_MODE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Vaccins recommandés</Label>
+              <Input value={vaccines} onChange={(e) => setVaccines(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Mode de déplacement sur place</Label>
+              <Select value={transportMode} onValueChange={setTransportMode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir un mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRANSPORT_MODE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
@@ -197,15 +215,24 @@ export function EtapeDialog({
               ))}
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Infos sécurité</Label>
-            <Textarea value={securityNotes} onChange={(e) => setSecurityNotes(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Infos sécurité</Label>
+              <Textarea value={securityNotes} onChange={(e) => setSecurityNotes(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes libres</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Notes libres</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <DialogFooter>
+          <DialogFooter className="flex items-center justify-between sm:justify-between">
+            {existing ? (
+              <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce pays"}
+              </Button>
+            ) : (
+              <span />
+            )}
             <Button type="submit" disabled={submitting}>
               {submitting ? "Enregistrement..." : "Enregistrer"}
             </Button>

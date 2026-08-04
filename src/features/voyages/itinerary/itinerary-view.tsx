@@ -9,13 +9,14 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight } from "lucide-react";
+import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEtapes, useReorderEtapes } from "@/features/voyages/use-etapes";
+import { useEtapes, useReorderEtapes, useDeleteEtape } from "@/features/voyages/use-etapes";
 import {
   useVoyageSousEtapes,
   useReorderSousEtapes,
   useUpdateSousEtape,
+  useDeleteSousEtape,
 } from "@/features/voyages/use-sous-etapes";
 import {
   buildFlatRows,
@@ -29,7 +30,7 @@ import {
   type CountryGroup,
 } from "@/features/voyages/itinerary/itinerary-model";
 import { MapView } from "@/features/voyages/itinerary/map-view";
-import { getCountryFlag } from "@/features/voyages/itinerary/location-pickers";
+import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { CarbonDashboard } from "@/features/voyages/itinerary/carbon-dashboard";
 import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
@@ -169,6 +170,7 @@ export function ItineraryView({
                   </>
                 )}
                 {tab === "climat" && <th className="px-3 py-3">Climat</th>}
+                <th className="w-10 px-2 py-3"></th>
               </tr>
               {tab === "climat" && (
                 <tr className="border-b border-border">
@@ -182,11 +184,12 @@ export function ItineraryView({
                       ))}
                     </div>
                   </td>
+                  <td></td>
                 </tr>
               )}
             </thead>
             <tbody>
-              <AddButton onClick={() => setCreatingCountryAt(0)} colSpan={tab === "dates" ? 5 : 3} />
+              <AddButton onClick={() => setCreatingCountryAt(0)} colSpan={tab === "dates" ? 6 : 4} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
                   {groups.map((group, colorIndex) => (
@@ -246,6 +249,7 @@ function CountryBlock({
   const [collapsed, setCollapsed] = useState(false);
   const reorderCities = useReorderSousEtapes(group.etape.id);
   const updateSousEtapeForReorder = useUpdateSousEtape(group.etape.id);
+  const deleteEtape = useDeleteEtape(group.etape.voyage_id);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const {
     attributes: countryAttributes,
@@ -296,7 +300,12 @@ function CountryBlock({
     }
   }
 
-  const colSpan = tab === "dates" ? 5 : 3;
+  const colSpan = tab === "dates" ? 6 : 4;
+
+  function handleDeleteCountry() {
+    if (!window.confirm(`Supprimer le pays "${group.etape.country_region}" et toutes ses villes ? Cette action est irréversible.`)) return;
+    deleteEtape.mutate(group.etape.id);
+  }
 
   return (
     <>
@@ -332,9 +341,7 @@ function CountryBlock({
             >
               <ChevronRight className={cn("h-4 w-4 transition-transform", !collapsed && "rotate-90")} />
             </button>
-            {getCountryFlag(group.etape.country_region) && (
-              <span className="text-lg leading-none">{getCountryFlag(group.etape.country_region)}</span>
-            )}
+            <CountryFlag name={group.etape.country_region} className="text-base shadow-sm" />
             {group.etape.country_region}
             {group.totalKm > 0 && (
               <span className="text-xs font-normal text-muted-foreground">
@@ -372,6 +379,16 @@ function CountryBlock({
           </>
         )}
         {tab === "climat" && <td className="px-3 py-3"></td>}
+        <td className="px-2 py-3 text-center">
+          <button
+            type="button"
+            onClick={handleDeleteCountry}
+            title="Supprimer ce pays"
+            className="text-muted-foreground opacity-0 hover:text-destructive group-hover/country:opacity-60 hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </td>
       </tr>
 
       {!collapsed && group.rows.length === 0 && (
@@ -418,6 +435,7 @@ function CountryBlock({
               })()
             : null
         }
+        previousRowId={creatingCityAt !== null && creatingCityAt > 0 ? group.rows[creatingCityAt - 1]?.sousEtape.id : undefined}
       />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
@@ -459,6 +477,7 @@ function CityRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
   const updateSousEtape = useUpdateSousEtape(etapeId);
+  const deleteSousEtape = useDeleteSousEtape(etapeId);
   const se = row.sousEtape;
   const previousRow = allFlat.find((r) => r.globalIndex === row.globalIndex - 1);
   const previousPoint =
@@ -491,6 +510,11 @@ function CityRow({
 
   const TransportIcon = transportIcon(row.incomingMode);
   const hasIncoming = row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode);
+
+  function handleDeleteCity() {
+    if (!window.confirm(`Supprimer la ville "${se.city}" ? Cette action est irréversible.`)) return;
+    deleteSousEtape.mutate(se.id);
+  }
 
   return (
     <tr ref={setNodeRef} style={style} className={cn("group relative border-b border-border last:border-0", isDragging && "opacity-50")}>
@@ -526,6 +550,7 @@ function CityRow({
             nextOrder={0}
             existing={se}
             previousPoint={previousPoint}
+            previousRowId={previousRow?.sousEtape.id}
             countryName={row.etape.country_region}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
@@ -575,6 +600,16 @@ function CityRow({
           <ClimateBand etape={se} row={row} />
         </td>
       )}
+      <td className="px-2 py-2.5 text-center">
+        <button
+          type="button"
+          onClick={handleDeleteCity}
+          title="Supprimer cette ville"
+          className="text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-60 hover:opacity-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </td>
     </tr>
   );
 }

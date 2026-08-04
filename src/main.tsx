@@ -6,6 +6,7 @@ import { AuthProvider } from "@/app/providers/auth-provider";
 import { ThemeProvider } from "@/app/providers/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import App from "./App";
+import "flag-icons/css/flag-icons.min.css";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(

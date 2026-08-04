@@ -203,14 +203,20 @@ export function cascadeDatesFrom(
   return updates;
 }
 
-/** Recalcule la distance (km) de chaque ville par rapport à la précédente dans la séquence donnée, quand les deux ont des coordonnées GPS. */
+/**
+ * Recalcule la distance (km) de chaque ville par rapport à la suivante dans la séquence donnée,
+ * quand les deux ont des coordonnées GPS. Convention de stockage : le champ `distance_km` d'une
+ * sous-étape représente le trajet SORTANT vers la ville SUIVANTE (donc stocké sur l'ORIGINE du
+ * trajet), affiché décalé d'une ligne comme "distance entrante" sur la ville de DESTINATION
+ * (voir buildFlatRows). Toute écriture doit donc cibler la ligne d'origine, pas la destination.
+ */
 function recomputeDistances(flat: FlatRow[]): Array<{ id: string; distance_km: number }> {
   const updates: Array<{ id: string; distance_km: number }> = [];
-  for (let i = 1; i < flat.length; i++) {
-    const row = flat[i].sousEtape;
-    const prev = flat[i - 1].sousEtape;
-    if (row.latitude != null && row.longitude != null && prev.latitude != null && prev.longitude != null) {
-      updates.push({ id: row.id, distance_km: haversineDistanceKm(prev.latitude, prev.longitude, row.latitude, row.longitude) });
+  for (let i = 0; i < flat.length - 1; i++) {
+    const origin = flat[i].sousEtape;
+    const destination = flat[i + 1].sousEtape;
+    if (origin.latitude != null && origin.longitude != null && destination.latitude != null && destination.longitude != null) {
+      updates.push({ id: origin.id, distance_km: haversineDistanceKm(origin.latitude, origin.longitude, destination.latitude, destination.longitude) });
     }
   }
   return updates;
