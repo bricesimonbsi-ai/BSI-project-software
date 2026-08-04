@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateEtape, useUpdateEtape, useInsertEtapeAt, useDeleteEtape } from "@/features/voyages/use-etapes";
 import { CLIMATE_COLOR_CLASS, MONTH_LABELS, TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag, CountryPicker } from "@/features/voyages/itinerary/location-pickers";
+import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ClimateRating, VoyageEtape } from "@/types/database";
-import { Plus, Trash2, Lock } from "lucide-react";
+import { Plus, Trash2, Lock, Sparkles } from "lucide-react";
 
 const RATING_CYCLE: ClimateRating[] = ["good", "mid", "bad"];
 
@@ -53,6 +55,7 @@ export function EtapeDialog({
   const [climate, setClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [suggestingClimate, setSuggestingClimate] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
   const insertEtapeAt = useInsertEtapeAt(voyageId);
@@ -65,6 +68,27 @@ export function EtapeDialog({
       next[index] = RATING_CYCLE[(currentIndex + 1) % RATING_CYCLE.length];
       return next;
     });
+  }
+
+  async function handleSuggestClimate() {
+    if (!latitude || !longitude) {
+      toast({
+        title: "Coordonnées manquantes",
+        description: "Choisis d'abord le pays via la liste déroulante pour obtenir ses coordonnées GPS.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSuggestingClimate(true);
+    try {
+      const suggested = await estimateClimateByMonth(Number(latitude), Number(longitude));
+      setClimate(suggested);
+      toast({ title: "Climat suggéré", description: "Basé sur l'historique météo réel (Open-Meteo), à ajuster si besoin." });
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSuggestingClimate(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -220,7 +244,13 @@ export function EtapeDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
+              <Button type="button" size="sm" variant="outline" onClick={handleSuggestClimate} disabled={suggestingClimate}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                {suggestingClimate ? "Analyse..." : "Suggérer (Open-Meteo)"}
+              </Button>
+            </div>
             <div className="flex overflow-hidden rounded-md">
               {climate.map((rating, i) => (
                 <button
@@ -234,6 +264,10 @@ export function EtapeDialog({
                 </button>
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Suggestion basée sur l'historique météo réel des 5 dernières années (Open-Meteo, gratuit, sans clé) —
+              une estimation à ajuster si besoin, pas une prévision.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
