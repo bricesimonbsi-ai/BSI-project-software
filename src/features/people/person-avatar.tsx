@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** Palette cyclique, une couleur par voyageur selon sa position (pas de choix manuel à faire). */
+/** Palette cyclique, une couleur par personne selon sa position (pas de choix manuel à faire). */
 const AVATAR_COLOR_CLASSES = [
   "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
   "bg-sky-500/20 text-sky-700 dark:text-sky-300",
@@ -10,11 +10,11 @@ const AVATAR_COLOR_CLASSES = [
   "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300",
 ];
 
-/** Émojis suggérés pour un avatar de voyageur, sans forcer une saisie. */
-export const TRAVELER_EMOJI_SUGGESTIONS = ["🧑", "👩", "👨", "🧒", "👵", "👴", "🧑‍🦱", "👩‍🦰", "🧔", "👶"];
+/** Émojis suggérés pour un avatar de personne, sans forcer une saisie. */
+export const PERSON_EMOJI_SUGGESTIONS = ["🧑", "👩", "👨", "🧒", "👵", "👴", "🧑‍🦱", "👩‍🦰", "🧔", "👶"];
 
 /** Avatar rond : émoji choisi, ou à défaut l'initiale du nom sur un fond coloré cyclique. */
-export function TravelerAvatarBadge({
+export function PersonAvatarBadge({
   name,
   avatarEmoji,
   index,

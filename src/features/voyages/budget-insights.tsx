@@ -1,46 +1,44 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
-import { useTravelers } from "@/features/voyages/use-travelers";
+import { useProjectPeople } from "@/features/people/use-people";
 import {
-  useVoyageBudgetSummary,
   useVoyageCategoryBudgetSummary,
-  useVoyageTravelerExpenseSummary,
-  useCreateExpense,
+  useVoyagePersonExpenseSummary,
   PRE_DEPARTURE_CATEGORIES,
   ON_SITE_CATEGORIES,
 } from "@/features/voyages/use-expenses";
-import { buildFlatRows } from "@/features/voyages/itinerary/itinerary-model";
-import { estimateBudget, TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
+import { buildFlatRows, groupByCountry } from "@/features/voyages/itinerary/itinerary-model";
+import { findCountryByName } from "@/features/voyages/itinerary/location-pickers";
+import { estimateFlightsEur, estimateVisasEur } from "@/features/voyages/budget-estimate";
+import { estimateLodgingAndFoodByCountry } from "@/features/voyages/cost-of-living";
+import { BudgetRing } from "@/features/voyages/budget-ring";
 import { formatCurrency } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
 import type { ExpenseCategory, TravelStyle, Voyage, VoyageSousEtape } from "@/types/database";
-import { Sparkles } from "lucide-react";
 
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   [...PRE_DEPARTURE_CATEGORIES, ...ON_SITE_CATEGORIES].map((c) => [c.value, c.label])
 );
 
-/** Indicateurs budget (total, par personne, par catégorie) + estimation indicative à partir
- * de l'itinéraire, dans l'onglet Budget. */
-export function BudgetInsights({ voyage }: { voyage: Voyage }) {
+/** Catégories automatiquement complétées par l'estimation indicative (hébergement,
+ * nourriture, vols, visas) — additionnées à ce qui a été saisi manuellement. */
+const AUTO_ESTIMATE_CATEGORIES: ExpenseCategory[] = ["logement", "nourriture", "transport_international", "visas"];
+
+/** Indicateurs budget (total, par personne, par catégorie) + estimation indicative fondue
+ * directement dans les totaux affichés, et comparatif prévisionnel / réel en anneaux. */
+export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectId: string }) {
   const voyageId = voyage.id;
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
-  const { data: travelers } = useTravelers(voyageId);
-  const { data: budgetSummary } = useVoyageBudgetSummary(voyageId);
+  const { data: linkedPeople } = useProjectPeople(projectId);
   const { data: categorySummary } = useVoyageCategoryBudgetSummary(voyageId);
-  const { data: travelerSummary } = useVoyageTravelerExpenseSummary(voyageId);
-  const createExpense = useCreateExpense({ voyageId }, ["voyage-expenses", voyageId]);
-  const [style, setStyle] = useState<TravelStyle>(voyage.travel_style ?? "standard");
-  const [adding, setAdding] = useState(false);
+  const { data: personSummary } = useVoyagePersonExpenseSummary(voyageId);
 
-  const travelerCount = travelers?.length || voyage.adults_count + voyage.children_count || 1;
+  const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
+  const style: TravelStyle = voyage.travel_style ?? "standard";
 
-  const itineraryStats = useMemo(() => {
+  const itinerary = useMemo(() => {
     const map = new Map<string, VoyageSousEtape[]>();
     for (const se of allSousEtapes ?? []) {
       const list = map.get(se.etape_id) ?? [];
@@ -48,63 +46,73 @@ export function BudgetInsights({ voyage }: { voyage: Voyage }) {
       map.set(se.etape_id, list);
     }
     const flat = buildFlatRows(etapes ?? [], map);
-    const totalNights = flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0);
+    const groups = groupByCountry(etapes ?? [], flat);
     const flightKm = flat.reduce(
       (sum, r) => sum + (r.incomingMode?.toLowerCase().includes("avion") ? r.incomingDistanceKm ?? 0 : 0),
       0
     );
     const visaEtapeCount = (etapes ?? []).filter((e) => e.visa_needed).length;
-    return { totalNights, flightKm, visaEtapeCount };
+    const countryNights = groups.map((g) => ({
+      countryCode: findCountryByName(g.etape.country_region)?.cca2 ?? null,
+      nights: g.totalNights,
+    }));
+    return { flightKm, visaEtapeCount, countryNights };
   }, [etapes, allSousEtapes]);
 
-  const estimate = estimateBudget({
-    totalNights: itineraryStats.totalNights,
-    travelerCount,
-    lodgingCount: voyage.lodging_count ?? travelerCount,
-    flightKm: itineraryStats.flightKm,
-    visaEtapeCount: itineraryStats.visaEtapeCount,
-    style,
-  });
+  const [autoEstimate, setAutoEstimate] = useState({ logement: 0, nourriture: 0, transport_international: 0, visas: 0 });
 
-  async function handleAddEstimateToBudget() {
-    setAdding(true);
-    try {
-      const allLines: { category: ExpenseCategory; amount: number; description: string }[] = [
-        { category: "logement", amount: estimate.lodging, description: "Estimation hébergement (auto)" },
-        { category: "nourriture", amount: estimate.food, description: "Estimation nourriture (auto)" },
-        { category: "transport_international", amount: estimate.flights, description: "Estimation vols inter-étapes (auto)" },
-        { category: "visas", amount: estimate.visas, description: "Estimation visas (auto)" },
-      ];
-      const lines = allLines.filter((l) => l.amount > 0);
-      for (const line of lines) {
-        await createExpense.mutateAsync({
-          category: line.category,
-          planned: true,
-          amount: Math.round(line.amount),
-          currency: "EUR",
-          manual_rate_to_reference: 1,
-          description: line.description,
-        });
-      }
-      toast({
-        title: "Estimation ajoutée au budget prévisionnel",
-        description:
-          voyage.reference_currency !== "EUR"
-            ? "Ajoutée en EUR — ajuste le taux si ta devise de référence est différente."
-            : undefined,
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      const { lodging, food } = await estimateLodgingAndFoodByCountry(
+        itinerary.countryNights,
+        style,
+        travelerCount,
+        voyage.lodging_count ?? travelerCount
+      );
+      if (cancelled) return;
+      setAutoEstimate({
+        logement: lodging,
+        nourriture: food,
+        transport_international: estimateFlightsEur(itinerary.flightKm, travelerCount),
+        visas: estimateVisasEur(itinerary.visaEtapeCount, style, travelerCount),
       });
-    } finally {
-      setAdding(false);
     }
-  }
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [itinerary, style, travelerCount, voyage.lodging_count]);
 
-  const totalPlanned = budgetSummary?.total_planned ?? 0;
+  // Fond en dur les totaux saisis (par catégorie) avec l'estimation automatique, pour que
+  // l'estimation alimente directement les indicateurs déjà affichés — pas d'encart séparé,
+  // pas de fausses dépenses créées en base.
+  const blendedCategories = useMemo(() => {
+    const byCategory = new Map((categorySummary ?? []).map((c) => [c.category, c]));
+    const allCategories = new Set<ExpenseCategory>([
+      ...PRE_DEPARTURE_CATEGORIES.map((c) => c.value),
+      ...ON_SITE_CATEGORIES.map((c) => c.value),
+      ...(categorySummary ?? []).map((c) => c.category),
+    ]);
+    return Array.from(allCategories).map((category) => {
+      const row = byCategory.get(category);
+      const estimate = (autoEstimate as Record<string, number>)[category] ?? 0;
+      return {
+        category,
+        label: CATEGORY_LABELS[category] ?? category,
+        planned: (row?.total_planned ?? 0) + estimate,
+        actual: row?.total_actual ?? 0,
+        isEstimated: AUTO_ESTIMATE_CATEGORIES.includes(category) && estimate > 0,
+      };
+    });
+  }, [categorySummary, autoEstimate]);
+
+  // Le transport local (sur place) est exclu du budget prévisionnel total affiché — c'est
+  // une dépense courante du quotidien du voyage, pas un poste à planifier à l'avance.
+  const headlineRows = blendedCategories.filter((c) => c.category !== "transport_local" && (c.planned > 0 || c.actual > 0));
+  const totalPlanned = headlineRows.reduce((sum, c) => sum + c.planned, 0);
+  const totalActual = headlineRows.reduce((sum, c) => sum + c.actual, 0);
   const perPersonPlanned = totalPlanned / travelerCount;
-
-  const categoryRows = (categorySummary ?? [])
-    .map((c) => ({ ...c, label: CATEGORY_LABELS[c.category] ?? c.category }))
-    .sort((a, b) => (b.total_planned ?? 0) - (a.total_planned ?? 0));
-  const maxCategoryTotal = Math.max(1, ...categoryRows.map((c) => c.total_planned ?? 0));
 
   return (
     <div className="space-y-4">
@@ -117,7 +125,7 @@ export function BudgetInsights({ voyage }: { voyage: Voyage }) {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-lg font-bold">{formatCurrency(budgetSummary?.total_actual ?? 0, voyage.reference_currency)}</p>
+            <p className="text-lg font-bold">{formatCurrency(totalActual, voyage.reference_currency)}</p>
             <p className="text-xs text-muted-foreground">Dépenses réelles totales</p>
           </CardContent>
         </Card>
@@ -135,94 +143,73 @@ export function BudgetInsights({ voyage }: { voyage: Voyage }) {
           </CardContent>
         </Card>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Le total exclut le transport local (dépense courante sur place, pas un poste à planifier à l'avance) et inclut une
+        estimation automatique indicative pour l'hébergement et la nourriture (selon le style de voyage et le coût de la vie
+        de chaque pays traversé), les vols inter-étapes et les visas — visible aussi dans le détail par catégorie ci-dessous.
+        Style de voyage réglable dans l'onglet Aperçu.
+      </p>
 
-      {categoryRows.length > 0 && (
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Comparatif prévisionnel / réel
+        </h3>
+        <div className="flex flex-wrap gap-4">
+          <BudgetRing label="Ensemble du voyage" planned={totalPlanned} actual={totalActual} currency={voyage.reference_currency} size={112} />
+          {headlineRows.map((c) => (
+            <BudgetRing key={c.category} label={c.label} planned={c.planned} actual={c.actual} currency={voyage.reference_currency} />
+          ))}
+        </div>
+      </div>
+
+      {headlineRows.length > 0 && (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Par grande catégorie (prévisionnel)
           </h3>
           <div className="space-y-2">
-            {categoryRows.map((c) => (
-              <div key={c.category} className="flex items-center gap-3 text-sm">
-                <span className="w-40 flex-shrink-0 truncate">{c.label}</span>
-                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${((c.total_planned ?? 0) / maxCategoryTotal) * 100}%` }}
-                  />
+            {headlineRows
+              .slice()
+              .sort((a, b) => b.planned - a.planned)
+              .map((c) => (
+                <div key={c.category} className="flex items-center gap-3 text-sm">
+                  <span className="w-40 flex-shrink-0 truncate">
+                    {c.label}
+                    {c.isEstimated && <span className="ml-1 text-xs text-muted-foreground">(inclut estimation)</span>}
+                  </span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${(c.planned / Math.max(1, ...headlineRows.map((r) => r.planned))) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-24 flex-shrink-0 text-right font-semibold">
+                    {formatCurrency(c.planned, voyage.reference_currency)}
+                  </span>
                 </div>
-                <span className="w-24 flex-shrink-0 text-right font-semibold">
-                  {formatCurrency(c.total_planned ?? 0, voyage.reference_currency)}
-                </span>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
 
-      {travelerSummary && travelerSummary.length > 0 && (
+      {personSummary && personSummary.length > 0 && (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Dépenses rattachées à une personne
           </h3>
           <div className="space-y-1">
-            {travelerSummary.map((t) => (
-              <div key={t.traveler_id} className="flex items-center justify-between text-sm">
-                <span>{t.name}</span>
+            {personSummary.map((p) => (
+              <div key={p.person_id} className="flex items-center justify-between text-sm">
+                <span>{p.name}</span>
                 <span className="font-semibold">
-                  {formatCurrency(t.total_planned ?? 0, voyage.reference_currency)} prévu ·{" "}
-                  {formatCurrency(t.total_actual ?? 0, voyage.reference_currency)} réel
+                  {formatCurrency(p.total_planned ?? 0, voyage.reference_currency)} prévu ·{" "}
+                  {formatCurrency(p.total_actual ?? 0, voyage.reference_currency)} réel
                 </span>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Estimation indicative à partir de l'itinéraire</p>
-            <Select value={style} onValueChange={(v) => setStyle(v as TravelStyle)}>
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TRAVEL_STYLE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Hébergement</p>
-              <p className="font-semibold">{formatCurrency(estimate.lodging, "EUR")}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Nourriture</p>
-              <p className="font-semibold">{formatCurrency(estimate.food, "EUR")}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Vols inter-étapes</p>
-              <p className="font-semibold">{formatCurrency(estimate.flights, "EUR")}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Visas</p>
-              <p className="font-semibold">{formatCurrency(estimate.visas, "EUR")}</p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Basé sur des tarifs forfaitaires par style de voyage (aucune source de coût de la vie en temps réel) — toujours en
-            EUR, à ajuster. N'inclut ni activités ni imprévus, pas estimables automatiquement.
-          </p>
-          <Button type="button" size="sm" onClick={handleAddEstimateToBudget} disabled={adding || estimate.total === 0}>
-            <Sparkles className="mr-1.5 h-4 w-4" /> {adding ? "Ajout..." : "Ajouter au budget prévisionnel"}
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }

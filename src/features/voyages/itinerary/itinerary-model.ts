@@ -115,6 +115,13 @@ export function estimateTotalCo2Kg(flat: FlatRow[]): number {
   return flat.reduce((sum, row) => sum + estimateCo2Kg(row.incomingDistanceKm, row.incomingMode), 0);
 }
 
+/** Dates de début/fin du voyage entier : celles de la toute première et toute dernière ville
+ * de l'itinéraire (l'ancre et son prolongement en cascade), pas une saisie indépendante. */
+export function getItineraryDateRange(flat: FlatRow[]): { start: string | null; end: string | null } {
+  if (flat.length === 0) return { start: null, end: null };
+  return { start: flat[0].sousEtape.start_date, end: flat[flat.length - 1].sousEtape.end_date };
+}
+
 export const CLIMATE_COLOR_CLASS: Record<string, string> = {
   good: "bg-emerald-500/25 dark:bg-emerald-400/25",
   mid: "bg-amber-500/25 dark:bg-amber-400/25",

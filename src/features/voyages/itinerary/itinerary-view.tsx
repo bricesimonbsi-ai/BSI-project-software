@@ -78,9 +78,11 @@ function transportIconColorClass(mode: string | null): string {
 export function ItineraryView({
   voyageId,
   referenceCurrency,
+  projectId,
 }: {
   voyageId: string;
   referenceCurrency: string;
+  projectId: string;
 }) {
   const [tab, setTab] = useState<Tab>("dates");
   const [creatingCountryAt, setCreatingCountryAt] = useState<number | null>(null);
@@ -240,6 +242,7 @@ export function ItineraryView({
                       group={group}
                       tab={tab}
                       referenceCurrency={referenceCurrency}
+                      projectId={projectId}
                       onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
                       allFlat={flat}
                       colorIndex={colorIndex}
@@ -276,6 +279,7 @@ function CountryBlock({
   group,
   tab,
   referenceCurrency,
+  projectId,
   onInsertCountryAfter,
   allFlat,
   colorIndex,
@@ -283,6 +287,7 @@ function CountryBlock({
   group: CountryGroup;
   tab: Tab;
   referenceCurrency: string;
+  projectId: string;
   onInsertCountryAfter: () => void;
   allFlat: FlatRow[];
   colorIndex: number;
@@ -453,6 +458,7 @@ function CountryBlock({
                 row={row}
                 tab={tab}
                 referenceCurrency={referenceCurrency}
+                projectId={projectId}
                 etapeId={group.etape.id}
                 allFlat={allFlat}
                 onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
@@ -480,7 +486,7 @@ function CountryBlock({
         }
         previousRowId={creatingCityAt !== null && creatingCityAt > 0 ? group.rows[creatingCityAt - 1]?.sousEtape.id : undefined}
         isFirstOverall={colorIndex === 0 && creatingCityAt === 0}
-        voyageId={group.etape.voyage_id}
+        projectId={projectId}
         referenceCurrency={referenceCurrency}
       />
 
@@ -510,6 +516,7 @@ function CityRow({
   row,
   tab,
   referenceCurrency,
+  projectId,
   etapeId,
   allFlat,
   onInsertAfter,
@@ -517,6 +524,7 @@ function CityRow({
   row: FlatRow;
   tab: Tab;
   referenceCurrency: string;
+  projectId: string;
   etapeId: string;
   allFlat: FlatRow[];
   onInsertAfter: () => void;
@@ -599,7 +607,7 @@ function CityRow({
             previousRowId={previousRow?.sousEtape.id}
             countryName={row.etape.country_region}
             isFirstOverall={row.globalIndex === 1}
-            voyageId={row.etape.voyage_id}
+            projectId={projectId}
             referenceCurrency={referenceCurrency}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />

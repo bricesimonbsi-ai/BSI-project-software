@@ -4,7 +4,7 @@ import { useThemeStore, type ThemeMode } from "@/features/theme/theme-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, Shapes } from "lucide-react";
+import { Sun, Moon, Monitor, Shapes, Users } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
@@ -37,6 +37,22 @@ export function SettingsPage() {
               <m.icon className="mr-2 h-4 w-4" /> {m.label}
             </Button>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Personnes</CardTitle>
+          <CardDescription>
+            Une liste de personnes réutilisable sur tous tes projets (ex. les voyageurs d'un voyage).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link to="/people">
+            <Button variant="outline">
+              <Users className="mr-2 h-4 w-4" /> Gérer les personnes
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 

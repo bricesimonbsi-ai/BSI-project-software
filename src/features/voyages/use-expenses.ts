@@ -7,7 +7,7 @@ import type {
   VoyageBudgetSummary,
   VoyageEtapeBudgetSummary,
   VoyageCategoryBudgetSummary,
-  VoyageTravelerExpenseSummary,
+  VoyagePersonExpenseSummary,
 } from "@/types/database";
 
 export const PRE_DEPARTURE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
@@ -62,20 +62,30 @@ export function useSousEtapeExpenses(sousEtapeId: string | undefined) {
   });
 }
 
+type ExpenseInput = {
+  category: ExpenseCategory;
+  planned: boolean;
+  amount: number;
+  currency: string;
+  manual_rate_to_reference: number;
+  description?: string;
+  expense_date?: string;
+  person_id?: string | null;
+};
+
+function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>, invalidateKey: unknown[]) {
+  queryClient.invalidateQueries({ queryKey: invalidateKey });
+  queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
+  queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
+  queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
+  queryClient.invalidateQueries({ queryKey: ["voyage-person-expense-summary"] });
+}
+
 export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: string }, invalidateKey: unknown[]) {
   const queryClient = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async (input: {
-      category: ExpenseCategory;
-      planned: boolean;
-      amount: number;
-      currency: string;
-      manual_rate_to_reference: number;
-      description?: string;
-      expense_date?: string;
-      traveler_id?: string | null;
-    }) => {
+    mutationFn: async (input: ExpenseInput) => {
       if (!session) throw new Error("Non authentifié");
       const { error } = await supabase.from("voyage_expenses").insert({
         voyage_id: scope.voyageId ?? null,
@@ -85,13 +95,18 @@ export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: strin
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: invalidateKey });
-      queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["voyage-traveler-expense-summary"] });
+    onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
+  });
+}
+
+export function useUpdateExpense(invalidateKey: unknown[]) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<ExpenseInput> & { id: string }) => {
+      const { error } = await supabase.from("voyage_expenses").update(updates).eq("id", id);
+      if (error) throw error;
     },
+    onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
   });
 }
 
@@ -102,13 +117,7 @@ export function useDeleteExpense(invalidateKey: unknown[]) {
       const { error } = await supabase.from("voyage_expenses").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: invalidateKey });
-      queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["voyage-traveler-expense-summary"] });
-    },
+    onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
   });
 }
 
@@ -159,14 +168,14 @@ export function useVoyageCategoryBudgetSummary(voyageId: string | undefined) {
   });
 }
 
-/** Dépenses réelles/prévisionnelles rattachées à chaque voyageur (quand renseigné sur la dépense). */
-export function useVoyageTravelerExpenseSummary(voyageId: string | undefined) {
+/** Dépenses réelles/prévisionnelles rattachées à chaque personne associée au projet du voyage. */
+export function useVoyagePersonExpenseSummary(voyageId: string | undefined) {
   return useQuery({
-    queryKey: ["voyage-traveler-expense-summary", voyageId],
+    queryKey: ["voyage-person-expense-summary", voyageId],
     enabled: !!voyageId,
-    queryFn: async (): Promise<VoyageTravelerExpenseSummary[]> => {
+    queryFn: async (): Promise<VoyagePersonExpenseSummary[]> => {
       const { data, error } = await supabase
-        .from("voyage_traveler_expense_summary")
+        .from("voyage_person_expense_summary")
         .select("*")
         .eq("voyage_id", voyageId as string);
       if (error) throw error;

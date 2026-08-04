@@ -105,6 +105,9 @@ export type Voyage = {
   updated_at: string;
 };
 
+/** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
+ * `ProjectPerson`. Le type et la table restent en base (migration additive) mais ne sont plus
+ * utilisés par l'application. */
 export type VoyageTraveler = {
   id: string;
   voyage_id: string;
@@ -113,6 +116,25 @@ export type VoyageTraveler = {
   order_index: number;
   created_at: string;
   updated_at: string;
+};
+
+/** Personne référencée globalement (nom + avatar), paramétrable pour tout le portefeuille,
+ * associable à n'importe quel projet via `ProjectPerson`. */
+export type Person = {
+  id: string;
+  created_by: string;
+  name: string;
+  avatar_emoji: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectPerson = {
+  id: string;
+  project_id: string;
+  person_id: string;
+  created_at: string;
 };
 
 /** Code couleur climatique par mois (index 0 = janvier). */
@@ -164,7 +186,9 @@ export type VoyageExpense = {
   id: string;
   voyage_id: string | null;
   sous_etape_id: string | null;
+  /** @deprecated voir Person/ProjectPerson. */
   traveler_id: string | null;
+  person_id: string | null;
   category: ExpenseCategory;
   planned: boolean;
   amount: number;
@@ -228,8 +252,17 @@ export type VoyageCategoryBudgetSummary = {
   total_actual: number | null;
 };
 
+/** @deprecated Remplacé par VoyagePersonExpenseSummary. */
 export type VoyageTravelerExpenseSummary = {
   traveler_id: string;
+  voyage_id: string;
+  name: string;
+  total_planned: number | null;
+  total_actual: number | null;
+};
+
+export type VoyagePersonExpenseSummary = {
+  person_id: string;
   voyage_id: string;
   name: string;
   total_planned: number | null;
@@ -256,6 +289,8 @@ export type Database = {
       voyage_sous_etapes: Table<VoyageSousEtape>;
       voyage_expenses: Table<VoyageExpense>;
       voyage_travelers: Table<VoyageTraveler>;
+      people: Table<Person>;
+      project_people: Table<ProjectPerson>;
       documents: Table<DocumentRow>;
       notifications: Table<NotificationRow>;
       notification_preferences: Table<NotificationPreferences>;
@@ -265,6 +300,7 @@ export type Database = {
       voyage_etape_budget_summary: { Row: VoyageEtapeBudgetSummary; Relationships: [] };
       voyage_category_budget_summary: { Row: VoyageCategoryBudgetSummary; Relationships: [] };
       voyage_traveler_expense_summary: { Row: VoyageTravelerExpenseSummary; Relationships: [] };
+      voyage_person_expense_summary: { Row: VoyagePersonExpenseSummary; Relationships: [] };
     };
     Functions: Record<string, never>;
     Enums: Record<string, never>;

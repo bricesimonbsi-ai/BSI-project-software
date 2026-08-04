@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useDeleteExpense } from "@/features/voyages/use-expenses";
-import { useTravelers } from "@/features/voyages/use-travelers";
+import { useProjectPeople } from "@/features/people/use-people";
+import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 const categoryLabels: Record<ExpenseCategory, string> = {
   equipement: "Équipement",
@@ -26,15 +28,21 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 export function ExpenseList({
   expenses,
   invalidateKey,
-  voyageId,
+  projectId,
+  categories,
+  referenceCurrency,
 }: {
   expenses: VoyageExpense[];
   invalidateKey: unknown[];
-  voyageId?: string;
+  projectId?: string;
+  /** Requis pour permettre la modification en ligne (mêmes catégories que le formulaire d'ajout). */
+  categories?: { value: ExpenseCategory; label: string }[];
+  referenceCurrency?: string;
 }) {
   const deleteExpense = useDeleteExpense(invalidateKey);
-  const { data: travelers } = useTravelers(voyageId);
-  const travelerName = (id: string | null) => (id ? travelers?.find((t) => t.id === id)?.name : undefined);
+  const { data: linkedPeople } = useProjectPeople(projectId);
+  const personName = (id: string | null) => (id ? linkedPeople?.find((l) => l.person_id === id)?.people.name : undefined);
+  const [editing, setEditing] = useState<VoyageExpense | null>(null);
 
   if (expenses.length === 0) {
     return <p className="text-sm text-muted-foreground">Aucune dépense pour l'instant.</p>;
@@ -48,19 +56,45 @@ export function ExpenseList({
             <p className="text-sm font-medium">
               {categoryLabels[expense.category]}
               {expense.description ? ` — ${expense.description}` : ""}
-              {travelerName(expense.traveler_id) ? ` · ${travelerName(expense.traveler_id)}` : ""}
+              {personName(expense.person_id) ? ` · ${personName(expense.person_id)}` : ""}
             </p>
             <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={expense.planned ? "outline" : "secondary"}>{expense.planned ? "Prévisionnel" : "Réel"}</Badge>
+            <Badge
+              className={cn(
+                "border-transparent",
+                expense.planned
+                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                  : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              )}
+            >
+              {expense.planned ? "Prévisionnel" : "Réel"}
+            </Badge>
             <span className="text-sm font-semibold">{formatCurrency(expense.amount, expense.currency)}</span>
+            {categories && referenceCurrency && (
+              <Button variant="ghost" size="icon" onClick={() => setEditing(expense)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </li>
       ))}
+      {editing && categories && referenceCurrency && (
+        <ExpenseFormDialog
+          existing={editing}
+          categories={categories}
+          referenceCurrency={referenceCurrency}
+          invalidateKey={invalidateKey}
+          projectId={projectId}
+          trigger={null}
+          open={editing !== null}
+          onOpenChange={(o) => !o && setEditing(null)}
+        />
+      )}
     </ul>
   );
 }

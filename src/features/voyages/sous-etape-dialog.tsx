@@ -29,7 +29,7 @@ export function SousEtapeDialog({
   countryName,
   insertAtIndex,
   isFirstOverall,
-  voyageId,
+  projectId,
   referenceCurrency,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
@@ -47,8 +47,8 @@ export function SousEtapeDialog({
    * la date se déduit automatiquement de la ville précédente (voir l'auto-guérison dans
    * ItineraryView) — seul le nombre de nuits reste éditable. */
   isFirstOverall?: boolean;
-  /** Nécessaires pour la section "Dépenses sur place" (voyageurs à rattacher, devise). */
-  voyageId?: string;
+  /** Nécessaires pour la section "Dépenses sur place" (personnes à rattacher, devise). */
+  projectId?: string;
   referenceCurrency?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -314,13 +314,16 @@ export function SousEtapeDialog({
                   categories={ON_SITE_CATEGORIES}
                   referenceCurrency={referenceCurrency ?? "EUR"}
                   invalidateKey={["sous-etape-expenses", existing.id]}
-                  voyageId={voyageId}
+                  projectId={projectId}
+                  defaultPlanned={false}
                 />
               </div>
               <ExpenseList
                 expenses={onSiteExpenses ?? []}
                 invalidateKey={["sous-etape-expenses", existing.id]}
-                voyageId={voyageId}
+                projectId={projectId}
+                categories={ON_SITE_CATEGORIES}
+                referenceCurrency={referenceCurrency ?? "EUR"}
               />
             </div>
           )}

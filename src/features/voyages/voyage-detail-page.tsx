@@ -17,7 +17,8 @@ import { DocumentsPanel } from "@/features/projects/documents-panel";
 import { TodoList } from "@/features/todos/todo-list";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
 import { VoyageSynthesis } from "@/features/voyages/voyage-synthesis";
-import { TravelersPanel } from "@/features/voyages/travelers-panel";
+import { useItineraryDateRange } from "@/features/voyages/use-itinerary-date-range";
+import { ProjectPeoplePicker } from "@/features/people/project-people-picker";
 import { BudgetInsights } from "@/features/voyages/budget-insights";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -32,10 +33,9 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const setAccentColor = useThemeStore((s) => s.setAccentColor);
 
   const { data: preDepartureExpenses } = useVoyageExpenses(voyage?.id);
+  const itineraryDates = useItineraryDateRange(voyage?.id);
 
   const [form, setForm] = useState({
-    start_date: "",
-    end_date: "",
     adults_count: "1",
     children_count: "0",
     reference_currency: "EUR",
@@ -47,8 +47,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (voyage) {
       setForm({
-        start_date: voyage.start_date ?? "",
-        end_date: voyage.end_date ?? "",
         adults_count: String(voyage.adults_count),
         children_count: String(voyage.children_count),
         reference_currency: voyage.reference_currency,
@@ -61,13 +59,21 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
     return () => setAccentColor(null);
   }, [voyage, project, setAccentColor]);
 
+  /** Les dates du voyage ne sont plus une saisie indépendante : elles suivent automatiquement
+   * la première et la dernière ville de l'itinéraire (voir useItineraryDateRange). */
+  useEffect(() => {
+    if (!voyage) return;
+    if (itineraryDates.start === voyage.start_date && itineraryDates.end === voyage.end_date) return;
+    updateVoyage.mutate({ start_date: itineraryDates.start, end_date: itineraryDates.end });
+    updateProject.mutate({ id: projectId, start_date: itineraryDates.start, end_date: itineraryDates.end });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voyage?.start_date, voyage?.end_date, itineraryDates.start, itineraryDates.end]);
+
   if (isLoading || !voyage || !project) return <p className="text-muted-foreground">Chargement...</p>;
 
   async function handleSaveOverview() {
     try {
       await updateVoyage.mutateAsync({
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
         adults_count: Number(form.adults_count),
         children_count: Number(form.children_count),
         reference_currency: form.reference_currency,
@@ -75,7 +81,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         travel_style: form.travel_style,
         budget_target_per_person: form.budget_target_per_person ? Number(form.budget_target_per_person) : null,
       });
-      await updateProject.mutateAsync({ id: projectId, start_date: form.start_date || null, end_date: form.end_date || null });
       toast({ title: "Voyage mis à jour" });
     } catch (err) {
       toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -114,7 +119,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
           <Card>
             <CardContent className="space-y-2 p-5">
               <Label>Voyageurs</Label>
-              <TravelersPanel voyageId={voyage.id} />
+              <ProjectPeoplePicker projectId={projectId} />
             </CardContent>
           </Card>
 
@@ -123,11 +128,13 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Date de départ</Label>
-                  <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+                  <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                    {formatDate(voyage.start_date)}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Date de retour</Label>
-                  <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
+                  <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">{formatDate(voyage.end_date)}</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Adultes</Label>
@@ -199,11 +206,11 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="itinerary" className="space-y-4">
-          <ItineraryView voyageId={voyage.id} referenceCurrency={voyage.reference_currency} />
+          <ItineraryView voyageId={voyage.id} referenceCurrency={voyage.reference_currency} projectId={projectId} />
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-4">
-          <BudgetInsights voyage={voyage} />
+          <BudgetInsights voyage={voyage} projectId={projectId} />
 
           <Card>
             <CardContent className="p-5">
@@ -219,10 +226,17 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
                   categories={PRE_DEPARTURE_CATEGORIES}
                   referenceCurrency={voyage.reference_currency}
                   invalidateKey={["voyage-expenses", voyage.id]}
-                  voyageId={voyage.id}
+                  projectId={projectId}
+                  defaultPlanned={true}
                 />
               </div>
-              <ExpenseList expenses={preDepartureExpenses ?? []} invalidateKey={["voyage-expenses", voyage.id]} voyageId={voyage.id} />
+              <ExpenseList
+                expenses={preDepartureExpenses ?? []}
+                invalidateKey={["voyage-expenses", voyage.id]}
+                projectId={projectId}
+                categories={PRE_DEPARTURE_CATEGORIES}
+                referenceCurrency={voyage.reference_currency}
+              />
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground">

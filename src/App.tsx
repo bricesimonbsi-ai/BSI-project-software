@@ -6,6 +6,7 @@ import { SignupPage } from "@/features/auth/signup-page";
 import { PortfolioHome } from "@/features/portfolio/portfolio-home";
 import { CategoryDetailPage } from "@/features/portfolio/category-detail-page";
 import { CategoriesAdminPage } from "@/features/portfolio/categories-admin-page";
+import { PeopleAdminPage } from "@/features/people/people-admin-page";
 import { ProjectDetailRouter } from "@/features/projects/project-detail-router";
 import { TodosPage } from "@/features/todos/todos-page";
 import { SettingsPage } from "@/features/theme/settings-page";
@@ -36,6 +37,14 @@ export default function App() {
         element={
           <Shell>
             <CategoriesAdminPage />
+          </Shell>
+        }
+      />
+      <Route
+        path="/people"
+        element={
+          <Shell>
+            <PeopleAdminPage />
           </Shell>
         }
       />

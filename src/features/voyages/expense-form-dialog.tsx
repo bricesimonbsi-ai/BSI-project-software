@@ -1,48 +1,65 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CurrencySelect } from "@/features/voyages/currency-select";
-import { useCreateExpense } from "@/features/voyages/use-expenses";
-import { useTravelers } from "@/features/voyages/use-travelers";
-import type { ExpenseCategory } from "@/types/database";
+import { useCreateExpense, useUpdateExpense } from "@/features/voyages/use-expenses";
+import { useProjectPeople } from "@/features/people/use-people";
+import type { ExpenseCategory, VoyageExpense } from "@/types/database";
 import { Plus } from "lucide-react";
 
 export function ExpenseFormDialog({
-  scope,
+  scope = {},
   categories,
   referenceCurrency,
   invalidateKey,
-  voyageId,
+  projectId,
+  existing,
+  trigger,
+  defaultPlanned = true,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: {
-  scope: { voyageId?: string; sousEtapeId?: string };
+  /** Requis à la création (cible la dépense) ; ignoré en modification. */
+  scope?: { voyageId?: string; sousEtapeId?: string };
   categories: { value: ExpenseCategory; label: string }[];
   referenceCurrency: string;
   invalidateKey: unknown[];
-  /** Voyage auquel rattacher la liste des voyageurs (nécessaire même pour une dépense
-   * scope="sousEtapeId", puisque les voyageurs sont définis au niveau du voyage). */
-  voyageId?: string;
+  /** Projet auquel rattacher la liste des personnes (nécessaire même pour une dépense
+   * scope="sousEtapeId", puisque les personnes sont associées au niveau du projet). */
+  projectId?: string;
+  /** Dépense à modifier ; absent = création. */
+  existing?: VoyageExpense;
+  /** `null` = ne rend aucun DialogTrigger (dialogue entièrement piloté par `open`/`onOpenChange`). */
+  trigger?: ReactNode | null;
+  /** Statut par défaut à la création (réel pour une dépense saisie sur place, prévisionnel sinon). */
+  defaultPlanned?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<ExpenseCategory>(categories[0].value);
-  const [planned, setPlanned] = useState(true);
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(referenceCurrency);
-  const [rate, setRate] = useState("1");
-  const [description, setDescription] = useState("");
-  const [expenseDate, setExpenseDate] = useState("");
-  const [travelerId, setTravelerId] = useState<string>("none");
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
+  const [category, setCategory] = useState<ExpenseCategory>(existing?.category ?? categories[0].value);
+  const [planned, setPlanned] = useState(existing?.planned ?? defaultPlanned);
+  const [amount, setAmount] = useState(existing?.amount?.toString() ?? "");
+  const [currency, setCurrency] = useState(existing?.currency ?? referenceCurrency);
+  const [rate, setRate] = useState(existing?.manual_rate_to_reference?.toString() ?? "1");
+  const [description, setDescription] = useState(existing?.description ?? "");
+  const [expenseDate, setExpenseDate] = useState(existing?.expense_date ?? "");
+  const [personId, setPersonId] = useState<string>(existing?.person_id ?? "none");
   const [submitting, setSubmitting] = useState(false);
   const createExpense = useCreateExpense(scope, invalidateKey);
-  const { data: travelers } = useTravelers(voyageId);
+  const updateExpense = useUpdateExpense(invalidateKey);
+  const { data: linkedPeople } = useProjectPeople(projectId);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await createExpense.mutateAsync({
+      const payload = {
         category,
         planned,
         amount: Number(amount),
@@ -50,12 +67,17 @@ export function ExpenseFormDialog({
         manual_rate_to_reference: currency === referenceCurrency ? 1 : Number(rate),
         description: description || undefined,
         expense_date: expenseDate || undefined,
-        traveler_id: travelerId === "none" ? null : travelerId,
-      });
+        person_id: personId === "none" ? null : personId,
+      };
+      if (existing) {
+        await updateExpense.mutateAsync({ id: existing.id, ...payload });
+      } else {
+        await createExpense.mutateAsync(payload);
+        setAmount("");
+        setDescription("");
+        setPersonId("none");
+      }
       setOpen(false);
-      setAmount("");
-      setDescription("");
-      setTravelerId("none");
     } finally {
       setSubmitting(false);
     }
@@ -63,14 +85,18 @@ export function ExpenseFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Plus className="mr-2 h-4 w-4" /> Dépense
-        </Button>
-      </DialogTrigger>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="outline">
+              <Plus className="mr-2 h-4 w-4" /> Dépense
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nouvelle dépense</DialogTitle>
+          <DialogTitle>{existing ? "Modifier la dépense" : "Nouvelle dépense"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -116,8 +142,8 @@ export function ExpenseFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="planned">Prévisionnel</SelectItem>
                   <SelectItem value="actual">Réel</SelectItem>
+                  <SelectItem value="planned">Prévisionnel</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -126,18 +152,18 @@ export function ExpenseFormDialog({
             <Label>Description</Label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          {travelers && travelers.length > 0 && (
+          {linkedPeople && linkedPeople.length > 0 && (
             <div className="space-y-2">
               <Label>Rattacher à une personne (optionnel)</Label>
-              <Select value={travelerId} onValueChange={setTravelerId}>
+              <Select value={personId} onValueChange={setPersonId}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Dépense commune</SelectItem>
-                  {travelers.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
+                  {linkedPeople.map((l) => (
+                    <SelectItem key={l.person_id} value={l.person_id}>
+                      {l.people.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -146,7 +172,7 @@ export function ExpenseFormDialog({
           )}
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Ajout..." : "Ajouter"}
+              {submitting ? "Enregistrement..." : existing ? "Enregistrer" : "Ajouter"}
             </Button>
           </DialogFooter>
         </form>
