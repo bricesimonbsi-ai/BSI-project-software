@@ -202,6 +202,9 @@ export type VoyageEquipment = {
   quantity: number;
   /** Prix unitaire estimé (EUR), ajustable ; null = utilise le tarif indicatif par défaut. */
   unit_price: number | null;
+  /** Déjà possédé (rien à acheter) : pas de coût, pas de tâche automatique — sert juste de
+   * pense-bête "à emporter". */
+  owned: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

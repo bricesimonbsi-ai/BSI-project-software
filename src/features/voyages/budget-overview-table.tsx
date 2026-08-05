@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
@@ -9,9 +9,12 @@ import {
   ADMIN_SANTE_SUB_CATEGORIES,
   groupedCategory,
 } from "@/features/voyages/use-expenses";
+import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
+import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { CountryFlag, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
 import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
+import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -59,6 +62,7 @@ export function BudgetOverviewTable({
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
+  const { data: equipmentItems } = useVoyageEquipment(voyageId);
   const [view, setView] = useState<"planned" | "actual">("planned");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
@@ -72,10 +76,15 @@ export function BudgetOverviewTable({
     return map;
   }, [allSousEtapes]);
 
-  const expenses = allExpenses ?? [];
-  const totalPlanned = sumAmount(expenses.filter((e) => e.planned));
+  // L'équipement n'est plus une ligne de dépense séparée à resynchroniser : son coût est
+  // calculé en direct depuis l'onglet Équipement à chaque affichage, donc toujours à jour
+  // immédiatement (pas besoin de revenir sur cet onglet pour que le total se propage). Les
+  // catégories "equipement" restantes dans voyage_expenses (anciennes lignes synchronisées
+  // avant ce changement) sont donc exclues des totaux pour ne pas compter en double.
+  const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement");
+  const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
+  const totalPlanned = sumAmount(expenses.filter((e) => e.planned)) + equipmentPlannedTotal;
   const totalActual = sumAmount(expenses.filter((e) => !e.planned));
-  const equipmentRows = expenses.filter((e) => groupedCategory(e.category) === "equipement");
   const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
 
   if (!etapes) return null;
@@ -141,45 +150,55 @@ export function BudgetOverviewTable({
         </table>
       </div>
 
-      {view === "actual" && selectedCell && (
-        <div className="space-y-2 rounded-md border border-border p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">{selectedCell.label}</p>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedCell(null)}>
-              Fermer
-            </Button>
-          </div>
-          <ExpenseList
-            expenses={expenses.filter(
-              (e) => e.sous_etape_id === selectedCell.sousEtapeId && !e.planned && groupedCategory(e.category) === selectedCell.category
+      {view === "actual" && (
+        <Dialog open={selectedCell !== null} onOpenChange={(o) => !o && setSelectedCell(null)}>
+          <DialogContent>
+            {selectedCell && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{selectedCell.label}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <ExpenseList
+                    expenses={expenses.filter(
+                      (e) => e.sous_etape_id === selectedCell.sousEtapeId && !e.planned && groupedCategory(e.category) === selectedCell.category
+                    )}
+                    invalidateKey={["voyage-all-expenses", voyageId]}
+                    projectId={projectId}
+                    categories={[{ value: selectedCell.category, label: selectedCell.label }]}
+                    referenceCurrency={referenceCurrency}
+                    lockPlanned
+                  />
+                  <ExpenseFormFields
+                    scope={{ sousEtapeId: selectedCell.sousEtapeId }}
+                    categories={[{ value: selectedCell.category, label: selectedCell.label }]}
+                    referenceCurrency={referenceCurrency}
+                    invalidateKey={["voyage-all-expenses", voyageId]}
+                    projectId={projectId}
+                    defaultPlanned={false}
+                    lockPlanned
+                    onDone={() => {}}
+                  />
+                </div>
+              </>
             )}
-            invalidateKey={["voyage-all-expenses", voyageId]}
-            projectId={projectId}
-            categories={[{ value: selectedCell.category, label: selectedCell.label }]}
-            referenceCurrency={referenceCurrency}
-          />
-          <ExpenseFormDialog
-            scope={{ sousEtapeId: selectedCell.sousEtapeId }}
-            categories={[{ value: selectedCell.category, label: selectedCell.label }]}
-            referenceCurrency={referenceCurrency}
-            invalidateKey={["voyage-all-expenses", voyageId]}
-            projectId={projectId}
-            defaultPlanned={false}
-          />
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       <div className="space-y-3 rounded-md border border-border p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Dépenses transverses (équipement, administratif & santé — pas propres à un pays)
         </p>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="font-medium">Équipement</span>
-          <span>
-            <span className="font-semibold">{formatCurrency(sumAmount(equipmentRows.filter((e) => e.planned === (view === "planned"))), referenceCurrency)}</span>
-            <span className="ml-1.5 text-xs text-muted-foreground">réglable dans l'onglet Équipement</span>
-          </span>
-        </div>
+        {view === "planned" && (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="font-medium">Équipement</span>
+            <span>
+              <span className="font-semibold">{formatCurrency(equipmentPlannedTotal, referenceCurrency)}</span>
+              <span className="ml-1.5 text-xs text-muted-foreground">réglable dans l'onglet Équipement</span>
+            </span>
+          </div>
+        )}
         {view === "planned" ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {ADMIN_SUB_COLUMNS.map((s) => {
@@ -205,11 +224,12 @@ export function BudgetOverviewTable({
           <div className="space-y-2">
             <ExpenseFormDialog
               scope={{ voyageId }}
-              categories={TRANSVERSE_CATEGORIES}
+              categories={[{ value: "administratif_sante", label: "Administratif & santé" }]}
               referenceCurrency={referenceCurrency}
               invalidateKey={["voyage-all-expenses", voyageId]}
               projectId={projectId}
               defaultPlanned={false}
+              lockPlanned
             />
             <ExpenseList
               expenses={adminRows.filter((e) => !e.planned)}
@@ -217,6 +237,7 @@ export function BudgetOverviewTable({
               projectId={projectId}
               categories={TRANSVERSE_CATEGORIES}
               referenceCurrency={referenceCurrency}
+              lockPlanned
             />
           </div>
         )}

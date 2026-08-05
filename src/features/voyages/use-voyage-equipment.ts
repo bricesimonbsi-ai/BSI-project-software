@@ -78,3 +78,16 @@ export function useUpdateEquipmentPrice(voyageId: string) {
     onSuccess: () => invalidate(queryClient, voyageId),
   });
 }
+
+/** Marque un article comme déjà possédé (pas de coût, pas de tâche auto) ou pas ; voir le
+ * trigger sync_equipment_todo côté base pour la gestion automatique de la tâche liée. */
+export function useUpdateEquipmentOwned(voyageId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, owned }: { id: string; owned: boolean }) => {
+      const { error } = await supabase.from("voyage_equipment").update({ owned }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(queryClient, voyageId),
+  });
+}

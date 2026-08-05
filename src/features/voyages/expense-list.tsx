@@ -22,6 +22,8 @@ export function ExpenseList({
   /** Édition inline (pas de Dialog) — obligatoire quand la liste vit déjà dans un Dialog
    * (ex. dialogue d'une ville), pour éviter un Dialog imbriqué dans un Dialog. */
   inline = false,
+  /** Si vrai, masque le sélecteur Statut à l'édition (liste dont toutes les lignes sont réelles). */
+  lockPlanned = false,
 }: {
   expenses: (VoyageExpense & { city_name?: string | null })[];
   invalidateKey: unknown[];
@@ -30,6 +32,7 @@ export function ExpenseList({
   categories?: { value: ExpenseCategory; label: string }[];
   referenceCurrency?: string;
   inline?: boolean;
+  lockPlanned?: boolean;
 }) {
   const deleteExpense = useDeleteExpense(invalidateKey);
   const { data: linkedPeople } = useProjectPeople(projectId);
@@ -55,6 +58,7 @@ export function ExpenseList({
                 referenceCurrency={referenceCurrency}
                 invalidateKey={invalidateKey}
                 projectId={projectId}
+                lockPlanned={lockPlanned}
                 onDone={() => setEditingId(null)}
                 onCancel={() => setEditingId(null)}
               />
@@ -110,6 +114,7 @@ export function ExpenseList({
           invalidateKey={invalidateKey}
           projectId={projectId}
           trigger={null}
+          lockPlanned={lockPlanned}
           open={dialogEditing !== null}
           onOpenChange={(o) => !o && setDialogEditing(null)}
         />

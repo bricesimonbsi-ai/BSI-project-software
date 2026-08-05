@@ -14,6 +14,8 @@ import {
 import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
 import { BudgetRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
+import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
+import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { formatCurrency } from "@/lib/utils";
 import type { TravelStyle, Voyage } from "@/types/database";
 
@@ -39,12 +41,17 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const { data: linkedPeople } = useProjectPeople(projectId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
   const { data: personSummary } = useVoyagePersonExpenseSummary(voyageId);
+  const { data: equipmentItems } = useVoyageEquipment(voyageId);
 
   const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
   const style: TravelStyle = voyage.travel_style ?? "standard";
-  const expenses = allExpenses ?? [];
+  // L'équipement n'est plus une ligne de dépense à resynchroniser : son coût prévisionnel est
+  // calculé en direct depuis l'onglet Équipement (toujours à jour, sans décalage). D'éventuelles
+  // anciennes lignes "equipement" dans voyage_expenses sont ignorées pour ne pas compter en double.
+  const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement");
+  const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
 
-  const totalPlanned = expenses.filter((e) => e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
+  const totalPlanned = expenses.filter((e) => e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0) + equipmentPlannedTotal;
   const totalActual = expenses.filter((e) => !e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
 
   const { categoryRows, transportRows, adminSanteRows } = useMemo(() => {
@@ -76,10 +83,12 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   }, [expenses]);
 
   // Toutes les catégories unifiées apparaissent dans le graphique principal, même à 0, pour que
-  // sa forme (6 catégories fixes) reste stable d'un voyage à l'autre.
-  const mainRows: CategoryComparisonRow[] = EXPENSE_CATEGORIES.map(
-    (c) => categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 }
-  );
+  // sa forme (6 catégories fixes) reste stable d'un voyage à l'autre. L'équipement est injecté
+  // depuis son calcul en direct (voir plus haut), pas depuis categoryRows.
+  const mainRows: CategoryComparisonRow[] = EXPENSE_CATEGORIES.map((c) => {
+    if (c.value === "equipement") return { key: "equipement", label: c.label, planned: equipmentPlannedTotal, actual: 0 };
+    return categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 };
+  });
 
   return (
     <div className="space-y-5">

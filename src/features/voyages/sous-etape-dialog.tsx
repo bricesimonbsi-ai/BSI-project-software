@@ -14,6 +14,7 @@ import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-p
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
+import { Badge } from "@/components/ui/badge";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
 import { toast } from "@/hooks/use-toast";
@@ -93,10 +94,10 @@ export function SousEtapeDialog({
   const plannedLodging = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "logement");
   const plannedFood = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "nourriture");
   const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
-  const structuredExpenseIds = new Set(
-    [plannedTransport?.id, plannedLodging?.id, plannedFood?.id, plannedActivities?.id].filter((id): id is string => !!id)
-  );
-  const otherExpenses = (onSiteExpenses ?? []).filter((e) => !structuredExpenseIds.has(e.id));
+  // Filtre explicite sur !planned (et pas seulement une exclusion par id des 4 lignes structurées
+  // ci-dessus) : garantit qu'aucune dépense prévisionnelle ne peut jamais apparaître dans la
+  // section "Dépenses réelles", même s'il existe d'anciennes lignes en doublon.
+  const actualExpenses = (onSiteExpenses ?? []).filter((e) => !e.planned);
 
   useEffect(() => {
     let cancelled = false;
@@ -328,63 +329,79 @@ export function SousEtapeDialog({
           </div>
           {existing && (
             <div className="space-y-2 border-t border-border pt-4">
-              <Label>Dépenses prévisionnelles pour cette ville</Label>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal text-muted-foreground">Transport (vers la suivante)</Label>
-                  <EditableExpenseAmount
-                    scope={{ sousEtapeId: existing.id }}
-                    category="transport"
-                    subCategory={transportMode || null}
-                    planned
-                    existing={plannedTransport}
-                    estimate={plannedCosts.transport}
-                    referenceCurrency={referenceCurrency ?? "EUR"}
-                    invalidateKey={["sous-etape-expenses", existing.id]}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal text-muted-foreground">Logement</Label>
-                  <EditableExpenseAmount
-                    scope={{ sousEtapeId: existing.id }}
-                    category="logement"
-                    planned
-                    existing={plannedLodging}
-                    estimate={plannedCosts.lodging}
-                    referenceCurrency={referenceCurrency ?? "EUR"}
-                    invalidateKey={["sous-etape-expenses", existing.id]}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal text-muted-foreground">Nourriture</Label>
-                  <EditableExpenseAmount
-                    scope={{ sousEtapeId: existing.id }}
-                    category="nourriture"
-                    planned
-                    existing={plannedFood}
-                    estimate={plannedCosts.food}
-                    referenceCurrency={referenceCurrency ?? "EUR"}
-                    invalidateKey={["sous-etape-expenses", existing.id]}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal text-muted-foreground">Activités</Label>
-                  <EditableExpenseAmount
-                    scope={{ sousEtapeId: existing.id }}
-                    category="activites"
-                    planned
-                    existing={plannedActivities}
-                    estimate={0}
-                    referenceCurrency={referenceCurrency ?? "EUR"}
-                    invalidateKey={["sous-etape-expenses", existing.id]}
-                  />
-                </div>
-              </div>
+              <Label>Dépenses prévisionnelles</Label>
               <p className="text-xs text-muted-foreground">
-                Pré-rempli automatiquement à partir du coût de la vie du pays et de la distance vers la ville suivante ;
+                Pré-remplies et mises à jour automatiquement selon le nombre de nuits et le coût de la vie du pays ;
                 ajuste librement chaque montant — ces mêmes lignes sont aussi modifiables depuis le tableau détaillé de
                 l'onglet Budget (une modification d'un côté se reflète immédiatement de l'autre).
               </p>
+              <ul className="divide-y divide-border rounded-md border border-border">
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm font-medium">Transport (vers la suivante)</p>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <EditableExpenseAmount
+                      scope={{ sousEtapeId: existing.id }}
+                      category="transport"
+                      subCategory={transportMode || null}
+                      planned
+                      existing={plannedTransport}
+                      estimate={plannedCosts.transport}
+                      referenceCurrency={referenceCurrency ?? "EUR"}
+                      invalidateKey={["sous-etape-expenses", existing.id]}
+                      className="w-24"
+                    />
+                  </div>
+                </li>
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm font-medium">Logement</p>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <EditableExpenseAmount
+                      scope={{ sousEtapeId: existing.id }}
+                      category="logement"
+                      planned
+                      existing={plannedLodging}
+                      estimate={plannedCosts.lodging}
+                      referenceCurrency={referenceCurrency ?? "EUR"}
+                      invalidateKey={["sous-etape-expenses", existing.id]}
+                      className="w-24"
+                    />
+                  </div>
+                </li>
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm font-medium">Nourriture</p>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <EditableExpenseAmount
+                      scope={{ sousEtapeId: existing.id }}
+                      category="nourriture"
+                      planned
+                      existing={plannedFood}
+                      estimate={plannedCosts.food}
+                      referenceCurrency={referenceCurrency ?? "EUR"}
+                      invalidateKey={["sous-etape-expenses", existing.id]}
+                      className="w-24"
+                    />
+                  </div>
+                </li>
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <p className="text-sm font-medium">Activités</p>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <EditableExpenseAmount
+                      scope={{ sousEtapeId: existing.id }}
+                      category="activites"
+                      planned
+                      existing={plannedActivities}
+                      estimate={0}
+                      referenceCurrency={referenceCurrency ?? "EUR"}
+                      invalidateKey={["sous-etape-expenses", existing.id]}
+                      className="w-24"
+                    />
+                  </div>
+                </li>
+              </ul>
             </div>
           )}
           {existing && (
@@ -406,17 +423,19 @@ export function SousEtapeDialog({
                     invalidateKey={["sous-etape-expenses", existing.id]}
                     projectId={projectId}
                     defaultPlanned={false}
+                    lockPlanned
                     onDone={() => setAddingExpense(false)}
                     onCancel={() => setAddingExpense(false)}
                   />
                 </div>
               )}
               <ExpenseList
-                expenses={otherExpenses}
+                expenses={actualExpenses}
                 invalidateKey={["sous-etape-expenses", existing.id]}
                 projectId={projectId}
                 categories={ETAPE_CATEGORIES}
                 referenceCurrency={referenceCurrency ?? "EUR"}
+                lockPlanned
                 inline
               />
             </div>

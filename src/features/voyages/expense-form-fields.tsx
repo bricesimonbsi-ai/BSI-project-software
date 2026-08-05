@@ -11,6 +11,7 @@ import {
   ADMIN_SANTE_SUB_CATEGORIES,
 } from "@/features/voyages/use-expenses";
 import { useProjectPeople } from "@/features/people/use-people";
+import { cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
 
 function subCategoryOptions(category: ExpenseCategory): { value: string; label: string }[] | null {
@@ -33,6 +34,7 @@ export function ExpenseFormFields({
   projectId,
   existing,
   defaultPlanned = true,
+  lockPlanned = false,
   onDone,
   onCancel,
 }: {
@@ -43,6 +45,9 @@ export function ExpenseFormFields({
   projectId?: string;
   existing?: VoyageExpense;
   defaultPlanned?: boolean;
+  /** Si vrai, masque le sélecteur Statut et fige le statut sur `defaultPlanned` (ex. un
+   * formulaire de saisie de dépenses réelles n'a pas besoin de proposer "Prévisionnel"). */
+  lockPlanned?: boolean;
   /** Appelé après un enregistrement réussi. */
   onDone: () => void;
   /** Si fourni, affiche un bouton Annuler. */
@@ -153,23 +158,25 @@ export function ExpenseFormFields({
           <Input type="number" step="0.0001" value={rate} onChange={(e) => setRate(e.target.value)} />
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className={cn("grid gap-4", lockPlanned ? "grid-cols-1" : "grid-cols-2")}>
         <div className="space-y-2">
           <Label>Date</Label>
           <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
         </div>
-        <div className="space-y-2">
-          <Label>Statut</Label>
-          <Select value={planned ? "planned" : "actual"} onValueChange={(v) => setPlanned(v === "planned")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="actual">Réel</SelectItem>
-              <SelectItem value="planned">Prévisionnel</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {!lockPlanned && (
+          <div className="space-y-2">
+            <Label>Statut</Label>
+            <Select value={planned ? "planned" : "actual"} onValueChange={(v) => setPlanned(v === "planned")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="actual">Réel</SelectItem>
+                <SelectItem value="planned">Prévisionnel</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       <div className="space-y-2">
         <Label>Description</Label>

@@ -19,6 +19,7 @@ export function ExpenseFormDialog({
   existing,
   trigger,
   defaultPlanned = true,
+  lockPlanned = false,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
@@ -30,6 +31,7 @@ export function ExpenseFormDialog({
   existing?: VoyageExpense;
   trigger?: ReactNode | null;
   defaultPlanned?: boolean;
+  lockPlanned?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -60,6 +62,7 @@ export function ExpenseFormDialog({
           projectId={projectId}
           existing={existing}
           defaultPlanned={defaultPlanned}
+          lockPlanned={lockPlanned}
           onDone={() => setOpen(false)}
         />
       </DialogContent>
