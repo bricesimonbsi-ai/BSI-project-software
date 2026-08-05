@@ -86,6 +86,7 @@ export type Todo = {
   category: TodoCategory | null;
   auto_generated: boolean;
   source_etape_id: string | null;
+  source_equipment_id: string | null;
   dedup_key: string | null;
   created_by: string;
   created_at: string;
@@ -187,6 +188,19 @@ export type VoyageSousEtape = {
   longitude: number | null;
   distance_km: number | null;
   climate_by_month: ClimateRating[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Article de matériel coché pour un voyage (catalogue de base statique, voir
+ * equipment-catalog.ts) ; l'absence de ligne = article non coché. */
+export type VoyageEquipment = {
+  id: string;
+  voyage_id: string;
+  category: string;
+  name: string;
+  quantity: number;
+  created_by: string;
   created_at: string;
   updated_at: string;
 };
@@ -313,6 +327,7 @@ export type Database = {
       voyage_etapes: Table<VoyageEtape>;
       voyage_sous_etapes: Table<VoyageSousEtape>;
       voyage_expenses: Table<VoyageExpense>;
+      voyage_equipment: Table<VoyageEquipment>;
       voyage_travelers: Table<VoyageTraveler>;
       people: Table<Person>;
       project_people: Table<ProjectPerson>;

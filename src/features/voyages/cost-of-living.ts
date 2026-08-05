@@ -56,84 +56,33 @@ export async function estimateFoodRate(countryCode: string | null, style: Travel
   return BASE_DAILY_RATES_EUR[style].food * (ratio ?? 1);
 }
 
-export type CityPlannedCosts = { transport: number; lodging: number; food: number };
+export type EtapePlannedCosts = { transport: number; lodging: number; food: number };
 
 /**
- * Estimation prévisionnelle (transport vers la ville suivante, logement, nourriture) pour UNE
- * ville précise — utilisée à la fois dans le dialogue d'édition d'une ville et dans la vue
- * d'ensemble du budget, pour garantir que la même formule produit toujours le même résultat.
+ * Estimation prévisionnelle (transport, logement, nourriture) pour UN pays entier — nuits
+ * agrégées sur toutes ses villes, trajets sortants de chacune de ses villes sommés pour le
+ * transport. Seule source d'estimation automatique de l'application (une ligne par pays, voir
+ * la vue d'ensemble du budget) : plus de calcul concurrent au niveau ville.
  */
-export async function estimateCityPlannedCosts(input: {
-  nights: number;
-  distanceKm: number | null;
-  transportMode: string | null;
+export async function estimateEtapePlannedCosts(input: {
+  totalNights: number;
+  /** Trajets sortants de chaque ville de ce pays (vers la ville suivante, dans ou hors du pays). */
+  legs: { distanceKm: number | null; mode: string | null }[];
   countryCode: string | null;
   style: TravelStyle;
   travelerCount: number;
   lodgingCount: number;
   lodgingOverride: number | null;
   foodOverride: number | null;
-}): Promise<CityPlannedCosts> {
+}): Promise<EtapePlannedCosts> {
   const lodgingRate = input.lodgingOverride ?? (await estimateLodgingRate(input.countryCode, input.style));
   const foodRate = input.foodOverride ?? (await estimateFoodRate(input.countryCode, input.style));
   const rooms = Math.max(1, input.lodgingCount || 1);
   const travelers = Math.max(1, input.travelerCount || 1);
+  const transport = input.legs.reduce((sum, leg) => sum + estimateTransportLegCost(leg.distanceKm, leg.mode, travelers), 0);
   return {
-    transport: estimateTransportLegCost(input.distanceKm, input.transportMode, travelers),
-    lodging: input.nights * rooms * lodgingRate,
-    food: input.nights * travelers * foodRate,
+    transport,
+    lodging: input.totalNights * rooms * lodgingRate,
+    food: input.totalNights * travelers * foodRate,
   };
-}
-
-export type CountryCostInput = {
-  etapeId: string;
-  countryCode: string | null;
-  nights: number;
-  /** Override manuel saisi par l'utilisateur ; prioritaire sur l'estimation automatique. */
-  lodgingOverride: number | null;
-  foodOverride: number | null;
-};
-
-export type CountryCostResult = {
-  etapeId: string;
-  nights: number;
-  lodgingRate: number;
-  foodRate: number;
-  lodgingIsEstimated: boolean;
-  foodIsEstimated: boolean;
-  lodgingTotal: number;
-  foodTotal: number;
-};
-
-/**
- * Estimation hébergement + nourriture, pays par pays (chaque pays de l'itinéraire pondéré par
- * son propre indice de niveau des prix, son nombre de nuits, et un éventuel tarif ajusté
- * manuellement par l'utilisateur qui prend toujours le pas sur l'estimation automatique).
- */
-export async function estimateCostsByCountry(
-  countries: CountryCostInput[],
-  style: TravelStyle,
-  travelerCount: number,
-  lodgingCount: number
-): Promise<CountryCostResult[]> {
-  const rooms = Math.max(1, lodgingCount || 1);
-  const travelers = Math.max(1, travelerCount || 1);
-  const results: CountryCostResult[] = [];
-  for (const c of countries) {
-    const lodgingIsEstimated = c.lodgingOverride == null;
-    const foodIsEstimated = c.foodOverride == null;
-    const lodgingRate = c.lodgingOverride ?? (await estimateLodgingRate(c.countryCode, style));
-    const foodRate = c.foodOverride ?? (await estimateFoodRate(c.countryCode, style));
-    results.push({
-      etapeId: c.etapeId,
-      nights: c.nights,
-      lodgingRate,
-      foodRate,
-      lodgingIsEstimated,
-      foodIsEstimated,
-      lodgingTotal: c.nights * rooms * lodgingRate,
-      foodTotal: c.nights * travelers * foodRate,
-    });
-  }
-  return results;
 }

@@ -18,6 +18,7 @@ import { VoyageSynthesis } from "@/features/voyages/voyage-synthesis";
 import { useItineraryDateRange } from "@/features/voyages/use-itinerary-date-range";
 import { ProjectPeoplePicker } from "@/features/people/project-people-picker";
 import { BudgetInsights } from "@/features/voyages/budget-insights";
+import { EquipmentTab } from "@/features/voyages/equipment-tab";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -103,6 +104,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
           <TabsTrigger value="overview">Aperçu</TabsTrigger>
           <TabsTrigger value="itinerary">Itinéraire</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>
+          <TabsTrigger value="equipment">Équipement</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="todos">Tâches</TabsTrigger>
           <TabsTrigger value="collaborators">Collaborateurs</TabsTrigger>
@@ -207,12 +209,15 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
             projectId={projectId}
             travelStyle={voyage.travel_style ?? "standard"}
             travelerCount={travelerCount}
-            lodgingCount={voyage.lodging_count ?? travelerCount}
           />
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-4">
           <BudgetInsights voyage={voyage} projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="equipment">
+          <EquipmentTab voyageId={voyage.id} referenceCurrency={voyage.reference_currency} />
         </TabsContent>
 
         <TabsContent value="documents">

@@ -14,7 +14,7 @@ import {
 import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
 import { formatCurrency } from "@/lib/utils";
-import type { Voyage } from "@/types/database";
+import type { TravelStyle, Voyage } from "@/types/database";
 
 const SUB_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   [...TRANSPORT_SUB_CATEGORIES, ...ADMIN_SANTE_SUB_CATEGORIES].map((s) => [s.value, s.label])
@@ -40,6 +40,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const { data: personSummary } = useVoyagePersonExpenseSummary(voyageId);
 
   const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
+  const style: TravelStyle = voyage.travel_style ?? "standard";
   const expenses = allExpenses ?? [];
 
   const totalPlanned = expenses.filter((e) => e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
@@ -134,7 +135,14 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         </div>
       )}
 
-      <BudgetOverviewTable voyageId={voyageId} projectId={projectId} referenceCurrency={voyage.reference_currency} />
+      <BudgetOverviewTable
+        voyageId={voyageId}
+        projectId={projectId}
+        referenceCurrency={voyage.reference_currency}
+        travelStyle={style}
+        travelerCount={travelerCount}
+        lodgingCount={voyage.lodging_count ?? travelerCount}
+      />
 
       {personSummary && personSummary.length > 0 && (
         <div>

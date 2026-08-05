@@ -47,3 +47,12 @@ export function estimateTransportLegCost(distanceKm: number | null, mode: string
   const rate = Object.entries(TRANSPORT_LEG_RATE_EUR).find(([modeKey]) => key.includes(modeKey))?.[1] ?? DEFAULT_TRANSPORT_LEG_RATE;
   return (rate.base + distanceKm * rate.perKm) * Math.max(1, travelerCount || 1);
 }
+
+/** Coût unitaire indicatif (EUR) par article de matériel coché, tous types confondus — une
+ * estimation volontairement grossière (pas de prix par article dans le catalogue de base),
+ * à ajuster dans l'onglet Budget une fois les vrais achats connus. */
+const EQUIPMENT_UNIT_COST_EUR = 12;
+
+export function estimateEquipmentCostEur(totalQuantity: number): number {
+  return Math.max(0, totalQuantity) * EQUIPMENT_UNIT_COST_EUR;
+}
