@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
-import { useVoyageExpenses, PRE_DEPARTURE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { useProject, useUpdateProject } from "@/features/projects/use-projects";
+import { useProjectPeople } from "@/features/people/use-people";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,8 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ItineraryView } from "@/features/voyages/itinerary/itinerary-view";
 import { CurrencySelect } from "@/features/voyages/currency-select";
-import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
-import { ExpenseList } from "@/features/voyages/expense-list";
 import { DocumentsPanel } from "@/features/projects/documents-panel";
 import { TodoList } from "@/features/todos/todo-list";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
@@ -21,7 +19,7 @@ import { useItineraryDateRange } from "@/features/voyages/use-itinerary-date-ran
 import { ProjectPeoplePicker } from "@/features/people/project-people-picker";
 import { BudgetInsights } from "@/features/voyages/budget-insights";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import type { TravelStyle } from "@/types/database";
 
@@ -32,7 +30,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const updateProject = useUpdateProject();
   const setAccentColor = useThemeStore((s) => s.setAccentColor);
 
-  const { data: preDepartureExpenses } = useVoyageExpenses(voyage?.id);
+  const { data: linkedPeople } = useProjectPeople(projectId);
   const itineraryDates = useItineraryDateRange(voyage?.id);
 
   const [form, setForm] = useState({
@@ -87,10 +85,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
     }
   }
 
-  const preDepartureTotal = preDepartureExpenses?.reduce(
-    (sum, e) => sum + e.amount * e.manual_rate_to_reference,
-    0
-  ) ?? 0;
+  const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -206,43 +201,18 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="itinerary" className="space-y-4">
-          <ItineraryView voyageId={voyage.id} referenceCurrency={voyage.reference_currency} projectId={projectId} />
+          <ItineraryView
+            voyageId={voyage.id}
+            referenceCurrency={voyage.reference_currency}
+            projectId={projectId}
+            travelStyle={voyage.travel_style ?? "standard"}
+            travelerCount={travelerCount}
+            lodgingCount={voyage.lodging_count ?? travelerCount}
+          />
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-4">
           <BudgetInsights voyage={voyage} projectId={projectId} />
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Catégories avant-départ</p>
-                  <p className="text-xs text-muted-foreground">
-                    Total : {formatCurrency(preDepartureTotal, voyage.reference_currency)}
-                  </p>
-                </div>
-                <ExpenseFormDialog
-                  scope={{ voyageId: voyage.id }}
-                  categories={PRE_DEPARTURE_CATEGORIES}
-                  referenceCurrency={voyage.reference_currency}
-                  invalidateKey={["voyage-expenses", voyage.id]}
-                  projectId={projectId}
-                  defaultPlanned={true}
-                />
-              </div>
-              <ExpenseList
-                expenses={preDepartureExpenses ?? []}
-                invalidateKey={["voyage-expenses", voyage.id]}
-                projectId={projectId}
-                categories={PRE_DEPARTURE_CATEGORIES}
-                referenceCurrency={voyage.reference_currency}
-              />
-            </CardContent>
-          </Card>
-          <p className="text-xs text-muted-foreground">
-            Les dépenses sur place (logement, nourriture, activités, transport local) se saisissent depuis chaque ville, dans
-            l'onglet Itinéraire (clique sur une ville puis "Dépenses sur place").
-          </p>
         </TabsContent>
 
         <TabsContent value="documents">

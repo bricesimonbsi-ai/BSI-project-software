@@ -38,7 +38,7 @@ import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import type { VoyageSousEtape } from "@/types/database";
+import type { TravelStyle, VoyageSousEtape } from "@/types/database";
 
 type Tab = "climat" | "dates" | "carte" | "carbone";
 
@@ -79,10 +79,18 @@ export function ItineraryView({
   voyageId,
   referenceCurrency,
   projectId,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
 }: {
   voyageId: string;
   referenceCurrency: string;
   projectId: string;
+  /** Nécessaires pour préremplir les estimations de dépenses prévisionnelles (logement,
+   * nourriture, transport, visa) dans les dialogues d'édition pays/ville. */
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("dates");
   const [creatingCountryAt, setCreatingCountryAt] = useState<number | null>(null);
@@ -246,6 +254,9 @@ export function ItineraryView({
                       onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
                       allFlat={flat}
                       colorIndex={colorIndex}
+                      travelStyle={travelStyle}
+                      travelerCount={travelerCount}
+                      lodgingCount={lodgingCount}
                     />
                   ))}
                 </SortableContext>
@@ -283,6 +294,9 @@ function CountryBlock({
   onInsertCountryAfter,
   allFlat,
   colorIndex,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
 }: {
   group: CountryGroup;
   tab: Tab;
@@ -291,6 +305,9 @@ function CountryBlock({
   onInsertCountryAfter: () => void;
   allFlat: FlatRow[];
   colorIndex: number;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
 }) {
   const [creatingCityAt, setCreatingCityAt] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -415,6 +432,8 @@ function CountryBlock({
               nextOrder={0}
               existing={group.etape}
               lockCountry={group.rows.length > 0}
+              travelStyle={travelStyle}
+              travelerCount={travelerCount}
               trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 hover:opacity-100 group-hover:opacity-60" />}
             />
           </span>
@@ -462,6 +481,9 @@ function CountryBlock({
                 etapeId={group.etape.id}
                 allFlat={allFlat}
                 onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
+                travelStyle={travelStyle}
+                travelerCount={travelerCount}
+                lodgingCount={lodgingCount}
               />
             ))}
           </SortableContext>
@@ -470,12 +492,12 @@ function CountryBlock({
 
       <SousEtapeDialog
         etapeId={group.etape.id}
+        etape={group.etape}
         nextOrder={0}
         trigger={null}
         open={creatingCityAt !== null}
         onOpenChange={(o) => !o && setCreatingCityAt(null)}
         insertAtIndex={creatingCityAt ?? 0}
-        countryName={group.etape.country_region}
         previousPoint={
           creatingCityAt !== null && creatingCityAt > 0
             ? (() => {
@@ -488,6 +510,9 @@ function CountryBlock({
         isFirstOverall={colorIndex === 0 && creatingCityAt === 0}
         projectId={projectId}
         referenceCurrency={referenceCurrency}
+        travelStyle={travelStyle}
+        travelerCount={travelerCount}
+        lodgingCount={lodgingCount}
       />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
@@ -520,6 +545,9 @@ function CityRow({
   etapeId,
   allFlat,
   onInsertAfter,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
 }: {
   row: FlatRow;
   tab: Tab;
@@ -528,6 +556,9 @@ function CityRow({
   etapeId: string;
   allFlat: FlatRow[];
   onInsertAfter: () => void;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
   const updateSousEtape = useUpdateSousEtape(etapeId);
@@ -601,14 +632,17 @@ function CityRow({
           {se.city}
           <SousEtapeDialog
             etapeId={etapeId}
+            etape={row.etape}
             nextOrder={0}
             existing={se}
             previousPoint={previousPoint}
             previousRowId={previousRow?.sousEtape.id}
-            countryName={row.etape.country_region}
             isFirstOverall={row.globalIndex === 1}
             projectId={projectId}
             referenceCurrency={referenceCurrency}
+            travelStyle={travelStyle}
+            travelerCount={travelerCount}
+            lodgingCount={lodgingCount}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>

@@ -23,3 +23,27 @@ export function estimateFlightsEur(flightKm: number, travelerCount: number): num
 export function estimateVisasEur(visaEtapeCount: number, style: TravelStyle, travelerCount: number): number {
   return visaEtapeCount * VISA_COST_ESTIMATE_EUR[style] * Math.max(1, travelerCount || 1);
 }
+
+/** Coût de visa indicatif (EUR) pour un pays donné, tous voyageurs compris. */
+export function estimateVisaCostEur(style: TravelStyle, travelerCount: number): number {
+  return VISA_COST_ESTIMATE_EUR[style] * Math.max(1, travelerCount || 1);
+}
+
+/** Tarif indicatif (EUR/km + base fixe) par mode de transport, moyenne mondiale. */
+const TRANSPORT_LEG_RATE_EUR: Record<string, { perKm: number; base: number }> = {
+  avion: { perKm: 0.09, base: 60 },
+  train: { perKm: 0.08, base: 5 },
+  bus: { perKm: 0.04, base: 3 },
+  voiture: { perKm: 0.12, base: 0 },
+  ferry: { perKm: 0.15, base: 10 },
+  bateau: { perKm: 0.15, base: 10 },
+};
+const DEFAULT_TRANSPORT_LEG_RATE = { perKm: 0.08, base: 5 };
+
+/** Coût indicatif (EUR) du trajet vers l'étape suivante, selon la distance et le mode. */
+export function estimateTransportLegCost(distanceKm: number | null, mode: string | null, travelerCount = 1): number {
+  if (!distanceKm) return 0;
+  const key = mode?.toLowerCase() ?? "";
+  const rate = Object.entries(TRANSPORT_LEG_RATE_EUR).find(([modeKey]) => key.includes(modeKey))?.[1] ?? DEFAULT_TRANSPORT_LEG_RATE;
+  return (rate.base + distanceKm * rate.perKm) * Math.max(1, travelerCount || 1);
+}

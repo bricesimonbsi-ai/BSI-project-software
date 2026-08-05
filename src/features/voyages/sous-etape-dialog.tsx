@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,49 +11,58 @@ import { useSousEtapeExpenses, ON_SITE_CATEGORIES } from "@/features/voyages/use
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
-import { CurrencySelect } from "@/features/voyages/currency-select";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseList } from "@/features/voyages/expense-list";
+import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
+import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
 import { toast } from "@/hooks/use-toast";
-import type { ClimateRating, VoyageSousEtape } from "@/types/database";
+import type { ClimateRating, TravelStyle, VoyageEtape, VoyageSousEtape } from "@/types/database";
 import { Plus, Trash2, Sparkles } from "lucide-react";
 
 export function SousEtapeDialog({
   etapeId,
+  etape,
   nextOrder,
   existing,
   trigger,
   previousPoint,
   previousRowId,
-  countryName,
   insertAtIndex,
   isFirstOverall,
   projectId,
   referenceCurrency,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
   etapeId: string;
+  /** Étape (pays) parente — fournit le pays pour le sélecteur de ville et les taux de coût de
+   * la vie (avec ses éventuels overrides manuels) utilisés pour les estimations prévisionnelles. */
+  etape: VoyageEtape;
   nextOrder: number;
   existing?: VoyageSousEtape;
   trigger?: ReactNode | null;
   previousPoint?: { lat: number; lng: number } | null;
   previousRowId?: string;
-  countryName?: string;
   insertAtIndex?: number;
   /** Vrai uniquement pour la toute première ville de l'ensemble de l'itinéraire (l'ancre) :
    * c'est la seule dont la date de début est librement modifiable ici. Pour toutes les autres,
    * la date se déduit automatiquement de la ville précédente (voir l'auto-guérison dans
    * ItineraryView) — seul le nombre de nuits reste éditable. */
   isFirstOverall?: boolean;
-  /** Nécessaires pour la section "Dépenses sur place" (personnes à rattacher, devise). */
+  /** Nécessaires pour les sections dépenses (personnes à rattacher, devise, estimations). */
   projectId?: string;
   referenceCurrency?: string;
+  travelStyle?: TravelStyle;
+  travelerCount?: number;
+  lodgingCount?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const countryCode = countryName ? findCountryByName(countryName)?.cca2 : undefined;
+  const countryCode = findCountryByName(etape.country_region)?.cca2;
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
@@ -67,21 +76,49 @@ export function SousEtapeDialog({
   const [latitude, setLatitude] = useState(existing?.latitude?.toString() ?? "");
   const [longitude, setLongitude] = useState(existing?.longitude?.toString() ?? "");
   const [transportMode, setTransportMode] = useState(existing?.transport_next_mode ?? "");
-  const [transportDuration, setTransportDuration] = useState(existing?.transport_next_duration_hours?.toString() ?? "");
-  const [transportCost, setTransportCost] = useState(existing?.transport_next_cost?.toString() ?? "");
-  const [transportCurrency, setTransportCurrency] = useState(existing?.transport_next_currency ?? "EUR");
   const [useCityClimate, setUseCityClimate] = useState(existing?.climate_by_month != null);
   const [cityClimate, setCityClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [suggestingClimate, setSuggestingClimate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addingExpense, setAddingExpense] = useState(false);
+  const [plannedCosts, setPlannedCosts] = useState<CityPlannedCosts>({ transport: 0, lodging: 0, food: 0 });
   const createSousEtape = useCreateSousEtape(etapeId);
   const updateSousEtape = useUpdateSousEtape(etapeId);
   const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
   const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
+  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport_local");
+  const plannedLodging = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "logement");
+  const plannedFood = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "nourriture");
+  const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
+  const structuredExpenseIds = new Set(
+    [plannedTransport?.id, plannedLodging?.id, plannedFood?.id, plannedActivities?.id].filter((id): id is string => !!id)
+  );
+  const otherExpenses = (onSiteExpenses ?? []).filter((e) => !structuredExpenseIds.has(e.id));
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      const result = await estimateCityPlannedCosts({
+        nights: Number(nights) || existing?.duration_days || 0,
+        distanceKm: distanceKm ? Number(distanceKm) : null,
+        transportMode: transportMode || null,
+        countryCode: countryCode ?? null,
+        style: travelStyle ?? "standard",
+        travelerCount: travelerCount ?? 1,
+        lodgingCount: lodgingCount ?? 1,
+        lodgingOverride: etape.lodging_cost_per_night,
+        foodOverride: etape.food_cost_per_day,
+      });
+      if (!cancelled) setPlannedCosts(result);
+    }
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [nights, existing?.duration_days, distanceKm, transportMode, countryCode, travelStyle, travelerCount, lodgingCount, etape.lodging_cost_per_night, etape.food_cost_per_day]);
 
   async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
     const lat = latOverride ?? Number(latitude);
@@ -129,9 +166,6 @@ export function SousEtapeDialog({
       longitude: longitude ? Number(longitude) : null,
       climate_by_month: useCityClimate ? cityClimate : null,
       transport_next_mode: transportMode || null,
-      transport_next_duration_hours: transportDuration ? Number(transportDuration) : null,
-      transport_next_cost: transportCost ? Number(transportCost) : null,
-      transport_next_currency: transportCurrency || null,
     };
     try {
       if (existing) {
@@ -152,9 +186,6 @@ export function SousEtapeDialog({
         setLatitude("");
         setLongitude("");
         setTransportMode("");
-        setTransportDuration("");
-        setTransportCost("");
-        setTransportCurrency("EUR");
         setUseCityClimate(false);
         setCityClimate(Array(12).fill("good"));
       }
@@ -282,34 +313,83 @@ export function SousEtapeDialog({
           </div>
           <div className="space-y-2">
             <Label>Transport vers l'étape suivante</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <Select value={transportMode} onValueChange={setTransportMode}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSPORT_MODE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Durée (h)"
-                type="number"
-                step="0.5"
-                value={transportDuration}
-                onChange={(e) => setTransportDuration(e.target.value)}
-              />
-              <Input placeholder="Coût" type="number" step="0.01" value={transportCost} onChange={(e) => setTransportCost(e.target.value)} />
-            </div>
-            <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} />
+            <Select value={transportMode} onValueChange={setTransportMode}>
+              <SelectTrigger>
+                <SelectValue placeholder="Mode" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRANSPORT_MODE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {existing && (
             <div className="space-y-2 border-t border-border pt-4">
+              <Label>Dépenses prévisionnelles pour cette ville</Label>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Transport (vers la suivante)</Label>
+                  <EditableExpenseAmount
+                    scope={{ sousEtapeId: existing.id }}
+                    category="transport_local"
+                    planned
+                    existing={plannedTransport}
+                    estimate={plannedCosts.transport}
+                    referenceCurrency={referenceCurrency ?? "EUR"}
+                    invalidateKey={["sous-etape-expenses", existing.id]}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Logement</Label>
+                  <EditableExpenseAmount
+                    scope={{ sousEtapeId: existing.id }}
+                    category="logement"
+                    planned
+                    existing={plannedLodging}
+                    estimate={plannedCosts.lodging}
+                    referenceCurrency={referenceCurrency ?? "EUR"}
+                    invalidateKey={["sous-etape-expenses", existing.id]}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Nourriture</Label>
+                  <EditableExpenseAmount
+                    scope={{ sousEtapeId: existing.id }}
+                    category="nourriture"
+                    planned
+                    existing={plannedFood}
+                    estimate={plannedCosts.food}
+                    referenceCurrency={referenceCurrency ?? "EUR"}
+                    invalidateKey={["sous-etape-expenses", existing.id]}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Activités</Label>
+                  <EditableExpenseAmount
+                    scope={{ sousEtapeId: existing.id }}
+                    category="activites"
+                    planned
+                    existing={plannedActivities}
+                    estimate={null}
+                    referenceCurrency={referenceCurrency ?? "EUR"}
+                    invalidateKey={["sous-etape-expenses", existing.id]}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pré-rempli automatiquement à partir du coût de la vie du pays et de la distance vers la ville suivante ;
+                ajuste librement chaque montant pour affiner le budget prévisionnel — chaque valeur alimente directement
+                l'onglet Budget.
+              </p>
+            </div>
+          )}
+          {existing && (
+            <div className="space-y-2 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-2">
-                <Label>Dépenses sur place (logement, nourriture, activités, transport local, imprévus)</Label>
+                <Label>Dépenses réelles (saisies au fil du voyage)</Label>
                 {!addingExpense && (
                   <Button type="button" size="sm" variant="outline" onClick={() => setAddingExpense(true)}>
                     <Plus className="mr-2 h-4 w-4" /> Dépense
@@ -331,7 +411,7 @@ export function SousEtapeDialog({
                 </div>
               )}
               <ExpenseList
-                expenses={onSiteExpenses ?? []}
+                expenses={otherExpenses}
                 invalidateKey={["sous-etape-expenses", existing.id]}
                 projectId={projectId}
                 categories={ON_SITE_CATEGORIES}

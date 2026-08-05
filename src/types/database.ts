@@ -191,6 +191,9 @@ export type VoyageExpense = {
   id: string;
   voyage_id: string | null;
   sous_etape_id: string | null;
+  /** Rattachement au niveau pays (ex. visa), en plus de voyage_id (transverse) et
+   * sous_etape_id (ville) — un seul des trois est renseigné. */
+  etape_id: string | null;
   /** @deprecated voir Person/ProjectPerson. */
   traveler_id: string | null;
   person_id: string | null;
@@ -204,6 +207,15 @@ export type VoyageExpense = {
   created_by: string;
   created_at: string;
   updated_at: string;
+};
+
+/** Vue de détail plate (voir voyage_all_expenses) : une ligne par dépense, quel que soit son
+ * niveau de rattachement, avec le voyage/pays/ville déjà résolus. */
+export type VoyageAllExpense = VoyageExpense & {
+  resolved_voyage_id: string | null;
+  resolved_etape_id: string | null;
+  country_region: string | null;
+  city_name: string | null;
 };
 
 export type DocumentRow = {
@@ -306,6 +318,7 @@ export type Database = {
       voyage_category_budget_summary: { Row: VoyageCategoryBudgetSummary; Relationships: [] };
       voyage_traveler_expense_summary: { Row: VoyageTravelerExpenseSummary; Relationships: [] };
       voyage_person_expense_summary: { Row: VoyagePersonExpenseSummary; Relationships: [] };
+      voyage_all_expenses: { Row: VoyageAllExpense; Relationships: [] };
     };
     Functions: Record<string, never>;
     Enums: Record<string, never>;

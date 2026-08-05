@@ -1,4 +1,5 @@
 import type { TravelStyle } from "@/types/database";
+import { estimateTransportLegCost } from "@/features/voyages/budget-estimate";
 
 /** Cache en mémoire (par code pays ISO), pour éviter de répéter les appels pendant la session. */
 const priceLevelCache = new Map<string, number | null>();
@@ -53,6 +54,35 @@ export async function estimateLodgingRate(countryCode: string | null, style: Tra
 export async function estimateFoodRate(countryCode: string | null, style: TravelStyle): Promise<number> {
   const ratio = countryCode ? await fetchPriceLevelRatio(countryCode) : null;
   return BASE_DAILY_RATES_EUR[style].food * (ratio ?? 1);
+}
+
+export type CityPlannedCosts = { transport: number; lodging: number; food: number };
+
+/**
+ * Estimation prévisionnelle (transport vers la ville suivante, logement, nourriture) pour UNE
+ * ville précise — utilisée à la fois dans le dialogue d'édition d'une ville et dans la vue
+ * d'ensemble du budget, pour garantir que la même formule produit toujours le même résultat.
+ */
+export async function estimateCityPlannedCosts(input: {
+  nights: number;
+  distanceKm: number | null;
+  transportMode: string | null;
+  countryCode: string | null;
+  style: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
+  lodgingOverride: number | null;
+  foodOverride: number | null;
+}): Promise<CityPlannedCosts> {
+  const lodgingRate = input.lodgingOverride ?? (await estimateLodgingRate(input.countryCode, input.style));
+  const foodRate = input.foodOverride ?? (await estimateFoodRate(input.countryCode, input.style));
+  const rooms = Math.max(1, input.lodgingCount || 1);
+  const travelers = Math.max(1, input.travelerCount || 1);
+  return {
+    transport: estimateTransportLegCost(input.distanceKm, input.transportMode, travelers),
+    lodging: input.nights * rooms * lodgingRate,
+    food: input.nights * travelers * foodRate,
+  };
 }
 
 export type CountryCostInput = {

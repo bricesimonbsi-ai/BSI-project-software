@@ -7,12 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateEtape, useUpdateEtape, useInsertEtapeAt, useDeleteEtape } from "@/features/voyages/use-etapes";
+import { useEtapeExpenses } from "@/features/voyages/use-expenses";
 import { TRANSPORT_MODE_OPTIONS } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag, CountryPicker } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
+import { estimateVisaCostEur } from "@/features/voyages/budget-estimate";
+import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
 import { toast } from "@/hooks/use-toast";
-import type { ClimateRating, VoyageEtape } from "@/types/database";
+import type { ClimateRating, TravelStyle, VoyageEtape } from "@/types/database";
 import { Plus, Trash2, Lock, Sparkles } from "lucide-react";
 
 export function EtapeDialog({
@@ -22,6 +25,8 @@ export function EtapeDialog({
   trigger,
   insertAtIndex,
   lockCountry,
+  travelStyle,
+  travelerCount,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
@@ -33,6 +38,9 @@ export function EtapeDialog({
   /** Verrouille le champ pays quand des villes sont déjà associées à cette étape : changer de
    * pays sous des villes existantes n'a pas de sens (visa/climat/permis dépendent du pays). */
   lockCountry?: boolean;
+  /** Nécessaires pour préremplir l'estimation du visa (EditableExpenseAmount). */
+  travelStyle?: TravelStyle;
+  travelerCount?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -51,6 +59,8 @@ export function EtapeDialog({
   const [climate, setClimate] = useState<ClimateRating[]>(existing?.climate_by_month ?? Array(12).fill("good"));
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { data: etapeExpenses } = useEtapeExpenses(existing?.id);
+  const plannedVisa = (etapeExpenses ?? []).find((e) => e.planned && e.category === "visas");
   const [suggestingClimate, setSuggestingClimate] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
@@ -198,6 +208,21 @@ export function EtapeDialog({
               <Label htmlFor="permit">Permis international nécessaire</Label>
             </div>
           </div>
+          {visaNeeded && existing && (
+            <div className="space-y-1">
+              <Label className="text-xs font-normal text-muted-foreground">Coût de visa prévisionnel (pour ce pays)</Label>
+              <EditableExpenseAmount
+                scope={{ etapeId: existing.id }}
+                category="visas"
+                planned
+                existing={plannedVisa}
+                estimate={estimateVisaCostEur(travelStyle ?? "standard", travelerCount ?? 1)}
+                referenceCurrency="EUR"
+                invalidateKey={["etape-expenses", existing.id]}
+                className="w-32"
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Vaccins recommandés</Label>

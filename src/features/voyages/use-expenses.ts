@@ -4,6 +4,7 @@ import { useAuth } from "@/app/providers/auth-provider";
 import type {
   ExpenseCategory,
   VoyageExpense,
+  VoyageAllExpense,
   VoyageBudgetSummary,
   VoyageEtapeBudgetSummary,
   VoyageCategoryBudgetSummary,
@@ -63,6 +64,40 @@ export function useSousEtapeExpenses(sousEtapeId: string | undefined) {
   });
 }
 
+export function useEtapeExpenses(etapeId: string | undefined) {
+  return useQuery({
+    queryKey: ["etape-expenses", etapeId],
+    enabled: !!etapeId,
+    queryFn: async (): Promise<VoyageExpense[]> => {
+      const { data, error } = await supabase
+        .from("voyage_expenses")
+        .select("*")
+        .eq("etape_id", etapeId as string)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Source unique pour toute agrégation de budget côté client (vue d'ensemble par ville/pays,
+ * transverses, totaux) : une ligne par dépense, quel que soit son niveau de rattachement. */
+export function useVoyageAllExpenses(voyageId: string | undefined) {
+  return useQuery({
+    queryKey: ["voyage-all-expenses", voyageId],
+    enabled: !!voyageId,
+    queryFn: async (): Promise<VoyageAllExpense[]> => {
+      const { data, error } = await supabase
+        .from("voyage_all_expenses")
+        .select("*")
+        .eq("resolved_voyage_id", voyageId as string)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 type ExpenseInput = {
   category: ExpenseCategory;
   planned: boolean;
@@ -80,9 +115,14 @@ function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>,
   queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
   queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
   queryClient.invalidateQueries({ queryKey: ["voyage-person-expense-summary"] });
+  queryClient.invalidateQueries({ queryKey: ["voyage-all-expenses"] });
+  queryClient.invalidateQueries({ queryKey: ["etape-expenses"] });
 }
 
-export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: string }, invalidateKey: unknown[]) {
+export function useCreateExpense(
+  scope: { voyageId?: string; sousEtapeId?: string; etapeId?: string },
+  invalidateKey: unknown[]
+) {
   const queryClient = useQueryClient();
   const { session } = useAuth();
   return useMutation({
@@ -91,6 +131,7 @@ export function useCreateExpense(scope: { voyageId?: string; sousEtapeId?: strin
       const { error } = await supabase.from("voyage_expenses").insert({
         voyage_id: scope.voyageId ?? null,
         sous_etape_id: scope.sousEtapeId ?? null,
+        etape_id: scope.etapeId ?? null,
         ...input,
         created_by: session.user.id,
       });
