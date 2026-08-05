@@ -11,26 +11,113 @@ import type {
   VoyagePersonExpenseSummary,
 } from "@/types/database";
 
-export const PRE_DEPARTURE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
-  { value: "equipement", label: "Équipement" },
-  { value: "transport_international", label: "Transport international" },
-  { value: "assurance", label: "Assurance" },
-  { value: "visas", label: "Visas" },
-  { value: "vaccins", label: "Vaccins" },
-  { value: "administratif", label: "Administratif" },
-  { value: "vehicule", label: "Véhicule" },
-  { value: "financement", label: "Financement (épargne)" },
-  { value: "imprevus", label: "Imprévus (fonds d'urgence)" },
-  { value: "frais_bancaires", label: "Frais bancaires" },
+export type CategoryScope = "transverse" | "etape";
+
+/**
+ * Catégories unifiées pour toute l'application : "transverse" (équipement, administratif &
+ * santé) ne se rattache qu'au voyage entier, jamais à une étape ni une ville ; les autres
+ * ("etape") peuvent se rattacher à une étape (pays) ou une ville. Les anciennes valeurs de
+ * catégorie (transport_international, visas, vaccins...) restent des `ExpenseCategory` valides
+ * pour ne pas invalider les dépenses déjà saisies (voir CATEGORY_LABELS), mais ne sont plus
+ * proposées à la saisie.
+ */
+export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string; scope: CategoryScope }[] = [
+  { value: "transport", label: "Transport", scope: "etape" },
+  { value: "logement", label: "Logement", scope: "etape" },
+  { value: "nourriture", label: "Nourriture", scope: "etape" },
+  { value: "activites", label: "Activités", scope: "etape" },
+  { value: "equipement", label: "Équipement", scope: "transverse" },
+  { value: "administratif_sante", label: "Administratif & santé", scope: "transverse" },
 ];
 
-export const ON_SITE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
-  { value: "logement", label: "Logement" },
-  { value: "nourriture", label: "Nourriture" },
-  { value: "activites", label: "Activités" },
-  { value: "transport_local", label: "Transport local" },
-  { value: "imprevus", label: "Imprévus" },
+export const TRANSVERSE_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => c.scope === "transverse");
+export const ETAPE_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => c.scope === "etape");
+
+/** Sous-type libre (`sub_category`) proposé quand la catégorie est "transport". */
+export const TRANSPORT_SUB_CATEGORIES: { value: string; label: string }[] = [
+  { value: "avion", label: "Avion" },
+  { value: "train", label: "Train" },
+  { value: "bus", label: "Bus" },
+  { value: "taxi", label: "Taxi" },
+  { value: "voiture", label: "Voiture" },
+  { value: "ferry_bateau", label: "Ferry / Bateau" },
+  { value: "autre", label: "Autre" },
 ];
+
+/** Sous-type libre (`sub_category`) proposé quand la catégorie est "administratif_sante". */
+export const ADMIN_SANTE_SUB_CATEGORIES: { value: string; label: string }[] = [
+  { value: "assurance", label: "Assurance" },
+  { value: "visa", label: "Visa" },
+  { value: "vaccin", label: "Vaccin" },
+  { value: "frais_bancaires", label: "Frais bancaires" },
+  { value: "imprevus", label: "Imprévus" },
+  { value: "autre", label: "Autre" },
+];
+
+/** Libellés pour TOUTES les valeurs de catégorie possibles, y compris les anciennes valeurs
+ * (encore présentes sur des dépenses saisies avant l'unification) — source unique d'affichage. */
+export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  transport: "Transport",
+  logement: "Logement",
+  nourriture: "Nourriture",
+  activites: "Activités",
+  equipement: "Équipement",
+  administratif_sante: "Administratif & santé",
+  transport_international: "Transport international",
+  transport_local: "Transport local",
+  assurance: "Assurance",
+  visas: "Visas",
+  vaccins: "Vaccins",
+  administratif: "Administratif",
+  vehicule: "Véhicule",
+  financement: "Financement",
+  imprevus: "Imprévus",
+  frais_bancaires: "Frais bancaires",
+};
+
+/** @deprecated Remplacé par TRANSVERSE_CATEGORIES + ETAPE_CATEGORIES (catégories unifiées). */
+export const PRE_DEPARTURE_CATEGORIES = TRANSVERSE_CATEGORIES;
+/** @deprecated Remplacé par TRANSVERSE_CATEGORIES + ETAPE_CATEGORIES (catégories unifiées). */
+export const ON_SITE_CATEGORIES = ETAPE_CATEGORIES;
+
+/** Regroupe une ancienne valeur de catégorie (saisie avant l'unification) dans l'une des 6
+ * catégories unifiées, pour que les dépenses historiques s'affichent correctement dans les
+ * graphiques et le détail par catégorie plutôt que de disparaître ou de créer un groupe à part. */
+const LEGACY_CATEGORY_GROUP: Record<string, ExpenseCategory> = {
+  transport_international: "transport",
+  transport_local: "transport",
+  vehicule: "transport",
+  assurance: "administratif_sante",
+  visas: "administratif_sante",
+  vaccins: "administratif_sante",
+  administratif: "administratif_sante",
+  financement: "administratif_sante",
+  imprevus: "administratif_sante",
+  frais_bancaires: "administratif_sante",
+};
+
+/** Sous-type déduit pour le regroupement (voir LEGACY_CATEGORY_GROUP) : une ancienne catégorie
+ * comme "visas" ou "assurance" devient le sous-type "visa"/"assurance" une fois rattachée à
+ * "administratif_sante", pour ne perdre aucun détail lors de la bascule vers l'ancienne saisie. */
+const LEGACY_SUB_CATEGORY: Record<string, string> = {
+  assurance: "assurance",
+  visas: "visa",
+  vaccins: "vaccin",
+  frais_bancaires: "frais_bancaires",
+  imprevus: "imprevus",
+};
+
+/** Catégorie unifiée effective d'une dépense (identité pour les nouvelles valeurs, regroupée
+ * pour les anciennes) — à utiliser pour tout graphique ou regroupement par catégorie. */
+export function groupedCategory(category: ExpenseCategory): ExpenseCategory {
+  return LEGACY_CATEGORY_GROUP[category] ?? category;
+}
+
+/** Sous-type effectif d'une dépense (le `sub_category` saisi, ou déduit de l'ancienne catégorie,
+ * ou "autre" à défaut) — à utiliser pour les graphiques de détail (transport, administratif & santé). */
+export function groupedSubCategory(e: { category: ExpenseCategory; sub_category: string | null }): string {
+  return e.sub_category || LEGACY_SUB_CATEGORY[e.category] || "autre";
+}
 
 export function useVoyageExpenses(voyageId: string | undefined) {
   return useQuery({
@@ -100,6 +187,8 @@ export function useVoyageAllExpenses(voyageId: string | undefined) {
 
 type ExpenseInput = {
   category: ExpenseCategory;
+  /** Sous-type libre (mode de transport, type de frais administratif/santé) ; null/absent = sans sous-type. */
+  sub_category?: string | null;
   planned: boolean;
   amount: number;
   currency: string;
@@ -107,6 +196,9 @@ type ExpenseInput = {
   description?: string;
   expense_date?: string;
   person_id?: string | null;
+  /** Vrai tant que le montant est piloté par l'estimation automatique (voir EditableExpenseAmount) :
+   * il continue alors à se resynchroniser avec l'estimation ; faux dès qu'il est ajusté à la main. */
+  is_estimated?: boolean;
 };
 
 function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>, invalidateKey: unknown[]) {

@@ -22,7 +22,7 @@ export function ExpenseFormDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: {
-  scope?: { voyageId?: string; sousEtapeId?: string };
+  scope?: { voyageId?: string; sousEtapeId?: string; etapeId?: string };
   categories: { value: ExpenseCategory; label: string }[];
   referenceCurrency: string;
   invalidateKey: unknown[];

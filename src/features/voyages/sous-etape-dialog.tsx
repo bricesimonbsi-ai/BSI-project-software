@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDeleteSousEtape } from "@/features/voyages/use-sous-etapes";
-import { useSousEtapeExpenses, ON_SITE_CATEGORIES } from "@/features/voyages/use-expenses";
+import { useSousEtapeExpenses, ETAPE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
@@ -89,7 +89,7 @@ export function SousEtapeDialog({
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
   const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
-  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport_local");
+  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport");
   const plannedLodging = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "logement");
   const plannedFood = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "nourriture");
   const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
@@ -334,7 +334,8 @@ export function SousEtapeDialog({
                   <Label className="text-xs font-normal text-muted-foreground">Transport (vers la suivante)</Label>
                   <EditableExpenseAmount
                     scope={{ sousEtapeId: existing.id }}
-                    category="transport_local"
+                    category="transport"
+                    subCategory={transportMode || null}
                     planned
                     existing={plannedTransport}
                     estimate={plannedCosts.transport}
@@ -400,7 +401,7 @@ export function SousEtapeDialog({
                 <div className="rounded-md border border-border p-3">
                   <ExpenseFormFields
                     scope={{ sousEtapeId: existing.id }}
-                    categories={ON_SITE_CATEGORIES}
+                    categories={ETAPE_CATEGORIES}
                     referenceCurrency={referenceCurrency ?? "EUR"}
                     invalidateKey={["sous-etape-expenses", existing.id]}
                     projectId={projectId}
@@ -414,7 +415,7 @@ export function SousEtapeDialog({
                 expenses={otherExpenses}
                 invalidateKey={["sous-etape-expenses", existing.id]}
                 projectId={projectId}
-                categories={ON_SITE_CATEGORIES}
+                categories={ETAPE_CATEGORIES}
                 referenceCurrency={referenceCurrency ?? "EUR"}
                 inline
               />

@@ -11,8 +11,16 @@ export type Permission = "read" | "write";
 export type ProjectStatus = "active" | "upcoming" | "completed" | "archived";
 export type CategoryStatus = "active" | "archived";
 export type ExpenseCategory =
+  // Catégories unifiées (voir use-expenses.ts pour la liste affichée dans l'UI)
+  | "transport"
+  | "logement"
+  | "nourriture"
+  | "activites"
   | "equipement"
+  | "administratif_sante"
+  // Anciennes valeurs, conservées uniquement pour les dépenses déjà saisies avant l'unification
   | "transport_international"
+  | "transport_local"
   | "assurance"
   | "visas"
   | "vaccins"
@@ -20,11 +28,7 @@ export type ExpenseCategory =
   | "vehicule"
   | "financement"
   | "imprevus"
-  | "frais_bancaires"
-  | "logement"
-  | "nourriture"
-  | "activites"
-  | "transport_local";
+  | "frais_bancaires";
 
 export type Profile = {
   id: string;
@@ -198,10 +202,14 @@ export type VoyageExpense = {
   traveler_id: string | null;
   person_id: string | null;
   category: ExpenseCategory;
+  /** Sous-type libre (mode de transport, type de frais administratif/santé) ; null = sans sous-type. */
+  sub_category: string | null;
   planned: boolean;
   amount: number;
   currency: string;
   manual_rate_to_reference: number;
+  /** Vrai tant que le montant est piloté par l'estimation automatique (voir EditableExpenseAmount). */
+  is_estimated: boolean;
   description: string | null;
   expense_date: string | null;
   created_by: string;

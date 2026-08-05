@@ -37,7 +37,7 @@ import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { TravelStyle, VoyageSousEtape } from "@/types/database";
 
 type Tab = "climat" | "dates" | "carte" | "carbone";
@@ -625,7 +625,6 @@ function CityRow({
             <ArrowDownRight className="h-3 w-3 text-muted-foreground/70" />
             {TransportIcon && <TransportIcon className={cn("h-3.5 w-3.5", transportIconColorClass(row.incomingMode))} />}
             {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : ""}
-            {row.incomingCost ? ` · ${formatCurrency(row.incomingCost, row.incomingCostCurrency ?? referenceCurrency)}` : ""}
           </span>
         )}
         <span className="inline-flex items-center gap-1.5">

@@ -60,7 +60,7 @@ export function EtapeDialog({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { data: etapeExpenses } = useEtapeExpenses(existing?.id);
-  const plannedVisa = (etapeExpenses ?? []).find((e) => e.planned && e.category === "visas");
+  const plannedVisa = (etapeExpenses ?? []).find((e) => e.planned && e.category === "administratif_sante" && e.sub_category === "visa");
   const [suggestingClimate, setSuggestingClimate] = useState(false);
   const createEtape = useCreateEtape(voyageId);
   const updateEtape = useUpdateEtape(voyageId);
@@ -213,7 +213,8 @@ export function EtapeDialog({
               <Label className="text-xs font-normal text-muted-foreground">Coût de visa prévisionnel (pour ce pays)</Label>
               <EditableExpenseAmount
                 scope={{ etapeId: existing.id }}
-                category="visas"
+                category="administratif_sante"
+                subCategory="visa"
                 planned
                 existing={plannedVisa}
                 estimate={estimateVisaCostEur(travelStyle ?? "standard", travelerCount ?? 1)}

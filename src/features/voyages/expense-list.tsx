@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDeleteExpense } from "@/features/voyages/use-expenses";
+import { useDeleteExpense, CATEGORY_LABELS, TRANSPORT_SUB_CATEGORIES, ADMIN_SANTE_SUB_CATEGORIES } from "@/features/voyages/use-expenses";
 import { useProjectPeople } from "@/features/people/use-people";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
@@ -9,22 +9,9 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
 import { Pencil, Trash2 } from "lucide-react";
 
-const categoryLabels: Record<ExpenseCategory, string> = {
-  equipement: "Équipement",
-  transport_international: "Transport international",
-  assurance: "Assurance",
-  visas: "Visas",
-  vaccins: "Vaccins",
-  administratif: "Administratif",
-  vehicule: "Véhicule",
-  financement: "Financement",
-  imprevus: "Imprévus",
-  frais_bancaires: "Frais bancaires",
-  logement: "Logement",
-  nourriture: "Nourriture",
-  activites: "Activités",
-  transport_local: "Transport local",
-};
+const subCategoryLabels: Record<string, string> = Object.fromEntries(
+  [...TRANSPORT_SUB_CATEGORIES, ...ADMIN_SANTE_SUB_CATEGORIES].map((s) => [s.value, s.label])
+);
 
 export function ExpenseList({
   expenses,
@@ -36,7 +23,7 @@ export function ExpenseList({
    * (ex. dialogue d'une ville), pour éviter un Dialog imbriqué dans un Dialog. */
   inline = false,
 }: {
-  expenses: VoyageExpense[];
+  expenses: (VoyageExpense & { city_name?: string | null })[];
   invalidateKey: unknown[];
   projectId?: string;
   /** Requis pour permettre la modification (mêmes catégories que le formulaire d'ajout). */
@@ -78,7 +65,9 @@ export function ExpenseList({
           <li key={expense.id} className="flex items-center justify-between gap-3 p-3">
             <div>
               <p className="text-sm font-medium">
-                {categoryLabels[expense.category]}
+                {CATEGORY_LABELS[expense.category] ?? expense.category}
+                {expense.sub_category ? ` (${subCategoryLabels[expense.sub_category] ?? expense.sub_category})` : ""}
+                {expense.city_name ? ` · ${expense.city_name}` : ""}
                 {expense.description ? ` — ${expense.description}` : ""}
                 {personName(expense.person_id) ? ` · ${personName(expense.person_id)}` : ""}
               </p>

@@ -4,9 +4,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CurrencySelect } from "@/features/voyages/currency-select";
-import { useCreateExpense, useUpdateExpense } from "@/features/voyages/use-expenses";
+import {
+  useCreateExpense,
+  useUpdateExpense,
+  TRANSPORT_SUB_CATEGORIES,
+  ADMIN_SANTE_SUB_CATEGORIES,
+} from "@/features/voyages/use-expenses";
 import { useProjectPeople } from "@/features/people/use-people";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
+
+function subCategoryOptions(category: ExpenseCategory): { value: string; label: string }[] | null {
+  if (category === "transport") return TRANSPORT_SUB_CATEGORIES;
+  if (category === "administratif_sante") return ADMIN_SANTE_SUB_CATEGORIES;
+  return null;
+}
 
 /**
  * Champs du formulaire de dépense, réutilisés à la fois dans un Dialog (contexte non
@@ -25,7 +36,7 @@ export function ExpenseFormFields({
   onDone,
   onCancel,
 }: {
-  scope?: { voyageId?: string; sousEtapeId?: string };
+  scope?: { voyageId?: string; sousEtapeId?: string; etapeId?: string };
   categories: { value: ExpenseCategory; label: string }[];
   referenceCurrency: string;
   invalidateKey: unknown[];
@@ -38,6 +49,7 @@ export function ExpenseFormFields({
   onCancel?: () => void;
 }) {
   const [category, setCategory] = useState<ExpenseCategory>(existing?.category ?? categories[0].value);
+  const [subCategory, setSubCategory] = useState(existing?.sub_category ?? "");
   const [planned, setPlanned] = useState(existing?.planned ?? defaultPlanned);
   const [amount, setAmount] = useState(existing?.amount?.toString() ?? "");
   const [currency, setCurrency] = useState(existing?.currency ?? referenceCurrency);
@@ -55,6 +67,7 @@ export function ExpenseFormFields({
     try {
       const payload = {
         category,
+        sub_category: subCategory || null,
         planned,
         amount: Number(amount),
         currency,
@@ -62,6 +75,7 @@ export function ExpenseFormFields({
         description: description || undefined,
         expense_date: expenseDate || undefined,
         person_id: personId === "none" ? null : personId,
+        is_estimated: false,
       };
       if (existing) {
         await updateExpense.mutateAsync({ id: existing.id, ...payload });
@@ -87,7 +101,13 @@ export function ExpenseFormFields({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Catégorie</Label>
-        <Select value={category} onValueChange={(v) => setCategory(v as ExpenseCategory)}>
+        <Select
+          value={category}
+          onValueChange={(v) => {
+            setCategory(v as ExpenseCategory);
+            setSubCategory("");
+          }}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -100,6 +120,23 @@ export function ExpenseFormFields({
           </SelectContent>
         </Select>
       </div>
+      {subCategoryOptions(category) && (
+        <div className="space-y-2">
+          <Label>Détail</Label>
+          <Select value={subCategory} onValueChange={setSubCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choisir..." />
+            </SelectTrigger>
+            <SelectContent>
+              {subCategoryOptions(category)!.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Montant</Label>
