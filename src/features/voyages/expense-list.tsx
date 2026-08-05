@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useDeleteExpense } from "@/features/voyages/use-expenses";
 import { useProjectPeople } from "@/features/people/use-people";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
+import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -31,68 +32,96 @@ export function ExpenseList({
   projectId,
   categories,
   referenceCurrency,
+  /** Édition inline (pas de Dialog) — obligatoire quand la liste vit déjà dans un Dialog
+   * (ex. dialogue d'une ville), pour éviter un Dialog imbriqué dans un Dialog. */
+  inline = false,
 }: {
   expenses: VoyageExpense[];
   invalidateKey: unknown[];
   projectId?: string;
-  /** Requis pour permettre la modification en ligne (mêmes catégories que le formulaire d'ajout). */
+  /** Requis pour permettre la modification (mêmes catégories que le formulaire d'ajout). */
   categories?: { value: ExpenseCategory; label: string }[];
   referenceCurrency?: string;
+  inline?: boolean;
 }) {
   const deleteExpense = useDeleteExpense(invalidateKey);
   const { data: linkedPeople } = useProjectPeople(projectId);
   const personName = (id: string | null) => (id ? linkedPeople?.find((l) => l.person_id === id)?.people.name : undefined);
-  const [editing, setEditing] = useState<VoyageExpense | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dialogEditing, setDialogEditing] = useState<VoyageExpense | null>(null);
 
   if (expenses.length === 0) {
     return <p className="text-sm text-muted-foreground">Aucune dépense pour l'instant.</p>;
   }
 
+  const canEdit = !!categories && !!referenceCurrency;
+
   return (
     <ul className="divide-y divide-border rounded-md border border-border">
-      {expenses.map((expense) => (
-        <li key={expense.id} className="flex items-center justify-between gap-3 p-3">
-          <div>
-            <p className="text-sm font-medium">
-              {categoryLabels[expense.category]}
-              {expense.description ? ` — ${expense.description}` : ""}
-              {personName(expense.person_id) ? ` · ${personName(expense.person_id)}` : ""}
-            </p>
-            <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              className={cn(
-                "border-transparent",
-                expense.planned
-                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                  : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+      {expenses.map((expense) => {
+        if (inline && editingId === expense.id && categories && referenceCurrency) {
+          return (
+            <li key={expense.id} className="border-l-2 border-l-accent p-3">
+              <ExpenseFormFields
+                existing={expense}
+                categories={categories}
+                referenceCurrency={referenceCurrency}
+                invalidateKey={invalidateKey}
+                projectId={projectId}
+                onDone={() => setEditingId(null)}
+                onCancel={() => setEditingId(null)}
+              />
+            </li>
+          );
+        }
+        return (
+          <li key={expense.id} className="flex items-center justify-between gap-3 p-3">
+            <div>
+              <p className="text-sm font-medium">
+                {categoryLabels[expense.category]}
+                {expense.description ? ` — ${expense.description}` : ""}
+                {personName(expense.person_id) ? ` · ${personName(expense.person_id)}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                className={cn(
+                  "border-transparent",
+                  expense.planned
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                )}
+              >
+                {expense.planned ? "Prévisionnel" : "Réel"}
+              </Badge>
+              <span className="text-sm font-semibold">{formatCurrency(expense.amount, expense.currency)}</span>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => (inline ? setEditingId(expense.id) : setDialogEditing(expense))}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
               )}
-            >
-              {expense.planned ? "Prévisionnel" : "Réel"}
-            </Badge>
-            <span className="text-sm font-semibold">{formatCurrency(expense.amount, expense.currency)}</span>
-            {categories && referenceCurrency && (
-              <Button variant="ghost" size="icon" onClick={() => setEditing(expense)}>
-                <Pencil className="h-4 w-4" />
+              <Button variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
+                <Trash2 className="h-4 w-4" />
               </Button>
-            )}
-            <Button variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </li>
-      ))}
-      {editing && categories && referenceCurrency && (
+            </div>
+          </li>
+        );
+      })}
+      {!inline && dialogEditing && categories && referenceCurrency && (
         <ExpenseFormDialog
-          existing={editing}
+          existing={dialogEditing}
           categories={categories}
           referenceCurrency={referenceCurrency}
           invalidateKey={invalidateKey}
           projectId={projectId}
           trigger={null}
-          open={editing !== null}
-          onOpenChange={(o) => !o && setEditing(null)}
+          open={dialogEditing !== null}
+          onOpenChange={(o) => !o && setDialogEditing(null)}
         />
       )}
     </ul>

@@ -12,7 +12,7 @@ import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
 import { CurrencySelect } from "@/features/voyages/currency-select";
-import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
+import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { toast } from "@/hooks/use-toast";
@@ -75,6 +75,7 @@ export function SousEtapeDialog({
   const [suggestingClimate, setSuggestingClimate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingExpense, setAddingExpense] = useState(false);
   const createSousEtape = useCreateSousEtape(etapeId);
   const updateSousEtape = useUpdateSousEtape(etapeId);
   const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
@@ -308,22 +309,34 @@ export function SousEtapeDialog({
           {existing && (
             <div className="space-y-2 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-2">
-                <Label>Dépenses sur place (logement, nourriture, activités, transport local)</Label>
-                <ExpenseFormDialog
-                  scope={{ sousEtapeId: existing.id }}
-                  categories={ON_SITE_CATEGORIES}
-                  referenceCurrency={referenceCurrency ?? "EUR"}
-                  invalidateKey={["sous-etape-expenses", existing.id]}
-                  projectId={projectId}
-                  defaultPlanned={false}
-                />
+                <Label>Dépenses sur place (logement, nourriture, activités, transport local, imprévus)</Label>
+                {!addingExpense && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => setAddingExpense(true)}>
+                    <Plus className="mr-2 h-4 w-4" /> Dépense
+                  </Button>
+                )}
               </div>
+              {addingExpense && (
+                <div className="rounded-md border border-border p-3">
+                  <ExpenseFormFields
+                    scope={{ sousEtapeId: existing.id }}
+                    categories={ON_SITE_CATEGORIES}
+                    referenceCurrency={referenceCurrency ?? "EUR"}
+                    invalidateKey={["sous-etape-expenses", existing.id]}
+                    projectId={projectId}
+                    defaultPlanned={false}
+                    onDone={() => setAddingExpense(false)}
+                    onCancel={() => setAddingExpense(false)}
+                  />
+                </div>
+              )}
               <ExpenseList
                 expenses={onSiteExpenses ?? []}
                 invalidateKey={["sous-etape-expenses", existing.id]}
                 projectId={projectId}
                 categories={ON_SITE_CATEGORIES}
                 referenceCurrency={referenceCurrency ?? "EUR"}
+                inline
               />
             </div>
           )}

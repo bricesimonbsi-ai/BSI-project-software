@@ -28,6 +28,7 @@ export const ON_SITE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: "nourriture", label: "Nourriture" },
   { value: "activites", label: "Activités" },
   { value: "transport_local", label: "Transport local" },
+  { value: "imprevus", label: "Imprévus" },
 ];
 
 export function useVoyageExpenses(voyageId: string | undefined) {

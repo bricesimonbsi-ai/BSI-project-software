@@ -6,11 +6,13 @@ const priceLevelCache = new Map<string, number | null>();
 /**
  * Tarifs de référence par jour et par personne, calibrés pour un niveau de prix mondial
  * moyen (ratio ≈ 1), en EUR — localisés ensuite par pays via l'indice de niveau des prix.
+ * Le logement est un prix de CHAMBRE (pas par personne) : standard = hôtel 2-3 étoiles,
+ * confort = hôtel 4 étoiles ou plus.
  */
 const BASE_DAILY_RATES_EUR: Record<TravelStyle, { lodging: number; food: number }> = {
-  economique: { lodging: 12, food: 8 },
-  standard: { lodging: 35, food: 18 },
-  confort: { lodging: 90, food: 35 },
+  economique: { lodging: 20, food: 15 },
+  standard: { lodging: 70, food: 30 },
+  confort: { lodging: 180, food: 60 },
 };
 
 /**
@@ -40,24 +42,68 @@ export async function fetchPriceLevelRatio(countryCode: string): Promise<number 
   }
 }
 
-/** Estimation hébergement + nourriture, pays par pays (chaque pays de l'itinéraire pondéré par
- * son propre indice de niveau des prix et son nombre de nuits), sommée sur tout le voyage. */
-export async function estimateLodgingAndFoodByCountry(
-  countries: { countryCode: string | null; nights: number }[],
+/** Tarif hébergement/nuit (EUR) auto-estimé pour un pays et un style de voyage, avant tout
+ * override manuel. */
+export async function estimateLodgingRate(countryCode: string | null, style: TravelStyle): Promise<number> {
+  const ratio = countryCode ? await fetchPriceLevelRatio(countryCode) : null;
+  return BASE_DAILY_RATES_EUR[style].lodging * (ratio ?? 1);
+}
+
+/** Tarif nourriture/jour/personne (EUR) auto-estimé pour un pays et un style de voyage. */
+export async function estimateFoodRate(countryCode: string | null, style: TravelStyle): Promise<number> {
+  const ratio = countryCode ? await fetchPriceLevelRatio(countryCode) : null;
+  return BASE_DAILY_RATES_EUR[style].food * (ratio ?? 1);
+}
+
+export type CountryCostInput = {
+  etapeId: string;
+  countryCode: string | null;
+  nights: number;
+  /** Override manuel saisi par l'utilisateur ; prioritaire sur l'estimation automatique. */
+  lodgingOverride: number | null;
+  foodOverride: number | null;
+};
+
+export type CountryCostResult = {
+  etapeId: string;
+  nights: number;
+  lodgingRate: number;
+  foodRate: number;
+  lodgingIsEstimated: boolean;
+  foodIsEstimated: boolean;
+  lodgingTotal: number;
+  foodTotal: number;
+};
+
+/**
+ * Estimation hébergement + nourriture, pays par pays (chaque pays de l'itinéraire pondéré par
+ * son propre indice de niveau des prix, son nombre de nuits, et un éventuel tarif ajusté
+ * manuellement par l'utilisateur qui prend toujours le pas sur l'estimation automatique).
+ */
+export async function estimateCostsByCountry(
+  countries: CountryCostInput[],
   style: TravelStyle,
   travelerCount: number,
   lodgingCount: number
-): Promise<{ lodging: number; food: number }> {
+): Promise<CountryCostResult[]> {
   const rooms = Math.max(1, lodgingCount || 1);
   const travelers = Math.max(1, travelerCount || 1);
-  const base = BASE_DAILY_RATES_EUR[style];
-  let lodging = 0;
-  let food = 0;
+  const results: CountryCostResult[] = [];
   for (const c of countries) {
-    const ratio = c.countryCode ? await fetchPriceLevelRatio(c.countryCode) : null;
-    const localFactor = ratio ?? 1;
-    lodging += c.nights * rooms * base.lodging * localFactor;
-    food += c.nights * travelers * base.food * localFactor;
+    const lodgingIsEstimated = c.lodgingOverride == null;
+    const foodIsEstimated = c.foodOverride == null;
+    const lodgingRate = c.lodgingOverride ?? (await estimateLodgingRate(c.countryCode, style));
+    const foodRate = c.foodOverride ?? (await estimateFoodRate(c.countryCode, style));
+    results.push({
+      etapeId: c.etapeId,
+      nights: c.nights,
+      lodgingRate,
+      foodRate,
+      lodgingIsEstimated,
+      foodIsEstimated,
+      lodgingTotal: c.nights * rooms * lodgingRate,
+      foodTotal: c.nights * travelers * foodRate,
+    });
   }
-  return { lodging, food };
+  return results;
 }

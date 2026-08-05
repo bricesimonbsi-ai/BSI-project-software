@@ -12,18 +12,15 @@ import {
 import { buildFlatRows, groupByCountry } from "@/features/voyages/itinerary/itinerary-model";
 import { findCountryByName } from "@/features/voyages/itinerary/location-pickers";
 import { estimateFlightsEur, estimateVisasEur } from "@/features/voyages/budget-estimate";
-import { estimateLodgingAndFoodByCountry } from "@/features/voyages/cost-of-living";
+import { estimateCostsByCountry } from "@/features/voyages/cost-of-living";
 import { BudgetRing } from "@/features/voyages/budget-ring";
+import { CountryCostPanel } from "@/features/voyages/country-cost-panel";
 import { formatCurrency } from "@/lib/utils";
 import type { ExpenseCategory, TravelStyle, Voyage, VoyageSousEtape } from "@/types/database";
 
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   [...PRE_DEPARTURE_CATEGORIES, ...ON_SITE_CATEGORIES].map((c) => [c.value, c.label])
 );
-
-/** Catégories automatiquement complétées par l'estimation indicative (hébergement,
- * nourriture, vols, visas) — additionnées à ce qui a été saisi manuellement. */
-const AUTO_ESTIMATE_CATEGORIES: ExpenseCategory[] = ["logement", "nourriture", "transport_international", "visas"];
 
 /** Indicateurs budget (total, par personne, par catégorie) + estimation indicative fondue
  * directement dans les totaux affichés, et comparatif prévisionnel / réel en anneaux. */
@@ -52,11 +49,14 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       0
     );
     const visaEtapeCount = (etapes ?? []).filter((e) => e.visa_needed).length;
-    const countryNights = groups.map((g) => ({
+    const countryCosts = groups.map((g) => ({
+      etapeId: g.etape.id,
       countryCode: findCountryByName(g.etape.country_region)?.cca2 ?? null,
       nights: g.totalNights,
+      lodgingOverride: g.etape.lodging_cost_per_night,
+      foodOverride: g.etape.food_cost_per_day,
     }));
-    return { flightKm, visaEtapeCount, countryNights };
+    return { flightKm, visaEtapeCount, countryCosts };
   }, [etapes, allSousEtapes]);
 
   const [autoEstimate, setAutoEstimate] = useState({ logement: 0, nourriture: 0, transport_international: 0, visas: 0 });
@@ -64,13 +64,15 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      const { lodging, food } = await estimateLodgingAndFoodByCountry(
-        itinerary.countryNights,
+      const results = await estimateCostsByCountry(
+        itinerary.countryCosts,
         style,
         travelerCount,
         voyage.lodging_count ?? travelerCount
       );
       if (cancelled) return;
+      const lodging = results.reduce((sum, r) => sum + r.lodgingTotal, 0);
+      const food = results.reduce((sum, r) => sum + r.foodTotal, 0);
       setAutoEstimate({
         logement: lodging,
         nourriture: food,
@@ -102,7 +104,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         label: CATEGORY_LABELS[category] ?? category,
         planned: (row?.total_planned ?? 0) + estimate,
         actual: row?.total_actual ?? 0,
-        isEstimated: AUTO_ESTIMATE_CATEGORIES.includes(category) && estimate > 0,
       };
     });
   }, [categorySummary, autoEstimate]);
@@ -145,14 +146,13 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       </div>
       <p className="text-xs text-muted-foreground">
         Le total exclut le transport local (dépense courante sur place, pas un poste à planifier à l'avance) et inclut une
-        estimation automatique indicative pour l'hébergement et la nourriture (selon le style de voyage et le coût de la vie
-        de chaque pays traversé), les vols inter-étapes et les visas — visible aussi dans le détail par catégorie ci-dessous.
-        Style de voyage réglable dans l'onglet Aperçu.
+        estimation automatique indicative pour l'hébergement et la nourriture (ajustable pays par pays ci-dessous), les vols
+        inter-étapes et les visas. Style de voyage réglable dans l'onglet Aperçu.
       </p>
 
       <div>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Comparatif prévisionnel / réel
+          Comparatif prévisionnel / réel, par catégorie
         </h3>
         <div className="flex flex-wrap gap-4">
           <BudgetRing label="Ensemble du voyage" planned={totalPlanned} actual={totalActual} currency={voyage.reference_currency} size={112} />
@@ -162,35 +162,12 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         </div>
       </div>
 
-      {headlineRows.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Par grande catégorie (prévisionnel)
-          </h3>
-          <div className="space-y-2">
-            {headlineRows
-              .slice()
-              .sort((a, b) => b.planned - a.planned)
-              .map((c) => (
-                <div key={c.category} className="flex items-center gap-3 text-sm">
-                  <span className="w-40 flex-shrink-0 truncate">
-                    {c.label}
-                    {c.isEstimated && <span className="ml-1 text-xs text-muted-foreground">(inclut estimation)</span>}
-                  </span>
-                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-accent"
-                      style={{ width: `${(c.planned / Math.max(1, ...headlineRows.map((r) => r.planned))) * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-24 flex-shrink-0 text-right font-semibold">
-                    {formatCurrency(c.planned, voyage.reference_currency)}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
+      <CountryCostPanel
+        voyageId={voyageId}
+        style={style}
+        travelerCount={travelerCount}
+        lodgingCount={voyage.lodging_count ?? travelerCount}
+      />
 
       {personSummary && personSummary.length > 0 && (
         <div>

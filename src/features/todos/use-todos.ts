@@ -34,6 +34,17 @@ export function useCreateTodo() {
   });
 }
 
+export function useUpdateTodo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; title?: string; due_date?: string | null }) => {
+      const { error } = await supabase.from("todos").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+  });
+}
+
 export function useToggleTodo() {
   const queryClient = useQueryClient();
   return useMutation({

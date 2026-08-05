@@ -156,6 +156,11 @@ export type VoyageEtape = {
   latitude: number | null;
   longitude: number | null;
   climate_by_month: ClimateRating[] | null;
+  /** Override manuel du tarif hébergement/nuit utilisé dans l'estimation budgétaire pour ce
+   * pays (EUR) ; null = utiliser l'estimation automatique (coût de la vie par pays). */
+  lodging_cost_per_night: number | null;
+  /** Override manuel du tarif nourriture/jour et par personne (EUR) ; null = estimation auto. */
+  food_cost_per_day: number | null;
   created_at: string;
   updated_at: string;
 };
