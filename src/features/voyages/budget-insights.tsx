@@ -12,6 +12,7 @@ import {
   groupedSubCategory,
 } from "@/features/voyages/use-expenses";
 import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
+import { BudgetRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
 import { formatCurrency } from "@/lib/utils";
 import type { TravelStyle, Voyage } from "@/types/database";
@@ -123,13 +124,21 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
           {transportRows.length > 0 && (
             <div>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail transport</h3>
-              <CategoryComparisonChart rows={transportRows} currency={voyage.reference_currency} hue="sky" />
+              <div className="flex flex-wrap gap-4">
+                {transportRows.map((r) => (
+                  <BudgetRing key={r.key} label={r.label} planned={r.planned} actual={r.actual} currency={voyage.reference_currency} size={84} />
+                ))}
+              </div>
             </div>
           )}
           {adminSanteRows.length > 0 && (
             <div>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail administratif & santé</h3>
-              <CategoryComparisonChart rows={adminSanteRows} currency={voyage.reference_currency} hue="rose" />
+              <div className="flex flex-wrap gap-4">
+                {adminSanteRows.map((r) => (
+                  <BudgetRing key={r.key} label={r.label} planned={r.planned} actual={r.actual} currency={voyage.reference_currency} size={84} />
+                ))}
+              </div>
             </div>
           )}
         </div>

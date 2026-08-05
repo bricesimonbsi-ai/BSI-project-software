@@ -45,7 +45,7 @@ export function EditableExpenseAmount({
   useEffect(() => {
     if (estimate == null) return;
     if (!existing) {
-      if (creatingRef.current || estimate <= 0) return;
+      if (creatingRef.current || estimate < 0) return;
       creatingRef.current = true;
       createExpense.mutate({
         category,

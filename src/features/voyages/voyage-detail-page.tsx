@@ -209,6 +209,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
             projectId={projectId}
             travelStyle={voyage.travel_style ?? "standard"}
             travelerCount={travelerCount}
+            lodgingCount={voyage.lodging_count ?? travelerCount}
           />
         </TabsContent>
 

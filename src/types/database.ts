@@ -200,6 +200,8 @@ export type VoyageEquipment = {
   category: string;
   name: string;
   quantity: number;
+  /** Prix unitaire estimé (EUR), ajustable ; null = utilise le tarif indicatif par défaut. */
+  unit_price: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;

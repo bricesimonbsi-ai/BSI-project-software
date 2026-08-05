@@ -56,33 +56,33 @@ export async function estimateFoodRate(countryCode: string | null, style: Travel
   return BASE_DAILY_RATES_EUR[style].food * (ratio ?? 1);
 }
 
-export type EtapePlannedCosts = { transport: number; lodging: number; food: number };
+export type CityPlannedCosts = { transport: number; lodging: number; food: number };
 
 /**
- * Estimation prévisionnelle (transport, logement, nourriture) pour UN pays entier — nuits
- * agrégées sur toutes ses villes, trajets sortants de chacune de ses villes sommés pour le
- * transport. Seule source d'estimation automatique de l'application (une ligne par pays, voir
- * la vue d'ensemble du budget) : plus de calcul concurrent au niveau ville.
+ * Estimation prévisionnelle (transport vers la ville suivante, logement, nourriture) pour UNE
+ * ville précise — seule source d'estimation automatique de l'application (une ligne par ville,
+ * voir le dialogue d'édition d'une ville et la vue d'ensemble du budget, qui pointent toutes les
+ * deux vers les mêmes lignes `voyage_expenses`). Le pays affiché dans la vue d'ensemble est un
+ * total calculé de ses villes, jamais une estimation concurrente.
  */
-export async function estimateEtapePlannedCosts(input: {
-  totalNights: number;
-  /** Trajets sortants de chaque ville de ce pays (vers la ville suivante, dans ou hors du pays). */
-  legs: { distanceKm: number | null; mode: string | null }[];
+export async function estimateCityPlannedCosts(input: {
+  nights: number;
+  distanceKm: number | null;
+  transportMode: string | null;
   countryCode: string | null;
   style: TravelStyle;
   travelerCount: number;
   lodgingCount: number;
   lodgingOverride: number | null;
   foodOverride: number | null;
-}): Promise<EtapePlannedCosts> {
+}): Promise<CityPlannedCosts> {
   const lodgingRate = input.lodgingOverride ?? (await estimateLodgingRate(input.countryCode, input.style));
   const foodRate = input.foodOverride ?? (await estimateFoodRate(input.countryCode, input.style));
   const rooms = Math.max(1, input.lodgingCount || 1);
   const travelers = Math.max(1, input.travelerCount || 1);
-  const transport = input.legs.reduce((sum, leg) => sum + estimateTransportLegCost(leg.distanceKm, leg.mode, travelers), 0);
   return {
-    transport,
-    lodging: input.totalNights * rooms * lodgingRate,
-    food: input.totalNights * travelers * foodRate,
+    transport: estimateTransportLegCost(input.distanceKm, input.transportMode, travelers),
+    lodging: input.nights * rooms * lodgingRate,
+    food: input.nights * travelers * foodRate,
   };
 }

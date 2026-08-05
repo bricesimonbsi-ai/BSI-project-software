@@ -1,32 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
 import {
   useVoyageAllExpenses,
   TRANSVERSE_CATEGORIES,
-  ETAPE_CATEGORIES,
+  ADMIN_SANTE_SUB_CATEGORIES,
   groupedCategory,
-  groupedSubCategory,
 } from "@/features/voyages/use-expenses";
 import { CountryFlag, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
-import { estimateEtapePlannedCosts, type EtapePlannedCosts } from "@/features/voyages/cost-of-living";
-import { estimateVisaCostEur } from "@/features/voyages/budget-estimate";
+import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
 import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { cn, formatCurrency } from "@/lib/utils";
-import type { TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
+import type { ExpenseCategory, TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
 
 function sumAmount(rows: VoyageAllExpense[]): number {
   return rows.reduce((sum, e) => sum + e.amount * e.manual_rate_to_reference, 0);
 }
 
+const CITY_COLUMNS: { key: ExpenseCategory; label: string }[] = [
+  { key: "transport", label: "Transport" },
+  { key: "nourriture", label: "Nourriture" },
+  { key: "logement", label: "Logement" },
+  { key: "activites", label: "Activités" },
+];
+
+const ADMIN_SUB_COLUMNS = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa" && s.value !== "autre");
+
+type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; label: string };
+
 /**
- * Détail des dépenses : bascule Prévisionnel (grille — une ligne par pays, une colonne par type
- * de dépense, chaque case pré-estimée et éditable) / Réel (listes détaillées par pays, saisies
- * au fil du voyage). Toutes deux lisent `voyage_all_expenses` avec la même normalisation de
- * catégorie que les graphiques au-dessus (`groupedCategory`/`groupedSubCategory`), donc les
- * chiffres coïncident toujours.
+ * Détail des dépenses : une ligne par VILLE (groupées par pays), une colonne par catégorie
+ * (transport, nourriture, logement, activités) — la ligne du pays est un total calculé de ses
+ * villes, non modifiable (la source d'entrée, c'est la ville). Équipement et administratif &
+ * santé, transverses au voyage, apparaissent en fin de tableau. Bascule Prévisionnel/Réel :
+ * même forme des deux côtés pour rester comparable. Chaque case éditable est une vraie ligne
+ * `voyage_expenses`, la même que celle modifiable depuis le dialogue de la ville correspondante
+ * — éditer d'un côté met donc toujours à jour l'autre.
  */
 export function BudgetOverviewTable({
   voyageId,
@@ -47,6 +60,7 @@ export function BudgetOverviewTable({
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
   const [view, setView] = useState<"planned" | "actual">("planned");
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
   const citiesByEtape = useMemo(() => {
     const map = new Map<string, VoyageSousEtape[]>();
@@ -62,9 +76,7 @@ export function BudgetOverviewTable({
   const totalPlanned = sumAmount(expenses.filter((e) => e.planned));
   const totalActual = sumAmount(expenses.filter((e) => !e.planned));
   const equipmentRows = expenses.filter((e) => groupedCategory(e.category) === "equipement");
-  const transverseAdminRows = expenses.filter(
-    (e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante"
-  );
+  const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
 
   if (!etapes) return null;
 
@@ -75,14 +87,20 @@ export function BudgetOverviewTable({
         <div className="inline-flex rounded-md border border-border p-0.5">
           <button
             type="button"
-            onClick={() => setView("planned")}
+            onClick={() => {
+              setView("planned");
+              setSelectedCell(null);
+            }}
             className={cn("rounded px-3 py-1 text-xs font-medium", view === "planned" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
           >
             Prévisionnel
           </button>
           <button
             type="button"
-            onClick={() => setView("actual")}
+            onClick={() => {
+              setView("actual");
+              setSelectedCell(null);
+            }}
             className={cn("rounded px-3 py-1 text-xs font-medium", view === "actual" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
           >
             Réel
@@ -90,70 +108,119 @@ export function BudgetOverviewTable({
         </div>
       </div>
 
-      {view === "planned" ? (
-        <PlannedGrid
-          etapes={etapes}
-          citiesByEtape={citiesByEtape}
-          expenses={expenses}
-          travelStyle={travelStyle}
-          travelerCount={travelerCount}
-          lodgingCount={lodgingCount}
-          referenceCurrency={referenceCurrency}
-          voyageId={voyageId}
-          equipmentRow={equipmentRows.find((e) => e.planned)}
-        />
-      ) : (
-        <div className="space-y-3">
-          {etapes.map((etape) => (
-            <div key={etape.id} className="space-y-2 rounded-md border border-border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                  <CountryFlag name={etape.country_region} />
-                  {etape.country_region}
-                </span>
-                <ExpenseFormDialog
-                  scope={{ etapeId: etape.id }}
-                  categories={ETAPE_CATEGORIES}
-                  referenceCurrency={referenceCurrency}
-                  invalidateKey={["voyage-all-expenses", voyageId]}
-                  projectId={projectId}
-                  defaultPlanned={false}
-                />
-              </div>
-              <ExpenseList
-                expenses={expenses.filter((e) => e.resolved_etape_id === etape.id && !e.planned)}
-                invalidateKey={["voyage-all-expenses", voyageId]}
-                projectId={projectId}
-                categories={ETAPE_CATEGORIES}
+      <div className="overflow-x-auto rounded-md border border-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2">Pays / ville</th>
+              {CITY_COLUMNS.map((c) => (
+                <th key={c.key} className="px-2 py-2">
+                  {c.label}
+                </th>
+              ))}
+              <th className="px-3 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {etapes.map((etape) => (
+              <CountrySection
+                key={etape.id}
+                etape={etape}
+                cities={citiesByEtape.get(etape.id) ?? []}
+                expenses={expenses}
+                view={view}
+                travelStyle={travelStyle}
+                travelerCount={travelerCount}
+                lodgingCount={lodgingCount}
                 referenceCurrency={referenceCurrency}
+                voyageId={voyageId}
+                onSelectCell={setSelectedCell}
               />
-            </div>
-          ))}
-          <div className="space-y-2 rounded-md border border-border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold">Équipement & administratif / santé</p>
-                <p className="text-xs text-muted-foreground">Dépenses transverses, non propres à un pays.</p>
-              </div>
-              <ExpenseFormDialog
-                scope={{ voyageId }}
-                categories={TRANSVERSE_CATEGORIES}
-                referenceCurrency={referenceCurrency}
-                invalidateKey={["voyage-all-expenses", voyageId]}
-                projectId={projectId}
-                defaultPlanned={false}
-              />
-            </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {view === "actual" && selectedCell && (
+        <div className="space-y-2 rounded-md border border-border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">{selectedCell.label}</p>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedCell(null)}>
+              Fermer
+            </Button>
+          </div>
+          <ExpenseList
+            expenses={expenses.filter(
+              (e) => e.sous_etape_id === selectedCell.sousEtapeId && !e.planned && groupedCategory(e.category) === selectedCell.category
+            )}
+            invalidateKey={["voyage-all-expenses", voyageId]}
+            projectId={projectId}
+            categories={[{ value: selectedCell.category, label: selectedCell.label }]}
+            referenceCurrency={referenceCurrency}
+          />
+          <ExpenseFormDialog
+            scope={{ sousEtapeId: selectedCell.sousEtapeId }}
+            categories={[{ value: selectedCell.category, label: selectedCell.label }]}
+            referenceCurrency={referenceCurrency}
+            invalidateKey={["voyage-all-expenses", voyageId]}
+            projectId={projectId}
+            defaultPlanned={false}
+          />
+        </div>
+      )}
+
+      <div className="space-y-3 rounded-md border border-border p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Dépenses transverses (équipement, administratif & santé — pas propres à un pays)
+        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="font-medium">Équipement</span>
+          <span>
+            <span className="font-semibold">{formatCurrency(sumAmount(equipmentRows.filter((e) => e.planned === (view === "planned"))), referenceCurrency)}</span>
+            <span className="ml-1.5 text-xs text-muted-foreground">réglable dans l'onglet Équipement</span>
+          </span>
+        </div>
+        {view === "planned" ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {ADMIN_SUB_COLUMNS.map((s) => {
+              const row = adminRows.find((e) => e.planned && (e.sub_category || "") === s.value);
+              return (
+                <div key={s.value} className="space-y-1">
+                  <Label className="text-xs font-normal text-muted-foreground">{s.label}</Label>
+                  <EditableExpenseAmount
+                    scope={{ voyageId }}
+                    category="administratif_sante"
+                    subCategory={s.value}
+                    planned
+                    existing={row}
+                    estimate={null}
+                    referenceCurrency={referenceCurrency}
+                    invalidateKey={["voyage-all-expenses", voyageId]}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <ExpenseFormDialog
+              scope={{ voyageId }}
+              categories={TRANSVERSE_CATEGORIES}
+              referenceCurrency={referenceCurrency}
+              invalidateKey={["voyage-all-expenses", voyageId]}
+              projectId={projectId}
+              defaultPlanned={false}
+            />
             <ExpenseList
-              expenses={[...equipmentRows, ...transverseAdminRows].filter((e) => !e.planned)}
+              expenses={adminRows.filter((e) => !e.planned)}
               invalidateKey={["voyage-all-expenses", voyageId]}
               projectId={projectId}
               categories={TRANSVERSE_CATEGORIES}
               referenceCurrency={referenceCurrency}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-base font-bold">
         <span>TOTAL</span>
@@ -165,95 +232,79 @@ export function BudgetOverviewTable({
   );
 }
 
-const GRID_COLUMNS: { key: string; sub?: string; label: string }[] = [
-  { key: "transport", label: "Transport" },
-  { key: "logement", label: "Logement" },
-  { key: "nourriture", label: "Nourriture" },
-  { key: "activites", label: "Activités" },
-  { key: "administratif_sante", sub: "visa", label: "Visa" },
-  { key: "administratif_sante", sub: "assurance", label: "Assurance" },
-  { key: "administratif_sante", sub: "vaccin", label: "Vaccins" },
-  { key: "administratif_sante", sub: "frais_bancaires", label: "Frais bancaires" },
-  { key: "administratif_sante", sub: "imprevus", label: "Imprévus" },
-];
-
-function PlannedGrid({
-  etapes,
-  citiesByEtape,
+function CountrySection({
+  etape,
+  cities,
   expenses,
+  view,
   travelStyle,
   travelerCount,
   lodgingCount,
   referenceCurrency,
   voyageId,
-  equipmentRow,
+  onSelectCell,
 }: {
-  etapes: VoyageEtape[];
-  citiesByEtape: Map<string, VoyageSousEtape[]>;
+  etape: VoyageEtape;
+  cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
+  view: "planned" | "actual";
   travelStyle: TravelStyle;
   travelerCount: number;
   lodgingCount: number;
   referenceCurrency: string;
   voyageId: string;
-  equipmentRow: VoyageAllExpense | undefined;
+  onSelectCell: (cell: SelectedCell) => void;
 }) {
+  const cityIds = new Set(cities.map((c) => c.id));
+  const countryRows = expenses.filter((e) => e.sous_etape_id && cityIds.has(e.sous_etape_id) && e.planned === (view === "planned"));
+  const countryTotal = sumAmount(countryRows);
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-3 py-2">Pays</th>
-            {GRID_COLUMNS.map((c) => (
-              <th key={c.key + (c.sub ?? "")} className="px-2 py-2">
-                {c.label}
-              </th>
-            ))}
-            <th className="px-3 py-2 text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {etapes.map((etape) => (
-            <EtapeGridRow
-              key={etape.id}
-              etape={etape}
-              cities={citiesByEtape.get(etape.id) ?? []}
-              rows={expenses.filter((e) => e.resolved_etape_id === etape.id && e.planned)}
-              travelStyle={travelStyle}
-              travelerCount={travelerCount}
-              lodgingCount={lodgingCount}
-              referenceCurrency={referenceCurrency}
-              voyageId={voyageId}
-            />
-          ))}
-          <tr className="border-t border-border bg-muted/30">
-            <td className="px-3 py-2 font-semibold">Équipement</td>
-            <td className="px-2 py-2" colSpan={GRID_COLUMNS.length - 1}>
-              <EditableExpenseAmount
-                scope={{ voyageId }}
-                category="equipement"
-                planned
-                existing={equipmentRow}
-                estimate={null}
-                referenceCurrency={referenceCurrency}
-                invalidateKey={["voyage-all-expenses", voyageId]}
-                className="w-28"
-              />
-              <span className="ml-2 text-xs text-muted-foreground">réglable aussi depuis l'onglet Équipement</span>
-            </td>
-            <td className="px-3 py-2 text-right font-semibold">
-              {formatCurrency(equipmentRow ? equipmentRow.amount * equipmentRow.manual_rate_to_reference : 0, referenceCurrency)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <>
+      <tr className="border-b border-border bg-muted/30 font-semibold">
+        <td className="whitespace-nowrap px-3 py-2">
+          <span className="inline-flex items-center gap-1.5">
+            <CountryFlag name={etape.country_region} />
+            {etape.country_region}
+          </span>
+        </td>
+        {CITY_COLUMNS.map((c) => (
+          <td key={c.key} className="px-2 py-2 text-right">
+            {formatCurrency(sumAmount(countryRows.filter((e) => groupedCategory(e.category) === c.key)), referenceCurrency)}
+          </td>
+        ))}
+        <td className="px-3 py-2 text-right">{formatCurrency(countryTotal, referenceCurrency)}</td>
+      </tr>
+      {cities.map((se) =>
+        view === "planned" ? (
+          <CityPlannedRow
+            key={se.id}
+            se={se}
+            etape={etape}
+            rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
+            travelStyle={travelStyle}
+            travelerCount={travelerCount}
+            lodgingCount={lodgingCount}
+            referenceCurrency={referenceCurrency}
+            voyageId={voyageId}
+          />
+        ) : (
+          <CityActualRow
+            key={se.id}
+            se={se}
+            rows={expenses.filter((e) => e.sous_etape_id === se.id && !e.planned)}
+            referenceCurrency={referenceCurrency}
+            onSelectCell={onSelectCell}
+          />
+        )
+      )}
+    </>
   );
 }
 
-function EtapeGridRow({
+function CityPlannedRow({
+  se,
   etape,
-  cities,
   rows,
   travelStyle,
   travelerCount,
@@ -261,8 +312,8 @@ function EtapeGridRow({
   referenceCurrency,
   voyageId,
 }: {
+  se: VoyageSousEtape;
   etape: VoyageEtape;
-  cities: VoyageSousEtape[];
   rows: VoyageAllExpense[];
   travelStyle: TravelStyle;
   travelerCount: number;
@@ -271,16 +322,15 @@ function EtapeGridRow({
   voyageId: string;
 }) {
   const countryCode = findCountryByName(etape.country_region)?.cca2 ?? null;
-  const [estimate, setEstimate] = useState<EtapePlannedCosts>({ transport: 0, lodging: 0, food: 0 });
+  const [estimate, setEstimate] = useState<CityPlannedCosts>({ transport: 0, lodging: 0, food: 0 });
 
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      const totalNights = cities.reduce((s, c) => s + (c.duration_days ?? 0), 0);
-      const legs = cities.map((c) => ({ distanceKm: c.distance_km, mode: c.transport_next_mode }));
-      const result = await estimateEtapePlannedCosts({
-        totalNights,
-        legs,
+      const result = await estimateCityPlannedCosts({
+        nights: se.duration_days ?? 0,
+        distanceKm: se.distance_km,
+        transportMode: se.transport_next_mode,
         countryCode,
         style: travelStyle,
         travelerCount,
@@ -294,61 +344,75 @@ function EtapeGridRow({
     return () => {
       cancelled = true;
     };
-  }, [cities, countryCode, travelStyle, travelerCount, lodgingCount, etape.lodging_cost_per_night, etape.food_cost_per_day]);
+  }, [se.duration_days, se.distance_km, se.transport_next_mode, countryCode, travelStyle, travelerCount, lodgingCount, etape.lodging_cost_per_night, etape.food_cost_per_day]);
 
-  function findRow(key: string, sub?: string) {
-    return rows.find((e) => groupedCategory(e.category) === key && (sub ? groupedSubCategory(e) === sub : true));
-  }
-
-  const estimateFor: Record<string, number | null> = {
+  const estimateFor: Record<string, number> = {
     transport: estimate.transport,
-    logement: estimate.lodging,
     nourriture: estimate.food,
-    activites: null,
-    visa: etape.visa_needed ? estimateVisaCostEur(travelStyle, travelerCount) : null,
-    assurance: null,
-    vaccin: null,
-    frais_bancaires: null,
-    imprevus: null,
+    logement: estimate.lodging,
+    activites: 0,
   };
 
-  const invalidateKey = ["voyage-all-expenses", voyageId];
+  function findRow(cat: ExpenseCategory) {
+    return rows.find((e) => groupedCategory(e.category) === cat);
+  }
+
   const total = sumAmount(rows);
+  const invalidateKey = ["voyage-all-expenses", voyageId];
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="whitespace-nowrap px-3 py-2">
-        <span className="inline-flex items-center gap-1.5">
-          <CountryFlag name={etape.country_region} />
-          {etape.country_region}
-        </span>
-      </td>
-      {GRID_COLUMNS.map((c) => {
-        const estimateKey = c.sub ?? c.key;
-        if (c.sub === "visa" && !etape.visa_needed) {
-          return (
-            <td key={c.key + (c.sub ?? "")} className="px-2 py-2 text-center text-muted-foreground">
-              —
-            </td>
-          );
-        }
+      <td className="whitespace-nowrap px-3 py-1.5 pl-8 text-muted-foreground">{se.city}</td>
+      {CITY_COLUMNS.map((c) => (
+        <td key={c.key} className="px-2 py-1.5">
+          <EditableExpenseAmount
+            scope={{ sousEtapeId: se.id }}
+            category={c.key}
+            subCategory={c.key === "transport" ? se.transport_next_mode : null}
+            planned
+            existing={findRow(c.key)}
+            estimate={estimateFor[c.key]}
+            referenceCurrency={referenceCurrency}
+            invalidateKey={invalidateKey}
+            className="w-20"
+          />
+        </td>
+      ))}
+      <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
+    </tr>
+  );
+}
+
+function CityActualRow({
+  se,
+  rows,
+  referenceCurrency,
+  onSelectCell,
+}: {
+  se: VoyageSousEtape;
+  rows: VoyageAllExpense[];
+  referenceCurrency: string;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
+  const total = sumAmount(rows);
+  return (
+    <tr className="border-b border-border last:border-0">
+      <td className="whitespace-nowrap px-3 py-1.5 pl-8 text-muted-foreground">{se.city}</td>
+      {CITY_COLUMNS.map((c) => {
+        const sum = sumAmount(rows.filter((e) => groupedCategory(e.category) === c.key));
         return (
-          <td key={c.key + (c.sub ?? "")} className="px-2 py-2">
-            <EditableExpenseAmount
-              scope={{ etapeId: etape.id }}
-              category={c.key as VoyageAllExpense["category"]}
-              subCategory={c.sub ?? null}
-              planned
-              existing={findRow(c.key, c.sub)}
-              estimate={estimateFor[estimateKey] ?? null}
-              referenceCurrency={referenceCurrency}
-              invalidateKey={invalidateKey}
-              className="w-20"
-            />
+          <td key={c.key} className="px-2 py-1.5">
+            <button
+              type="button"
+              className="w-20 rounded px-1.5 py-1 text-right text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
+              onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.key, label: `${se.city} · ${c.label}` })}
+            >
+              {formatCurrency(sum, referenceCurrency)}
+            </button>
           </td>
         );
       })}
-      <td className="px-3 py-2 text-right font-semibold">{formatCurrency(total, referenceCurrency)}</td>
+      <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
     </tr>
   );
 }

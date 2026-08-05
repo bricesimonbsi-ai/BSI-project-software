@@ -87,6 +87,7 @@ export function ExpenseList({
               <span className="text-sm font-semibold">{formatCurrency(expense.amount, expense.currency)}</span>
               {canEdit && (
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => (inline ? setEditingId(expense.id) : setDialogEditing(expense))}
@@ -94,7 +95,7 @@ export function ExpenseList({
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
+              <Button type="button" variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>

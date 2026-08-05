@@ -81,13 +81,16 @@ export function ItineraryView({
   projectId,
   travelStyle,
   travelerCount,
+  lodgingCount,
 }: {
   voyageId: string;
   referenceCurrency: string;
   projectId: string;
-  /** Nécessaires pour préremplir l'estimation du visa dans le dialogue d'édition d'un pays. */
+  /** Nécessaires pour préremplir les estimations de dépenses prévisionnelles (logement,
+   * nourriture, transport, visa) dans les dialogues d'édition pays/ville. */
   travelStyle: TravelStyle;
   travelerCount: number;
+  lodgingCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("dates");
   const [creatingCountryAt, setCreatingCountryAt] = useState<number | null>(null);
@@ -253,6 +256,7 @@ export function ItineraryView({
                       colorIndex={colorIndex}
                       travelStyle={travelStyle}
                       travelerCount={travelerCount}
+                      lodgingCount={lodgingCount}
                     />
                   ))}
                 </SortableContext>
@@ -292,6 +296,7 @@ function CountryBlock({
   colorIndex,
   travelStyle,
   travelerCount,
+  lodgingCount,
 }: {
   group: CountryGroup;
   tab: Tab;
@@ -302,6 +307,7 @@ function CountryBlock({
   colorIndex: number;
   travelStyle: TravelStyle;
   travelerCount: number;
+  lodgingCount: number;
 }) {
   const [creatingCityAt, setCreatingCityAt] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -475,6 +481,9 @@ function CountryBlock({
                 etapeId={group.etape.id}
                 allFlat={allFlat}
                 onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
+                travelStyle={travelStyle}
+                travelerCount={travelerCount}
+                lodgingCount={lodgingCount}
               />
             ))}
           </SortableContext>
@@ -501,6 +510,9 @@ function CountryBlock({
         isFirstOverall={colorIndex === 0 && creatingCityAt === 0}
         projectId={projectId}
         referenceCurrency={referenceCurrency}
+        travelStyle={travelStyle}
+        travelerCount={travelerCount}
+        lodgingCount={lodgingCount}
       />
 
       <AddButtonRow colSpan={colSpan} onClick={onInsertCountryAfter} title="Ajouter un pays ici" />
@@ -533,6 +545,9 @@ function CityRow({
   etapeId,
   allFlat,
   onInsertAfter,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
 }: {
   row: FlatRow;
   tab: Tab;
@@ -541,6 +556,9 @@ function CityRow({
   etapeId: string;
   allFlat: FlatRow[];
   onInsertAfter: () => void;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
   const updateSousEtape = useUpdateSousEtape(etapeId);
@@ -621,6 +639,9 @@ function CityRow({
             isFirstOverall={row.globalIndex === 1}
             projectId={projectId}
             referenceCurrency={referenceCurrency}
+            travelStyle={travelStyle}
+            travelerCount={travelerCount}
+            lodgingCount={lodgingCount}
             trigger={<Pencil className="h-3 w-3 cursor-pointer opacity-0 group-hover:opacity-60" />}
           />
         </span>

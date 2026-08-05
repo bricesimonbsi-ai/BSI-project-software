@@ -1,35 +1,72 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { EQUIPMENT_CATALOG } from "@/features/voyages/equipment-catalog";
 import {
   useVoyageEquipment,
   useCheckEquipment,
   useUncheckEquipment,
   useUpdateEquipmentQuantity,
+  useUpdateEquipmentPrice,
 } from "@/features/voyages/use-voyage-equipment";
-import { useVoyageExpenses } from "@/features/voyages/use-expenses";
-import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
-import { estimateEquipmentCostEur } from "@/features/voyages/budget-estimate";
-import { cn } from "@/lib/utils";
+import { useVoyageExpenses, useCreateExpense, useUpdateExpense } from "@/features/voyages/use-expenses";
+import { DEFAULT_EQUIPMENT_UNIT_PRICE_EUR } from "@/features/voyages/budget-estimate";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { VoyageEquipment } from "@/types/database";
 import { ChevronRight, Plus } from "lucide-react";
 
 /**
- * Liste de matériel à cocher (catalogue de base statique, ~370 articles), quantité ajustable.
- * Cocher un article crée automatiquement une tâche "Prévoir : ..." dans l'onglet Tâches
- * (voir le trigger sync_equipment_todo côté base) ; décocher la supprime. Le coût prévisionnel
- * équipement est une seule case éditable (comme les autres catégories), pré-remplie à partir
- * du nombre total d'articles cochés.
+ * Synchronise en continu la ligne de dépense "equipement" (voyage_expenses, prévisionnelle) sur
+ * la somme des articles cochés — jamais de saisie manuelle directe sur ce total : la source de
+ * vérité, c'est le prix par article ci-dessous, donc ce total reste toujours son exact reflet
+ * (et alimente automatiquement le tableau détail des dépenses de l'onglet Budget).
+ */
+function useSyncEquipmentTotal(voyageId: string, referenceCurrency: string, totalCost: number) {
+  const { data: voyageExpenses } = useVoyageExpenses(voyageId);
+  const existing = (voyageExpenses ?? []).find((e) => e.planned && e.category === "equipement");
+  const createExpense = useCreateExpense({ voyageId }, ["voyage-all-expenses", voyageId]);
+  const updateExpense = useUpdateExpense(["voyage-all-expenses", voyageId]);
+  const creatingRef = useRef(false);
+
+  useEffect(() => {
+    const rounded = Math.round(totalCost * 100) / 100;
+    if (!existing) {
+      if (creatingRef.current || rounded <= 0) return;
+      creatingRef.current = true;
+      createExpense.mutate({
+        category: "equipement",
+        planned: true,
+        amount: rounded,
+        currency: referenceCurrency,
+        manual_rate_to_reference: 1,
+        is_estimated: true,
+      });
+      return;
+    }
+    if (Math.abs(existing.amount - rounded) > 0.01) {
+      updateExpense.mutate({ id: existing.id, amount: rounded });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCost, existing]);
+
+  return existing?.amount ?? 0;
+}
+
+/**
+ * Liste de matériel à cocher (catalogue de base statique, ~370 articles), quantité et prix
+ * unitaire ajustables article par article. Cocher un article crée automatiquement une tâche
+ * "Prévoir : ..." dans l'onglet Tâches (voir le trigger sync_equipment_todo côté base) ;
+ * décocher la supprime. Le récapitulatif du haut liste chaque article coché avec sa quantité et
+ * son prix (unitaire ET total, l'un et l'autre bien distingués), et son total général alimente
+ * automatiquement le tableau détail des dépenses prévisionnelles de l'onglet Budget.
  */
 export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string; referenceCurrency: string }) {
   const { data: equipment } = useVoyageEquipment(voyageId);
-  const { data: voyageExpenses } = useVoyageExpenses(voyageId);
   const checkItem = useCheckEquipment(voyageId);
   const uncheckItem = useUncheckEquipment(voyageId);
   const updateQty = useUpdateEquipmentQuantity(voyageId);
+  const updatePrice = useUpdateEquipmentPrice(voyageId);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
 
@@ -51,8 +88,9 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
     return map;
   }, [equipment]);
 
-  const totalQuantity = (equipment ?? []).reduce((s, e) => s + e.quantity, 0);
-  const plannedEquipmentExpense = (voyageExpenses ?? []).find((e) => e.planned && e.category === "equipement");
+  const items = equipment ?? [];
+  const totalCost = items.reduce((s, e) => s + e.quantity * (e.unit_price ?? DEFAULT_EQUIPMENT_UNIT_PRICE_EUR), 0);
+  useSyncEquipmentTotal(voyageId, referenceCurrency, totalCost);
 
   function handleAddCustom(category: string) {
     const name = (customNames[category] ?? "").trim();
@@ -63,26 +101,73 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-border p-4">
-        <div>
-          <p className="text-sm font-semibold">
-            {equipment?.length ?? 0} article{(equipment?.length ?? 0) > 1 ? "s" : ""} coché(s) · {totalQuantity} au total
+      <div className="space-y-2 rounded-md border border-border p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm font-semibold">Récapitulatif ({items.length} article{items.length > 1 ? "s" : ""})</p>
+          <p className="text-xs text-muted-foreground">
+            Chaque case cochée crée une tâche "Prévoir : ..." dans l'onglet Tâches ; le total ci-dessous alimente
+            automatiquement le détail des dépenses prévisionnelles de l'onglet Budget.
           </p>
-          <p className="text-xs text-muted-foreground">Chaque case cochée crée une tâche "Prévoir : ..." dans l'onglet Tâches.</p>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Coût prévisionnel équipement</Label>
-          <EditableExpenseAmount
-            scope={{ voyageId }}
-            category="equipement"
-            planned
-            existing={plannedEquipmentExpense}
-            estimate={estimateEquipmentCostEur(totalQuantity)}
-            referenceCurrency={referenceCurrency}
-            invalidateKey={["voyage-all-expenses", voyageId]}
-            className="w-28"
-          />
-        </div>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucun article coché pour l'instant — coche-en ci-dessous.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-3 py-2">Équipement nécessaire</th>
+                  <th className="px-2 py-2 text-right">Quantité</th>
+                  <th className="px-2 py-2 text-right">Prix unitaire estimé</th>
+                  <th className="px-3 py-2 text-right">Prix total estimé</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const unitPrice = item.unit_price ?? DEFAULT_EQUIPMENT_UNIT_PRICE_EUR;
+                  return (
+                    <tr key={item.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5">{item.name}</td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateQty.mutate({ id: item.id, quantity: Math.max(1, Number(e.target.value) || 1) })}
+                          className="ml-auto h-7 w-16 text-right text-xs"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          defaultValue={unitPrice}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim() === "" ? null : Math.max(0, Number(e.target.value));
+                            updatePrice.mutate({ id: item.id, unit_price: v });
+                          }}
+                          className="ml-auto h-7 w-20 text-right text-xs"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-medium">
+                        {formatCurrency(item.quantity * unitPrice, referenceCurrency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-border bg-muted/40 font-semibold">
+                  <td className="px-3 py-2" colSpan={3}>
+                    Total général
+                  </td>
+                  <td className="px-3 py-2 text-right">{formatCurrency(totalCost, referenceCurrency)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -113,23 +198,14 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
                         key={name}
                         checked={!!row}
                         label={name}
-                        quantity={row?.quantity ?? 1}
                         onToggle={(checked) =>
                           checked ? checkItem.mutate({ category: group.category, name }) : row && uncheckItem.mutate(row.id)
                         }
-                        onQuantityChange={(q) => row && updateQty.mutate({ id: row.id, quantity: q })}
                       />
                     );
                   })}
                   {(customByCategory.get(group.category) ?? []).map((row) => (
-                    <EquipmentRow
-                      key={row.id}
-                      checked
-                      label={row.name}
-                      quantity={row.quantity}
-                      onToggle={() => uncheckItem.mutate(row.id)}
-                      onQuantityChange={(q) => updateQty.mutate({ id: row.id, quantity: q })}
-                    />
+                    <EquipmentRow key={row.id} checked label={row.name} onToggle={() => uncheckItem.mutate(row.id)} />
                   ))}
                   <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-3">
                     <Input
@@ -156,29 +232,16 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
 function EquipmentRow({
   checked,
   label,
-  quantity,
   onToggle,
-  onQuantityChange,
 }: {
   checked: boolean;
   label: string;
-  quantity: number;
   onToggle: (checked: boolean) => void;
-  onQuantityChange: (quantity: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-muted/50">
       <Checkbox checked={checked} onCheckedChange={(c) => onToggle(!!c)} />
       <span className="flex-1 text-sm">{label}</span>
-      {checked && (
-        <Input
-          type="number"
-          min="1"
-          value={quantity}
-          onChange={(e) => onQuantityChange(Math.max(1, Number(e.target.value) || 1))}
-          className="h-7 w-14 text-xs"
-        />
-      )}
     </div>
   );
 }

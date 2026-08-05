@@ -66,3 +66,15 @@ export function useUpdateEquipmentQuantity(voyageId: string) {
     onSuccess: () => invalidate(queryClient, voyageId),
   });
 }
+
+/** Ajuste le prix unitaire estimé d'un article (alimente le coût prévisionnel équipement). */
+export function useUpdateEquipmentPrice(voyageId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, unit_price }: { id: string; unit_price: number | null }) => {
+      const { error } = await supabase.from("voyage_equipment").update({ unit_price }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(queryClient, voyageId),
+  });
+}
