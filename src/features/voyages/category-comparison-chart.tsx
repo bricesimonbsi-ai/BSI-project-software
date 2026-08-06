@@ -36,6 +36,21 @@ function barPct(value: number, globalMax: number): number {
   return Math.max(2, Math.min(100, Math.sqrt(value / globalMax) * 100));
 }
 
+/** % du prévisionnel déjà consommé (réel / prévu) : null si rien n'est prévu pour cette
+ * catégorie (pourcentage non significatif sans référence à comparer). */
+function consumedPct(actual: number, planned: number): number | null {
+  if (planned <= 0) return null;
+  return Math.round((actual / planned) * 100);
+}
+
+/** Vert = large marge, ambre = proche du budget, rouge = dépassement — mêmes seuils que le
+ * reste de l'application pour tout indicateur de consommation de budget. */
+function consumedPctClasses(pct: number): string {
+  if (pct > 105) return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  if (pct >= 85) return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+  return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+}
+
 /**
  * Graphique en "bullet" (une ligne par catégorie) : le remplissage plein est TOUJOURS le réel,
  * la bande plus claire TOUJOURS le prévisionnel (avec un repère net à son bord) — jamais
@@ -70,6 +85,7 @@ export function CategoryComparisonChart({
         const h = HUE_CLASSES[hue ?? CATEGORY_HUES[r.key] ?? "sky"];
         const actualPct = barPct(r.actual, globalMax);
         const plannedPct = barPct(r.planned, globalMax);
+        const pct = consumedPct(r.actual, r.planned);
         return (
           <div key={r.key} className="flex items-center gap-3">
             <span className="w-36 shrink-0 whitespace-normal text-xs font-medium leading-tight">{r.label}</span>
@@ -81,6 +97,9 @@ export function CategoryComparisonChart({
             <span className="w-36 shrink-0 text-right text-xs">
               <span className="font-semibold">{formatCurrency(r.actual, currency)}</span>
               <span className="text-muted-foreground"> / {formatCurrency(r.planned, currency)}</span>
+            </span>
+            <span className={cn("w-12 shrink-0 rounded-full py-0.5 text-center text-[0.7rem] font-semibold", pct != null ? consumedPctClasses(pct) : "text-muted-foreground")}>
+              {pct != null ? `${pct}%` : "—"}
             </span>
           </div>
         );

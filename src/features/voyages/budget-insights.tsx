@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProjectPeople } from "@/features/people/use-people";
+import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
 import {
   useVoyageAllExpenses,
-  useVoyagePersonExpenseSummary,
   EXPENSE_CATEGORIES,
   CATEGORY_LABELS,
   TRANSPORT_SUB_CATEGORIES,
@@ -48,7 +48,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const voyageId = voyage.id;
   const { data: linkedPeople } = useProjectPeople(projectId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
-  const { data: personSummary } = useVoyagePersonExpenseSummary(voyageId);
   const { data: equipmentItems } = useVoyageEquipment(voyageId);
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
@@ -182,8 +181,23 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Par personne ({travelerCount})</p>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Par personne ({travelerCount})</p>
+              {linkedPeople && linkedPeople.length > 0 && (
+                <div className="flex -space-x-1.5">
+                  {linkedPeople.map((l, i) => (
+                    <PersonAvatarBadge
+                      key={l.person_id}
+                      name={l.people.name}
+                      avatarEmoji={l.people.avatar_emoji}
+                      index={i}
+                      className="h-6 w-6 border-2 border-card text-xs"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="text-lg font-bold">
               {formatCurrency(totalPlanned / travelerCount, voyage.reference_currency)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -221,23 +235,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         travelerCount={travelerCount}
         lodgingCount={lodgingCount}
       />
-
-      {personSummary && personSummary.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dépenses par personne</h3>
-          <div className="space-y-1">
-            {personSummary.map((p) => (
-              <div key={p.person_id} className="flex items-center justify-between text-sm">
-                <span>{p.name}</span>
-                <span className="font-semibold">
-                  {formatCurrency(p.total_planned ?? 0, voyage.reference_currency)} prévu ·{" "}
-                  {formatCurrency(p.total_actual ?? 0, voyage.reference_currency)} réel
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
