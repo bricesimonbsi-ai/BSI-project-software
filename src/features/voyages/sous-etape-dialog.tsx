@@ -391,7 +391,7 @@ export function SousEtapeDialog({
                 <li className="flex items-center justify-between gap-3 p-3">
                   <div>
                     <p className="text-sm font-medium">Transport (vers la suivante)</p>
-                    <p className="text-xs text-muted-foreground">Montant total du trajet, librement modifiable</p>
+                    <p className="text-xs text-muted-foreground">Montant total du trajet pour tous les voyageurs, librement modifiable</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>

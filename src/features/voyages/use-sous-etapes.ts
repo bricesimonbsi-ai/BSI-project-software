@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { invalidateAllExpenseQueries } from "@/features/voyages/use-expenses";
+import { toast } from "@/hooks/use-toast";
 import type { VoyageSousEtape } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 function invalidateAll(queryClient: ReturnType<typeof useQueryClient>, etapeId: string) {
   queryClient.invalidateQueries({ queryKey: ["sous-etapes", etapeId] });
@@ -53,6 +58,7 @@ export function useCreateSousEtape(etapeId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),
+    onError: onMutationError,
   });
 }
 
@@ -93,6 +99,7 @@ export function useInsertSousEtapeAt(etapeId: string) {
       if (insertError) throw insertError;
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),
+    onError: onMutationError,
   });
 }
 
@@ -104,6 +111,7 @@ export function useUpdateSousEtape(etapeId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),
+    onError: onMutationError,
   });
 }
 
@@ -115,6 +123,7 @@ export function useDeleteSousEtape(etapeId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),
+    onError: onMutationError,
   });
 }
 
@@ -132,5 +141,6 @@ export function useReorderSousEtapes(etapeId: string) {
       );
     },
     onSuccess: () => invalidateAll(queryClient, etapeId),
+    onError: onMutationError,
   });
 }

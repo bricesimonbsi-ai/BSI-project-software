@@ -69,7 +69,13 @@ const CITY_COLUMNS: CityColumn[] = [
   { key: "activites", label: "Activités", category: "activites" },
 ];
 
-const ADMIN_SUB_COLUMNS = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa" && s.value !== "autre");
+// Le visa a sa propre estimation dans la fenêtre du pays (etape-dialog.tsx, rattachée à cette
+// étape précise, pas au voyage) : exclu ici pour éviter la confusion avec les frais
+// administratifs & santé transverses au voyage. "Autre" reste affiché : sans lui, d'éventuelles
+// anciennes lignes (ex. catégories "administratif"/"financement" d'avant l'unification, qui se
+// regroupent sous "autre") comptaient dans le total affiché sans jamais apparaître dans la
+// grille, rendant ce total incompréhensible.
+const ADMIN_SUB_COLUMNS = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa");
 
 type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; subCategory?: string | null; label: string };
 

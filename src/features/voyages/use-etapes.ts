@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { invalidateAllExpenseQueries } from "@/features/voyages/use-expenses";
+import { toast } from "@/hooks/use-toast";
 import type { VoyageEtape } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export function useEtapes(voyageId: string | undefined) {
   return useQuery({
@@ -27,6 +32,7 @@ export function useCreateEtape(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+    onError: onMutationError,
   });
 }
 
@@ -44,6 +50,7 @@ export function useUpdateEtape(voyageId: string) {
       // recalcule immédiatement, sans dépendre d'un refetch déclenché ailleurs par hasard.
       invalidateAllExpenseQueries(queryClient);
     },
+    onError: onMutationError,
   });
 }
 
@@ -61,6 +68,7 @@ export function useDeleteEtape(voyageId: string) {
       // du pays supprimé) jusqu'à ce qu'un refetch sans rapport se déclenche par hasard.
       invalidateAllExpenseQueries(queryClient);
     },
+    onError: onMutationError,
   });
 }
 
@@ -98,6 +106,7 @@ export function useInsertEtapeAt(voyageId: string) {
       if (insertError) throw insertError;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+    onError: onMutationError,
   });
 }
 
@@ -115,5 +124,6 @@ export function useReorderEtapes(voyageId: string) {
       );
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+    onError: onMutationError,
   });
 }
