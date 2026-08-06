@@ -223,72 +223,45 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
             <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
           </div>
           {linkedPeople && linkedPeople.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
-              {linkedPeople.map((l, i) => (
-                <div key={l.person_id} className="flex items-center gap-1.5">
-                  <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-6 w-6 text-xs" />
-                  <span className="text-xs text-muted-foreground">{l.people.name}</span>
-                  {l.budget_target != null ? (
-                    <ConsumedPctBadge
-                      pct={consumedPct(actualPerTraveler, l.budget_target)}
-                      className="text-[0.7rem]"
-                      title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
-                    />
-                  ) : (
-                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[0.7rem] font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
-                      cible manquante
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">% du budget cible propre à chaque voyageur, déjà consommé</p>
+              <div className="flex flex-wrap items-center gap-3">
+                {linkedPeople.map((l, i) => (
+                  <div key={l.person_id} className="flex items-center gap-1.5">
+                    <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-6 w-6 text-xs" />
+                    <span className="text-xs text-muted-foreground">{l.people.name}</span>
+                    {l.budget_target != null ? (
+                      <ConsumedPctBadge
+                        pct={consumedPct(actualPerTraveler, l.budget_target)}
+                        className="text-[0.7rem]"
+                        title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
+                      />
+                    ) : (
+                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[0.7rem] font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
+                        cible manquante
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalPlanned, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
-            </p>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalActual, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">réel</span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-2 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Par personne ({travelerCount})</p>
-              {linkedPeople && linkedPeople.length > 0 && (
-                <div className="flex -space-x-1.5">
-                  {linkedPeople.map((l, i) => (
-                    <PersonAvatarBadge
-                      key={l.person_id}
-                      name={l.people.name}
-                      avatarEmoji={l.people.avatar_emoji}
-                      index={i}
-                      className="h-6 w-6 border-2 border-card text-xs"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalPlanned / travelerCount, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
-            </p>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalActual / travelerCount, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">réel</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="space-y-1 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
+          <p className="text-lg font-bold">
+            {formatCurrency(totalPlanned, voyage.reference_currency)}
+            <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
+          </p>
+          <p className="text-lg font-bold">
+            {formatCurrency(totalActual, voyage.reference_currency)}
+            <span className="ml-1 text-sm font-normal text-muted-foreground">réel</span>
+          </p>
+        </CardContent>
+      </Card>
 
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

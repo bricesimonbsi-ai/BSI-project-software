@@ -180,7 +180,12 @@ export function CategoryComparisonChart({
               <div className={cn("relative h-4 flex-1 overflow-hidden rounded-sm", h.track)}>
                 <div className={cn("absolute inset-y-0 left-0 rounded-sm", h.band)} style={{ width: `${plannedPct}%` }} />
                 <div className={cn("absolute inset-y-1 left-0 rounded-sm", h.fill)} style={{ width: `${actualPct}%` }} />
-                {r.planned > 0 && <div className={cn("absolute inset-y-0 w-0.5", h.tick)} style={{ left: `${plannedPct}%` }} />}
+                {/* translateX(-1px) : quand plannedPct atteint 100% (la catégorie la plus chère,
+                    qui définit le maximum commun), le repère se retrouve pile sur le bord droit
+                    et se fait entièrement rogner par overflow-hidden sans ce léger décalage. */}
+                {r.planned > 0 && (
+                  <div className={cn("absolute inset-y-0 w-0.5", h.tick)} style={{ left: `${plannedPct}%`, transform: "translateX(-1px)" }} />
+                )}
               </div>
               <span className="w-36 shrink-0 text-right text-xs">
                 <span className="font-semibold">{formatCurrency(r.actual, currency)}</span>
