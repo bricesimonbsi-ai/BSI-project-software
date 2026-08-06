@@ -447,6 +447,10 @@ export function SousEtapeDialog({
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
                       <ComputedCostAmount amount={plannedCosts.localTransport} className="w-24" />
+                      {/* Espace réservé de la même taille que le bouton de réinitialisation (voir
+                          EditableExpenseAmount) pour que l'étiquette "Prévisionnel" reste alignée
+                          entre les lignes, avec ou sans bouton. */}
+                      <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
                   <DailyRateInput
@@ -464,6 +468,7 @@ export function SousEtapeDialog({
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
                       <ComputedCostAmount amount={plannedCosts.lodging} className="w-24" />
+                      <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
                   <DailyRateInput
@@ -483,6 +488,7 @@ export function SousEtapeDialog({
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
                       <ComputedCostAmount amount={plannedCosts.food} className="w-24" />
+                      <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
                   <DailyRateInput
