@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDeleteSousEtape } from "@/features/voyages/use-sous-etapes";
+import { useUpdateEtape } from "@/features/voyages/use-etapes";
 import { useSousEtapeExpenses, ETAPE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
@@ -20,6 +21,34 @@ import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voya
 import { toast } from "@/hooks/use-toast";
 import type { ClimateRating, TravelStyle, VoyageEtape, VoyageSousEtape } from "@/types/database";
 import { Plus, Trash2, Sparkles } from "lucide-react";
+
+/** Champ compact pour ajuster un taux journalier (logement/nuit, nourriture/jour,
+ * transport sur place/jour) — persiste sur l'étape (pays) parente au blur, donc partagé par
+ * toutes les villes de ce pays. Vider le champ efface l'override et revient à l'estimation
+ * automatique. */
+function DailyRateInput({ value, onCommit, suffix }: { value: number; onCommit: (v: number | null) => void; suffix: string }) {
+  const [text, setText] = useState(value.toFixed(2));
+  useEffect(() => {
+    setText(value.toFixed(2));
+  }, [value]);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Input
+        type="number"
+        step="0.5"
+        min="0"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const v = text.trim() === "" ? null : Math.max(0, Number(text));
+          if (v === null || Math.abs(v - value) > 0.001) onCommit(v);
+        }}
+        className="h-7 w-20 text-xs"
+      />
+      <span className="whitespace-nowrap text-xs text-muted-foreground">{suffix}</span>
+    </span>
+  );
+}
 
 export function SousEtapeDialog({
   etapeId,
@@ -83,14 +112,25 @@ export function SousEtapeDialog({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addingExpense, setAddingExpense] = useState(false);
-  const [plannedCosts, setPlannedCosts] = useState<CityPlannedCosts>({ transport: 0, lodging: 0, food: 0 });
+  const [plannedCosts, setPlannedCosts] = useState<CityPlannedCosts>({
+    transport: 0,
+    lodging: 0,
+    food: 0,
+    localTransport: 0,
+    rates: { lodging: 0, food: 0, localTransport: 0 },
+  });
   const createSousEtape = useCreateSousEtape(etapeId);
   const updateSousEtape = useUpdateSousEtape(etapeId);
   const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
+  const updateEtape = useUpdateEtape(etape.voyage_id);
   const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
-  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport");
+  // Le trajet vers la ville suivante et le transport sur place partagent la même catégorie
+  // unifiée "transport" mais pas le même sub_category : exclure explicitement "sur_place" ici
+  // (et le cibler précisément plus bas) pour ne jamais les confondre dans le même champ.
+  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport" && e.sub_category !== "sur_place");
+  const plannedLocalTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport" && e.sub_category === "sur_place");
   const plannedLodging = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "logement");
   const plannedFood = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "nourriture");
   const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
@@ -112,6 +152,7 @@ export function SousEtapeDialog({
         lodgingCount: lodgingCount ?? 1,
         lodgingOverride: etape.lodging_cost_per_night,
         foodOverride: etape.food_cost_per_day,
+        localTransportOverride: etape.local_transport_cost_per_day,
       });
       if (!cancelled) setPlannedCosts(result);
     }
@@ -119,7 +160,19 @@ export function SousEtapeDialog({
     return () => {
       cancelled = true;
     };
-  }, [nights, existing?.duration_days, distanceKm, transportMode, countryCode, travelStyle, travelerCount, lodgingCount, etape.lodging_cost_per_night, etape.food_cost_per_day]);
+  }, [
+    nights,
+    existing?.duration_days,
+    distanceKm,
+    transportMode,
+    countryCode,
+    travelStyle,
+    travelerCount,
+    lodgingCount,
+    etape.lodging_cost_per_night,
+    etape.food_cost_per_day,
+    etape.local_transport_cost_per_day,
+  ]);
 
   async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
     const lat = latOverride ?? Number(latitude);
@@ -331,13 +384,18 @@ export function SousEtapeDialog({
             <div className="space-y-2 border-t border-border pt-4">
               <Label>Dépenses prévisionnelles</Label>
               <p className="text-xs text-muted-foreground">
-                Pré-remplies et mises à jour automatiquement selon le nombre de nuits et le coût de la vie du pays ;
-                ajuste librement chaque montant — ces mêmes lignes sont aussi modifiables depuis le tableau détaillé de
-                l'onglet Budget (une modification d'un côté se reflète immédiatement de l'autre).
+                Logement, nourriture et transport sur place se calculent automatiquement (taux journalier x nombre de
+                nuits, voir l'unité sous chaque ligne) et ne se saisissent plus directement ici : ajuste le taux ou le
+                nombre de nuits ci-dessus, le total se recalcule seul. Le taux journalier s'applique à tout le pays
+                "{etape.country_region}" (partagé par toutes ses villes). Transport (vers la suivante) et Activités
+                restent librement modifiables.
               </p>
               <ul className="divide-y divide-border rounded-md border border-border">
                 <li className="flex items-center justify-between gap-3 p-3">
-                  <p className="text-sm font-medium">Transport (vers la suivante)</p>
+                  <div>
+                    <p className="text-sm font-medium">Transport (vers la suivante)</p>
+                    <p className="text-xs text-muted-foreground">Montant total du trajet, librement modifiable</p>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
                     <EditableExpenseAmount
@@ -353,40 +411,95 @@ export function SousEtapeDialog({
                     />
                   </div>
                 </li>
-                <li className="flex items-center justify-between gap-3 p-3">
-                  <p className="text-sm font-medium">Logement</p>
-                  <div className="flex items-center gap-2">
-                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                    <EditableExpenseAmount
-                      scope={{ sousEtapeId: existing.id }}
-                      category="logement"
-                      planned
-                      existing={plannedLodging}
-                      estimate={plannedCosts.lodging}
-                      referenceCurrency={referenceCurrency ?? "EUR"}
-                      invalidateKey={["sous-etape-expenses", existing.id]}
-                      className="w-24"
-                    />
+                <li className="flex flex-col gap-2 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Transport sur place</p>
+                      <p className="text-xs text-muted-foreground">Taux par personne / jour x {nights || existing.duration_days || 0} nuit(s) x {travelerCount ?? 1} voyageur(s)</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                      <EditableExpenseAmount
+                        scope={{ sousEtapeId: existing.id }}
+                        category="transport"
+                        subCategory="sur_place"
+                        planned
+                        existing={plannedLocalTransport}
+                        estimate={plannedCosts.localTransport}
+                        referenceCurrency={referenceCurrency ?? "EUR"}
+                        invalidateKey={["sous-etape-expenses", existing.id]}
+                        className="w-24"
+                        readOnly
+                      />
+                    </div>
                   </div>
+                  <DailyRateInput
+                    value={plannedCosts.rates.localTransport}
+                    onCommit={(v) => updateEtape.mutate({ id: etape.id, local_transport_cost_per_day: v })}
+                    suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
+                  />
+                </li>
+                <li className="flex flex-col gap-2 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Logement</p>
+                      <p className="text-xs text-muted-foreground">Taux par logement / nuit x {nights || existing.duration_days || 0} nuit(s)</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                      <EditableExpenseAmount
+                        scope={{ sousEtapeId: existing.id }}
+                        category="logement"
+                        planned
+                        existing={plannedLodging}
+                        estimate={plannedCosts.lodging}
+                        referenceCurrency={referenceCurrency ?? "EUR"}
+                        invalidateKey={["sous-etape-expenses", existing.id]}
+                        className="w-24"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                  <DailyRateInput
+                    value={plannedCosts.rates.lodging}
+                    onCommit={(v) => updateEtape.mutate({ id: etape.id, lodging_cost_per_night: v })}
+                    suffix={`${referenceCurrency ?? "EUR"} / logement / nuit`}
+                  />
+                </li>
+                <li className="flex flex-col gap-2 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Nourriture</p>
+                      <p className="text-xs text-muted-foreground">
+                        Taux par personne / jour x {nights || existing.duration_days || 0} nuit(s) x {travelerCount ?? 1} voyageur(s)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                      <EditableExpenseAmount
+                        scope={{ sousEtapeId: existing.id }}
+                        category="nourriture"
+                        planned
+                        existing={plannedFood}
+                        estimate={plannedCosts.food}
+                        referenceCurrency={referenceCurrency ?? "EUR"}
+                        invalidateKey={["sous-etape-expenses", existing.id]}
+                        className="w-24"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                  <DailyRateInput
+                    value={plannedCosts.rates.food}
+                    onCommit={(v) => updateEtape.mutate({ id: etape.id, food_cost_per_day: v })}
+                    suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
+                  />
                 </li>
                 <li className="flex items-center justify-between gap-3 p-3">
-                  <p className="text-sm font-medium">Nourriture</p>
-                  <div className="flex items-center gap-2">
-                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                    <EditableExpenseAmount
-                      scope={{ sousEtapeId: existing.id }}
-                      category="nourriture"
-                      planned
-                      existing={plannedFood}
-                      estimate={plannedCosts.food}
-                      referenceCurrency={referenceCurrency ?? "EUR"}
-                      invalidateKey={["sous-etape-expenses", existing.id]}
-                      className="w-24"
-                    />
+                  <div>
+                    <p className="text-sm font-medium">Activités</p>
+                    <p className="text-xs text-muted-foreground">Montant total pour tous les voyageurs, librement modifiable</p>
                   </div>
-                </li>
-                <li className="flex items-center justify-between gap-3 p-3">
-                  <p className="text-sm font-medium">Activités</p>
                   <div className="flex items-center gap-2">
                     <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
                     <EditableExpenseAmount

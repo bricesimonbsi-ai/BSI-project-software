@@ -166,6 +166,9 @@ export type VoyageEtape = {
   lodging_cost_per_night: number | null;
   /** Override manuel du tarif nourriture/jour et par personne (EUR) ; null = estimation auto. */
   food_cost_per_day: number | null;
+  /** Override manuel du forfait transport sur place, par jour et par personne (EUR) ; null =
+   * forfait par défaut (voir DEFAULT_LOCAL_TRANSPORT_EUR_PER_DAY dans cost-of-living.ts). */
+  local_transport_cost_per_day: number | null;
   created_at: string;
   updated_at: string;
 };

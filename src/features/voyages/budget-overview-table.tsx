@@ -25,32 +25,58 @@ function sumAmount(rows: VoyageAllExpense[]): number {
   return rows.reduce((sum, e) => sum + e.amount * e.manual_rate_to_reference, 0);
 }
 
+/** Le trajet vers la ville suivante et le transport sur place partagent la même catégorie
+ * unifiée "transport" mais pas le même sub_category (voir sous-etape-dialog.tsx) : chaque
+ * colonne précise explicitement quel sub_category elle représente (ou exclut) pour ne jamais
+ * confondre les deux dans la même case. Une colonne "locked" est calculée automatiquement
+ * (taux journalier x nuits, voir SousEtapeDialog) et non éditable directement dans ce tableau. */
+type CityColumn = {
+  key: string;
+  label: string;
+  category: ExpenseCategory;
+  subCategory?: string;
+  excludeSubCategories?: string[];
+  locked?: boolean;
+};
+
+function matchesColumn(e: { category: ExpenseCategory; sub_category: string | null }, col: CityColumn): boolean {
+  if (groupedCategory(e.category) !== col.category) return false;
+  if (col.subCategory != null) return (e.sub_category ?? "") === col.subCategory;
+  if (col.excludeSubCategories) return !col.excludeSubCategories.includes(e.sub_category ?? "");
+  return true;
+}
+
 /** Total d'une ligne = somme des colonnes réellement affichées (jamais un total "à côté"
  * calculé indépendamment) : garantit par construction qu'il ne peut jamais diverger de ce qui
  * est visible à l'écran, même si d'anciennes lignes en double existent pour une catégorie. */
 function sumByColumns(rows: VoyageAllExpense[]): number {
-  return CITY_COLUMNS.reduce((sum, c) => sum + sumAmount(rows.filter((e) => groupedCategory(e.category) === c.key)), 0);
+  return CITY_COLUMNS.reduce((sum, c) => sum + sumAmount(rows.filter((e) => matchesColumn(e, c))), 0);
 }
 
-const CITY_COLUMNS: { key: ExpenseCategory; label: string }[] = [
-  { key: "transport", label: "Transport" },
-  { key: "nourriture", label: "Nourriture" },
-  { key: "logement", label: "Logement" },
-  { key: "activites", label: "Activités" },
+const CITY_COLUMNS: CityColumn[] = [
+  { key: "transport", label: "Transport", category: "transport", excludeSubCategories: ["sur_place"] },
+  { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true },
+  { key: "logement", label: "Logement", category: "logement", locked: true },
+  { key: "nourriture", label: "Nourriture", category: "nourriture", locked: true },
+  { key: "activites", label: "Activités", category: "activites" },
 ];
 
 const ADMIN_SUB_COLUMNS = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa" && s.value !== "autre");
 
-type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; label: string };
+type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; subCategory?: string | null; label: string };
 
 /**
  * Détail des dépenses : une ligne par VILLE (groupées par pays), une colonne par catégorie
- * (transport, nourriture, logement, activités) — la ligne du pays est un total calculé de ses
- * villes, non modifiable (la source d'entrée, c'est la ville). Équipement et administratif &
- * santé, transverses au voyage, apparaissent en fin de tableau. Bascule Prévisionnel/Réel :
- * même forme des deux côtés pour rester comparable. Chaque case éditable est une vraie ligne
+ * (transport, transport sur place, logement, nourriture, activités) — la ligne du pays est un
+ * total calculé de ses villes, non modifiable (la source d'entrée, c'est la ville). Équipement
+ * et administratif & santé, transverses au voyage, apparaissent en fin de tableau. Bascule
+ * Prévisionnel/Réel : même forme des deux côtés pour rester comparable, mais côté Prévisionnel,
+ * Transport sur place/Logement/Nourriture sont verrouillées (calculées automatiquement depuis
+ * le taux journalier x le nombre de nuits, ajustables uniquement via SousEtapeDialog ou le
+ * compteur de nuits ci-dessous) — seuls Transport (trajet) et Activités restent librement
+ * modifiables ici, comme toutes les cases côté Réel. Chaque case est une vraie ligne
  * `voyage_expenses`, la même que celle modifiable depuis le dialogue de la ville correspondante
- * — éditer d'un côté met donc toujours à jour l'autre.
+ * — éditer d'un côté (quand ce n'est pas verrouillé) met donc toujours à jour l'autre.
  */
 export function BudgetOverviewTable({
   voyageId,
@@ -178,7 +204,16 @@ export function BudgetOverviewTable({
                 <div className="space-y-3">
                   <ExpenseList
                     expenses={expenses.filter(
-                      (e) => e.sous_etape_id === selectedCell.sousEtapeId && !e.planned && groupedCategory(e.category) === selectedCell.category
+                      (e) =>
+                        e.sous_etape_id === selectedCell.sousEtapeId &&
+                        !e.planned &&
+                        matchesColumn(e, {
+                          key: "selected",
+                          label: "",
+                          category: selectedCell.category,
+                          subCategory: selectedCell.subCategory ?? undefined,
+                          excludeSubCategories: selectedCell.subCategory ? undefined : ["sur_place"],
+                        })
                     )}
                     invalidateKey={["voyage-all-expenses", voyageId]}
                     projectId={projectId}
@@ -193,6 +228,7 @@ export function BudgetOverviewTable({
                     invalidateKey={["voyage-all-expenses", voyageId]}
                     projectId={projectId}
                     defaultPlanned={false}
+                    defaultSubCategory={selectedCell.subCategory ?? undefined}
                     lockPlanned
                     onDone={() => {}}
                   />
@@ -322,7 +358,7 @@ function CountrySection({
         <td className="px-2 py-2 text-center">{totalNights}</td>
         {CITY_COLUMNS.map((c) => (
           <td key={c.key} className="px-2 py-2 text-right">
-            {formatCurrency(sumAmount(countryRows.filter((e) => groupedCategory(e.category) === c.key)), referenceCurrency)}
+            {formatCurrency(sumAmount(countryRows.filter((e) => matchesColumn(e, c))), referenceCurrency)}
           </td>
         ))}
         <td className="border-l border-border bg-muted/20 px-3 py-2 text-right">{formatCurrency(countryTotal, referenceCurrency)}</td>
@@ -423,7 +459,13 @@ function CityPlannedRow({
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
   const countryCode = findCountryByName(etape.country_region)?.cca2 ?? null;
-  const [estimate, setEstimate] = useState<CityPlannedCosts>({ transport: 0, lodging: 0, food: 0 });
+  const [estimate, setEstimate] = useState<CityPlannedCosts>({
+    transport: 0,
+    lodging: 0,
+    food: 0,
+    localTransport: 0,
+    rates: { lodging: 0, food: 0, localTransport: 0 },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -438,6 +480,7 @@ function CityPlannedRow({
         lodgingCount,
         lodgingOverride: etape.lodging_cost_per_night,
         foodOverride: etape.food_cost_per_day,
+        localTransportOverride: etape.local_transport_cost_per_day,
       });
       if (!cancelled) setEstimate(result);
     }
@@ -445,18 +488,26 @@ function CityPlannedRow({
     return () => {
       cancelled = true;
     };
-  }, [se.duration_days, se.distance_km, se.transport_next_mode, countryCode, travelStyle, travelerCount, lodgingCount, etape.lodging_cost_per_night, etape.food_cost_per_day]);
+  }, [
+    se.duration_days,
+    se.distance_km,
+    se.transport_next_mode,
+    countryCode,
+    travelStyle,
+    travelerCount,
+    lodgingCount,
+    etape.lodging_cost_per_night,
+    etape.food_cost_per_day,
+    etape.local_transport_cost_per_day,
+  ]);
 
   const estimateFor: Record<string, number> = {
     transport: estimate.transport,
+    transport_local: estimate.localTransport,
     nourriture: estimate.food,
     logement: estimate.lodging,
     activites: 0,
   };
-
-  function findRow(cat: ExpenseCategory) {
-    return rows.find((e) => groupedCategory(e.category) === cat);
-  }
 
   const total = sumByColumns(rows);
   const invalidateKey = ["voyage-all-expenses", voyageId];
@@ -471,14 +522,15 @@ function CityPlannedRow({
         <td key={c.key} className="px-2 py-1.5">
           <EditableExpenseAmount
             scope={{ sousEtapeId: se.id }}
-            category={c.key}
-            subCategory={c.key === "transport" ? se.transport_next_mode : null}
+            category={c.category}
+            subCategory={c.subCategory ?? (c.category === "transport" ? se.transport_next_mode : null)}
             planned
-            existing={findRow(c.key)}
+            existing={rows.find((e) => matchesColumn(e, c))}
             estimate={estimateFor[c.key]}
             referenceCurrency={referenceCurrency}
             invalidateKey={invalidateKey}
             className="w-20"
+            readOnly={c.locked}
           />
         </td>
       ))}
@@ -510,13 +562,13 @@ function CityActualRow({
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
       {CITY_COLUMNS.map((c) => {
-        const sum = sumAmount(rows.filter((e) => groupedCategory(e.category) === c.key));
+        const sum = sumAmount(rows.filter((e) => matchesColumn(e, c)));
         return (
           <td key={c.key} className="px-2 py-1.5">
             <button
               type="button"
               className="w-20 rounded px-1.5 py-1 text-right text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
-              onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.key, label: `${se.city} · ${c.label}` })}
+              onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.category, subCategory: c.subCategory ?? null, label: `${se.city} · ${c.label}` })}
             >
               {formatCurrency(sum, referenceCurrency)}
             </button>

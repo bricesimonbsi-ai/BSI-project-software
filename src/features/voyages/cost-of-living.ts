@@ -56,14 +56,47 @@ export async function estimateFoodRate(countryCode: string | null, style: Travel
   return BASE_DAILY_RATES_EUR[style].food * (ratio ?? 1);
 }
 
-export type CityPlannedCosts = { transport: number; lodging: number; food: number };
+/** Forfait transport sur place (taxis, bus locaux, métro...) par défaut, en EUR par jour et
+ * par personne — contrairement au logement/nourriture, pas localisé par pays (un forfait
+ * simple), mais ajustable comme les autres tarifs journaliers via l'override pays. */
+export const DEFAULT_LOCAL_TRANSPORT_EUR_PER_DAY = 5;
+
+/** Les 3 tarifs journaliers proposés pour une ville (héritent du pays, ajustables) : logement
+ * (par logement/nuit), nourriture (par personne/jour), transport sur place (par personne/jour). */
+export type CityDailyRates = { lodging: number; food: number; localTransport: number };
+
+export async function estimateCityDailyRates(input: {
+  countryCode: string | null;
+  style: TravelStyle;
+  lodgingOverride: number | null;
+  foodOverride: number | null;
+  localTransportOverride: number | null;
+}): Promise<CityDailyRates> {
+  const lodging = input.lodgingOverride ?? (await estimateLodgingRate(input.countryCode, input.style));
+  const food = input.foodOverride ?? (await estimateFoodRate(input.countryCode, input.style));
+  const localTransport = input.localTransportOverride ?? DEFAULT_LOCAL_TRANSPORT_EUR_PER_DAY;
+  return { lodging, food, localTransport };
+}
+
+export type CityPlannedCosts = {
+  /** Tarifs journaliers utilisés pour ce calcul (voir estimateCityDailyRates). */
+  rates: CityDailyRates;
+  /** Trajet vers la ville suivante — pas un tarif journalier, ne dépend pas du nombre de nuits. */
+  transport: number;
+  /** = rates.lodging * nuits * nombre de logements. */
+  lodging: number;
+  /** = rates.food * nuits * nombre de voyageurs. */
+  food: number;
+  /** = rates.localTransport * nuits * nombre de voyageurs. */
+  localTransport: number;
+};
 
 /**
- * Estimation prévisionnelle (transport vers la ville suivante, logement, nourriture) pour UNE
- * ville précise — seule source d'estimation automatique de l'application (une ligne par ville,
- * voir le dialogue d'édition d'une ville et la vue d'ensemble du budget, qui pointent toutes les
- * deux vers les mêmes lignes `voyage_expenses`). Le pays affiché dans la vue d'ensemble est un
- * total calculé de ses villes, jamais une estimation concurrente.
+ * Estimation prévisionnelle (transport vers la ville suivante, logement, nourriture, transport
+ * sur place) pour UNE ville précise — seule source d'estimation automatique de l'application
+ * (une ligne par ville, voir le dialogue d'édition d'une ville et la vue d'ensemble du budget,
+ * qui pointent toutes les deux vers les mêmes lignes `voyage_expenses`). Le pays affiché dans la
+ * vue d'ensemble est un total calculé de ses villes, jamais une estimation concurrente.
  */
 export async function estimateCityPlannedCosts(input: {
   nights: number;
@@ -75,14 +108,16 @@ export async function estimateCityPlannedCosts(input: {
   lodgingCount: number;
   lodgingOverride: number | null;
   foodOverride: number | null;
+  localTransportOverride: number | null;
 }): Promise<CityPlannedCosts> {
-  const lodgingRate = input.lodgingOverride ?? (await estimateLodgingRate(input.countryCode, input.style));
-  const foodRate = input.foodOverride ?? (await estimateFoodRate(input.countryCode, input.style));
+  const rates = await estimateCityDailyRates(input);
   const rooms = Math.max(1, input.lodgingCount || 1);
   const travelers = Math.max(1, input.travelerCount || 1);
   return {
+    rates,
     transport: estimateTransportLegCost(input.distanceKm, input.transportMode, travelers),
-    lodging: input.nights * rooms * lodgingRate,
-    food: input.nights * travelers * foodRate,
+    lodging: input.nights * rooms * rates.lodging,
+    food: input.nights * travelers * rates.food,
+    localTransport: input.nights * travelers * rates.localTransport,
   };
 }

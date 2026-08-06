@@ -43,7 +43,8 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const { data: personSummary } = useVoyagePersonExpenseSummary(voyageId);
   const { data: equipmentItems } = useVoyageEquipment(voyageId);
 
-  const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
+  // Même source unique que voyage-detail-page.tsx : la liste "Voyageurs" liée au projet.
+  const travelerCount = linkedPeople?.length || 1;
   const style: TravelStyle = voyage.travel_style ?? "standard";
   // L'équipement n'est plus une ligne de dépense à resynchroniser : son coût prévisionnel est
   // calculé en direct depuis l'onglet Équipement (toujours à jour, sans décalage). D'éventuelles

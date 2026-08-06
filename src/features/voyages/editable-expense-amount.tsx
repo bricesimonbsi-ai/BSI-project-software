@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useCreateExpense, useUpdateExpense } from "@/features/voyages/use-expenses";
+import { cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
 
 /**
@@ -21,6 +22,11 @@ export function EditableExpenseAmount({
   referenceCurrency,
   invalidateKey,
   className,
+  /** Si vrai, le champ n'est jamais saisissable : la ligne reste verrouillée sur l'estimation
+   * (taux journalier x nuits...) et se resynchronise donc TOUJOURS avec elle, sans jamais
+   * pouvoir être figée par une saisie manuelle. Utilisé pour les coûts que l'utilisateur ne
+   * doit ajuster qu'indirectement (via le taux journalier ou le nombre de nuits). */
+  readOnly = false,
 }: {
   scope: { voyageId?: string; sousEtapeId?: string; etapeId?: string };
   category: ExpenseCategory;
@@ -32,6 +38,7 @@ export function EditableExpenseAmount({
   referenceCurrency: string;
   invalidateKey: unknown[];
   className?: string;
+  readOnly?: boolean;
 }) {
   const createExpense = useCreateExpense(scope, invalidateKey);
   const updateExpense = useUpdateExpense(invalidateKey);
@@ -94,9 +101,12 @@ export function EditableExpenseAmount({
       min="0"
       value={value}
       placeholder={estimate != null && estimate > 0 ? Math.round(estimate).toString() : "0"}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-      className={className}
+      onChange={readOnly ? undefined : (e) => setValue(e.target.value)}
+      onBlur={readOnly ? undefined : handleBlur}
+      readOnly={readOnly}
+      disabled={readOnly}
+      title={readOnly ? "Calculé automatiquement (taux journalier x nombre de nuits) — ajuste le taux ou les nuits pour le changer" : undefined}
+      className={cn(className, readOnly && "cursor-default disabled:opacity-100 bg-muted/40 text-muted-foreground")}
     />
   );
 }

@@ -35,6 +35,7 @@ export function ExpenseFormFields({
   existing,
   defaultPlanned = true,
   lockPlanned = false,
+  defaultSubCategory,
   onDone,
   onCancel,
 }: {
@@ -48,13 +49,16 @@ export function ExpenseFormFields({
   /** Si vrai, masque le sélecteur Statut et fige le statut sur `defaultPlanned` (ex. un
    * formulaire de saisie de dépenses réelles n'a pas besoin de proposer "Prévisionnel"). */
   lockPlanned?: boolean;
+  /** Pré-sélectionne le détail (sub_category), ex. "sur_place" quand le formulaire s'ouvre
+   * depuis la case "Transport sur place" du tableau budget — reste modifiable par l'utilisateur. */
+  defaultSubCategory?: string;
   /** Appelé après un enregistrement réussi. */
   onDone: () => void;
   /** Si fourni, affiche un bouton Annuler. */
   onCancel?: () => void;
 }) {
   const [category, setCategory] = useState<ExpenseCategory>(existing?.category ?? categories[0].value);
-  const [subCategory, setSubCategory] = useState(existing?.sub_category ?? "");
+  const [subCategory, setSubCategory] = useState(existing?.sub_category ?? defaultSubCategory ?? "");
   const [planned, setPlanned] = useState(existing?.planned ?? defaultPlanned);
   const [amount, setAmount] = useState(existing?.amount?.toString() ?? "");
   const [currency, setCurrency] = useState(existing?.currency ?? referenceCurrency);

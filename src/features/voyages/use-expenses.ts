@@ -33,7 +33,9 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string; scope:
 export const TRANSVERSE_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => c.scope === "transverse");
 export const ETAPE_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => c.scope === "etape");
 
-/** Sous-type libre (`sub_category`) proposé quand la catégorie est "transport". */
+/** Sous-type libre (`sub_category`) proposé quand la catégorie est "transport". "sur_place" est
+ * réservé à la ligne auto-calculée "Transport sur place" (voir SousEtapeDialog) — distincte du
+ * trajet vers la ville suivante bien que dans la même catégorie unifiée "transport". */
 export const TRANSPORT_SUB_CATEGORIES: { value: string; label: string }[] = [
   { value: "avion", label: "Avion" },
   { value: "train", label: "Train" },
@@ -41,6 +43,7 @@ export const TRANSPORT_SUB_CATEGORIES: { value: string; label: string }[] = [
   { value: "taxi", label: "Taxi" },
   { value: "voiture", label: "Voiture" },
   { value: "ferry_bateau", label: "Ferry / Bateau" },
+  { value: "sur_place", label: "Transport sur place" },
   { value: "autre", label: "Autre" },
 ];
 

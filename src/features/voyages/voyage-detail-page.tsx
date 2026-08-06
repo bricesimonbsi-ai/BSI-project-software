@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
-import { useProject, useUpdateProject } from "@/features/projects/use-projects";
+import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
 import { useProjectPeople } from "@/features/people/use-people";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -22,12 +23,16 @@ import { EquipmentTab } from "@/features/voyages/equipment-tab";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 import type { TravelStyle } from "@/types/database";
 
 export function VoyageDetailPage({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
   const { data: project } = useProject(projectId);
   const { data: voyage, isLoading } = useVoyage(projectId);
   const updateVoyage = useUpdateVoyage(projectId);
+  const deleteProject = useDeleteProject();
+  const [deleting, setDeleting] = useState(false);
   const updateProject = useUpdateProject();
   const setAccentColor = useThemeStore((s) => s.setAccentColor);
 
@@ -35,8 +40,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const itineraryDates = useItineraryDateRange(voyage?.id);
 
   const [form, setForm] = useState({
-    adults_count: "1",
-    children_count: "0",
     reference_currency: "EUR",
     lodging_count: "",
     travel_style: "standard" as TravelStyle,
@@ -46,8 +49,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (voyage) {
       setForm({
-        adults_count: String(voyage.adults_count),
-        children_count: String(voyage.children_count),
         reference_currency: voyage.reference_currency,
         lodging_count: voyage.lodging_count?.toString() ?? "",
         travel_style: voyage.travel_style ?? "standard",
@@ -73,8 +74,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   async function handleSaveOverview() {
     try {
       await updateVoyage.mutateAsync({
-        adults_count: Number(form.adults_count),
-        children_count: Number(form.children_count),
         reference_currency: form.reference_currency,
         lodging_count: form.lodging_count ? Number(form.lodging_count) : null,
         travel_style: form.travel_style,
@@ -86,17 +85,41 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
     }
   }
 
-  const travelerCount = linkedPeople?.length || voyage.adults_count + voyage.children_count || 1;
+  async function handleDeleteVoyage() {
+    if (
+      !window.confirm(
+        `Supprimer définitivement le voyage "${project?.title ?? ""}" ? Tout son contenu (itinéraire, dépenses, équipement, documents, tâches) sera perdu. Cette action est irréversible.`
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      await deleteProject.mutateAsync(projectId);
+      navigate("/");
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+      setDeleting(false);
+    }
+  }
+
+  // Source unique du nombre de voyageurs : la liste "Voyageurs" liée au projet (ProjectPeoplePicker
+  // ci-dessous), pas des compteurs adultes/enfants séparés qu'on pouvait oublier de synchroniser
+  // avec cette liste — tous les calculs prévisionnels (nourriture, transport sur place...) s'y fient.
+  const travelerCount = linkedPeople?.length || 1;
 
   return (
     <div className="max-w-6xl space-y-6">
-      <div>
-        <p className="text-sm text-muted-foreground">Voyages</p>
-        <h1 className="text-2xl font-bold">{project.title}</h1>
-        <p className="text-sm text-muted-foreground">
-          {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {voyage.adults_count} adulte(s)
-          {voyage.children_count > 0 ? `, ${voyage.children_count} enfant(s)` : ""}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">Voyages</p>
+          <h1 className="text-2xl font-bold">{project.title}</h1>
+          <p className="text-sm text-muted-foreground">
+            {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {travelerCount} voyageur{travelerCount > 1 ? "s" : ""}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleDeleteVoyage} disabled={deleting}>
+          <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce voyage"}
+        </Button>
       </div>
 
       <Tabs defaultValue="itinerary">
@@ -115,7 +138,11 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
 
           <Card>
             <CardContent className="space-y-2 p-5">
-              <Label>Voyageurs</Label>
+              <Label>Voyageurs ({travelerCount})</Label>
+              <p className="text-xs text-muted-foreground">
+                Nombre de voyageurs utilisé pour tous les calculs prévisionnels (nourriture, transport sur place...) : ajoute ou
+                retire des personnes ici pour l'ajuster.
+              </p>
               <ProjectPeoplePicker projectId={projectId} />
             </CardContent>
           </Card>
@@ -132,24 +159,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
                 <div className="space-y-2">
                   <Label>Date de retour</Label>
                   <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">{formatDate(voyage.end_date)}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Adultes</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.adults_count}
-                    onChange={(e) => setForm({ ...form, adults_count: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Enfants</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.children_count}
-                    onChange={(e) => setForm({ ...form, children_count: e.target.value })}
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Devise de référence</Label>

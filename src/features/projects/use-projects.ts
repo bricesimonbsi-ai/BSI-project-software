@@ -76,3 +76,17 @@ export function useUpdateProject() {
     },
   });
 }
+
+/** Supprime un projet (voyage compris) et tout ce qui s'y rattache : le schéma cascade déjà
+ * proprement depuis `projects` (voyages, étapes, sous-étapes, dépenses, équipement, tâches,
+ * documents, collaborateurs) via ON DELETE CASCADE, une seule suppression suffit donc. */
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("projects").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+  });
+}
