@@ -14,6 +14,7 @@ import {
   groupedSubCategory,
   computeAdminSantePlannedBySubCategory,
   computeAdminSantePlannedTotal,
+  computeAdminSanteVisaPlannedTotal,
 } from "@/features/voyages/use-expenses";
 import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
@@ -77,12 +78,16 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   // de toutes les lignes en base, qui compterait en double d'éventuelles anciennes lignes
   // devenues invisibles dans la grille).
   const adminSantePlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
+  // Le visa est exclu de adminSantePlannedTotal (voir use-expenses.ts) car saisi par pays, pas
+  // par voyage — recompté ici à part pour ne pas disparaître du total général ni du graphique.
+  const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
+  const adminSantePlannedTotalWithVisa = adminSantePlannedTotal + visaPlannedTotal;
 
   const totalPlanned =
     expenses
       .filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante")
       .reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0) +
-    adminSantePlannedTotal +
+    adminSantePlannedTotalWithVisa +
     equipmentPlannedTotal +
     lockedPlannedTotal;
   const totalActual = expenses.filter((e) => !e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
@@ -136,25 +141,28 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     }
     if (c.value === "administratif_sante") {
       const actual = categoryRows.find((r) => r.key === "administratif_sante")?.actual ?? 0;
-      return { key: "administratif_sante", label: c.label, planned: adminSantePlannedTotal, actual };
+      return { key: "administratif_sante", label: c.label, planned: adminSantePlannedTotalWithVisa, actual };
     }
     return categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 };
   });
 
-  const transportRow = mainRows.find((r) => r.key === "transport")!;
   const adminRow = mainRows.find((r) => r.key === "administratif_sante")!;
 
-  // Le détail "Transport sur place" n'existe plus comme ligne prévisionnelle en base (calculé en
-  // direct, voir plus haut) : on l'ajoute manuellement au détail par sous-type du côté
-  // prévisionnel, pour qu'il apparaisse dans l'anneau au même titre qu'avion/train/bus...
-  const transportPlannedItems = [
-    ...transportRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned })),
-    ...(lockedTotal.localTransport > 0.01 ? [{ key: "sur_place", label: "Transport sur place", amount: lockedTotal.localTransport }] : []),
-  ];
+  // L'anneau Transport ne détaille QUE les trajets entre étapes par mode (avion, train, ferry...),
+  // jamais le transport sur place (calculé en direct, sans mode associé) — donc son propre total
+  // exclut lockedTotal.localTransport, contrairement à celui du graphique en barres ci-dessus qui
+  // regroupe les deux sous la même catégorie "Transport".
+  const transportLegPlannedTotal = categoryRows.find((r) => r.key === "transport")?.planned ?? 0;
+  const transportLegActualTotal = categoryRows.find((r) => r.key === "transport")?.actual ?? 0;
+  const transportPlannedItems = transportRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned }));
   const transportActualItems = transportRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
   // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
-  // sommerait toutes les lignes correspondantes, doublons compris).
-  const adminPlannedItems = computeAdminSantePlannedBySubCategory(expenses, voyageId);
+  // sommerait toutes les lignes correspondantes, doublons compris) — le visa y est rajouté à part
+  // (voir computeAdminSanteVisaPlannedTotal) puisqu'il est saisi par pays, pas par voyage.
+  const adminPlannedItems = [
+    ...computeAdminSantePlannedBySubCategory(expenses, voyageId),
+    ...(visaPlannedTotal > 0.01 ? [{ key: "visa", label: "Visa", amount: visaPlannedTotal }] : []),
+  ];
   const adminActualItems = adminSanteRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
 
   return (
@@ -198,8 +206,8 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       <div>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail transport et administratif & santé</h3>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <CategoryBreakdownRing title="Transport · prévisionnel" total={transportRow.planned} items={transportPlannedItems} currency={voyage.reference_currency} />
-          <CategoryBreakdownRing title="Transport · réel" total={transportRow.actual} items={transportActualItems} currency={voyage.reference_currency} />
+          <CategoryBreakdownRing title="Transport · prévisionnel" total={transportLegPlannedTotal} items={transportPlannedItems} currency={voyage.reference_currency} />
+          <CategoryBreakdownRing title="Transport · réel" total={transportLegActualTotal} items={transportActualItems} currency={voyage.reference_currency} />
           <CategoryBreakdownRing title="Admin. & santé · prévisionnel" total={adminRow.planned} items={adminPlannedItems} currency={voyage.reference_currency} />
           <CategoryBreakdownRing title="Admin. & santé · réel" total={adminRow.actual} items={adminActualItems} currency={voyage.reference_currency} />
         </div>

@@ -61,22 +61,37 @@ export function EditableExpenseAmount({
     if (!existing) {
       if (creatingRef.current || estimate < 0) return;
       creatingRef.current = true;
-      createExpense.mutate({
-        category,
-        sub_category: subCategory,
-        planned,
-        amount: Math.round(estimate * 100) / 100,
-        currency: referenceCurrency,
-        manual_rate_to_reference: 1,
-        is_estimated: true,
-      });
+      createExpense.mutate(
+        {
+          category,
+          sub_category: subCategory,
+          planned,
+          amount: Math.round(estimate * 100) / 100,
+          currency: referenceCurrency,
+          manual_rate_to_reference: 1,
+          is_estimated: true,
+        },
+        // Si la création échoue (RLS, réseau...), on doit pouvoir réessayer au prochain rendu —
+        // sinon le champ reste bloqué indéfiniment (creatingRef jamais réarmé) et semble ne plus
+        // jamais s'enregistrer, sans aucune indication visible du problème.
+        { onError: () => { creatingRef.current = false; } }
+      );
       return;
     }
-    if (existing.is_estimated && Math.abs(existing.amount - estimate) > 0.01) {
-      updateExpense.mutate({ id: existing.id, amount: Math.round(estimate * 100) / 100 });
+    if (existing.is_estimated) {
+      if (Math.abs(existing.amount - estimate) > 0.01) {
+        updateExpense.mutate({ id: existing.id, amount: Math.round(estimate * 100) / 100 });
+      }
+      // Le montant n'est pas la seule chose à resynchroniser : si le sous-type dont dépend
+      // l'estimation a changé (ex. mode de transport ajusté après coup), la ligne stockée doit
+      // suivre elle aussi — sinon elle reste rattachée à l'ancien sous-type indéfiniment (montant
+      // à jour, mais classé dans le mauvais type dans le détail par catégorie).
+      if (subCategory != null && existing.sub_category !== subCategory) {
+        updateExpense.mutate({ id: existing.id, sub_category: subCategory });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existing, estimate, dataReady]);
+  }, [existing, estimate, subCategory, dataReady]);
 
   function handleBlur() {
     const amount = value.trim() === "" ? 0 : Math.max(0, Number(value));
@@ -89,15 +104,18 @@ export function EditableExpenseAmount({
       }
     } else if (amount > 0 && !creatingRef.current) {
       creatingRef.current = true;
-      createExpense.mutate({
-        category,
-        sub_category: subCategory,
-        planned,
-        amount,
-        currency: referenceCurrency,
-        manual_rate_to_reference: 1,
-        is_estimated: false,
-      });
+      createExpense.mutate(
+        {
+          category,
+          sub_category: subCategory,
+          planned,
+          amount,
+          currency: referenceCurrency,
+          manual_rate_to_reference: 1,
+          is_estimated: false,
+        },
+        { onError: () => { creatingRef.current = false; } }
+      );
     }
   }
 

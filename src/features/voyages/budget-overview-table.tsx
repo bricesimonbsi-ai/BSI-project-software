@@ -8,6 +8,7 @@ import {
   TRANSVERSE_CATEGORIES,
   ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES,
   computeAdminSantePlannedTotal,
+  computeAdminSanteVisaPlannedTotal,
   groupedCategory,
 } from "@/features/voyages/use-expenses";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
@@ -149,9 +150,18 @@ export function BudgetOverviewTable({
   // Source unique (voir use-expenses.ts) : partagée avec budget-insights.tsx pour que le tableau
   // et le graphique/résumé du budget affichent toujours exactement le même chiffre.
   const adminPlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
+  // Le visa est exclu de adminPlannedTotal (voir use-expenses.ts) car saisi par pays, pas par
+  // voyage — recompté ici à part pour ne pas disparaître du total général.
+  const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
   const plannedTotalExcludingAdmin = sumAmount(expenses.filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante"));
   const totalPlanned =
-    plannedTotalExcludingAdmin + adminPlannedTotal + equipmentPlannedTotal + lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
+    plannedTotalExcludingAdmin +
+    adminPlannedTotal +
+    visaPlannedTotal +
+    equipmentPlannedTotal +
+    lockedTotal.lodging +
+    lockedTotal.food +
+    lockedTotal.localTransport;
   const totalActual = sumAmount(expenses.filter((e) => !e.planned));
 
   if (!etapes) return null;

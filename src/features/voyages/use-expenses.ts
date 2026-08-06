@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type {
   ExpenseCategory,
   VoyageExpense,
@@ -150,6 +151,22 @@ export function computeAdminSantePlannedTotal(expenses: VoyageAllExpense[], voya
   return computeAdminSantePlannedBySubCategory(expenses, voyageId).reduce((sum, r) => sum + r.amount, 0);
 }
 
+/** Total prévisionnel des visas, à part : contrairement aux autres sous-catégories "Administratif
+ * & santé" (transverses au voyage entier, un seul montant possible), le visa est saisi PAR PAYS
+ * (voir etape-dialog.tsx) — plusieurs lignes légitimes peuvent donc coexister, une par pays qui en
+ * nécessite un, et doivent être SOMMÉES (pas dédupliquées à la première trouvée comme les autres
+ * sous-catégories). Dédupliqué uniquement par pays (première ligne trouvée par étape), pour ne
+ * jamais compter deux fois une éventuelle ligne en double au sein d'un même pays. */
+export function computeAdminSanteVisaPlannedTotal(expenses: VoyageAllExpense[]): number {
+  const byEtape = new Map<string, VoyageAllExpense>();
+  for (const e of expenses) {
+    if (!e.planned || !e.resolved_etape_id || groupedCategory(e.category) !== "administratif_sante") continue;
+    if ((e.sub_category || "") !== "visa") continue;
+    if (!byEtape.has(e.resolved_etape_id)) byEtape.set(e.resolved_etape_id, e);
+  }
+  return Array.from(byEtape.values()).reduce((sum, e) => sum + e.amount * e.manual_rate_to_reference, 0);
+}
+
 export function useVoyageExpenses(voyageId: string | undefined) {
   return useQuery({
     queryKey: ["voyage-expenses", voyageId],
@@ -256,6 +273,13 @@ function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>,
   invalidateAllExpenseQueries(queryClient);
 }
 
+/** Toute mutation de dépense qui échoue (RLS, contrainte, réseau...) doit rester visible : sans
+ * ceci, un enregistrement en échec semblait "ne rien faire" (montant tapé jamais confirmé, sans
+ * aucun message), impossible à distinguer d'un montant simplement pas encore rechargé. */
+function onExpenseMutationError(err: unknown) {
+  toast({ title: "Erreur lors de l'enregistrement de la dépense", description: (err as Error).message, variant: "destructive" });
+}
+
 export function useCreateExpense(
   scope: { voyageId?: string; sousEtapeId?: string; etapeId?: string },
   invalidateKey: unknown[]
@@ -275,6 +299,7 @@ export function useCreateExpense(
       if (error) throw error;
     },
     onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
+    onError: onExpenseMutationError,
   });
 }
 
@@ -286,6 +311,7 @@ export function useUpdateExpense(invalidateKey: unknown[]) {
       if (error) throw error;
     },
     onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
+    onError: onExpenseMutationError,
   });
 }
 
@@ -297,6 +323,7 @@ export function useDeleteExpense(invalidateKey: unknown[]) {
       if (error) throw error;
     },
     onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
+    onError: onExpenseMutationError,
   });
 }
 
