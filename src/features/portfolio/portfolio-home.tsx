@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { differenceInCalendarDays, differenceInDays, isFuture, parseISO } from "date-fns";
+import { differenceInCalendarDays, differenceInDays, isFuture, isPast, parseISO } from "date-fns";
 import { useCategories } from "@/features/portfolio/use-categories";
 import { useProjects } from "@/features/projects/use-projects";
 import { useTodos } from "@/features/todos/use-todos";
@@ -16,10 +16,18 @@ export function PortfolioHome() {
 
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.status === "active"), [categories]);
 
-  const nextEvent = useMemo(() => {
-    return (projects ?? [])
+  // Met en avant un projet EN COURS en priorité (sinon il disparaîtrait du bandeau dès sa date
+  // de début passée, alors que c'est justement le moment où il est le plus utile de le retrouver
+  // rapidement), sinon le plus proche projet à venir.
+  const featuredProject = useMemo(() => {
+    const withDates = (projects ?? []).filter((p) => p.start_date && p.end_date);
+    const ongoing = withDates.find((p) => !isFuture(parseISO(p.start_date!)) && !isPast(parseISO(p.end_date!)));
+    if (ongoing) return { project: ongoing, status: "ongoing" as const };
+    const upcoming = (projects ?? [])
       .filter((p) => p.start_date && isFuture(parseISO(p.start_date)))
       .sort((a, b) => parseISO(a.start_date!).getTime() - parseISO(b.start_date!).getTime())[0];
+    if (upcoming) return { project: upcoming, status: "upcoming" as const };
+    return null;
   }, [projects]);
 
   const metrics = useMemo(() => {
@@ -50,17 +58,19 @@ export function PortfolioHome() {
 
   return (
     <div className="space-y-6">
-      {nextEvent && (
+      {featuredProject && (
         <Card className="overflow-hidden border-accent/40 bg-gradient-to-br from-accent/15 to-transparent">
           <CardContent className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-accent">Prochainement</p>
-              <h2 className="text-2xl font-bold">{nextEvent.title}</h2>
+              <p className="text-sm font-medium text-accent">{featuredProject.status === "ongoing" ? "En cours" : "Prochainement"}</p>
+              <h2 className="text-2xl font-bold">{featuredProject.project.title}</h2>
               <p className="text-sm text-muted-foreground">
-                {formatDate(nextEvent.start_date)} · dans {differenceInCalendarDays(parseISO(nextEvent.start_date!), new Date())} jours
+                {featuredProject.status === "ongoing"
+                  ? `${formatDate(featuredProject.project.start_date)} → ${formatDate(featuredProject.project.end_date)}`
+                  : `${formatDate(featuredProject.project.start_date)} · dans ${differenceInCalendarDays(parseISO(featuredProject.project.start_date!), new Date())} jours`}
               </p>
             </div>
-            <Link to={`/projects/${nextEvent.id}`}>
+            <Link to={`/projects/${featuredProject.project.id}`}>
               <Badge variant="accent" className="flex items-center gap-1 px-3 py-1.5 text-sm">
                 Voir le projet <ArrowRight className="h-3.5 w-3.5" />
               </Badge>
