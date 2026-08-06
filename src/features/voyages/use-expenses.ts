@@ -176,7 +176,18 @@ export function useVoyageExpenses(voyageId: string | undefined) {
         .from("voyage_expenses")
         .select("*")
         .eq("voyage_id", voyageId as string)
-        .order("expense_date", { ascending: false });
+        // Toute recherche de la "première" ligne pour une catégorie/sous-catégorie donnée
+        // (voir EditableExpenseAmount, budget-overview-table.tsx...) dépend de cet ordre : sans
+        // second critère, deux lignes avec le même expense_date (souvent toutes les deux null,
+        // aucun champ de saisie rapide ne renseigne cette date) n'ont AUCUN ordre garanti par
+        // Postgres — d'éventuelles lignes en double (historiques ou futures) pouvaient donc
+        // remonter tantôt l'une tantôt l'autre selon le hasard du plan de requête, avec des
+        // montants incohérents d'un chargement à l'autre. Les saisies manuelles (is_estimated =
+        // faux) gagnent toujours sur les estimations automatiques, puis la plus récente gagne —
+        // un ordre stable et reproductible à chaque fois.
+        .order("expense_date", { ascending: false })
+        .order("is_estimated", { ascending: true })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -192,7 +203,18 @@ export function useSousEtapeExpenses(sousEtapeId: string | undefined) {
         .from("voyage_expenses")
         .select("*")
         .eq("sous_etape_id", sousEtapeId as string)
-        .order("expense_date", { ascending: false });
+        // Toute recherche de la "première" ligne pour une catégorie/sous-catégorie donnée
+        // (voir EditableExpenseAmount, budget-overview-table.tsx...) dépend de cet ordre : sans
+        // second critère, deux lignes avec le même expense_date (souvent toutes les deux null,
+        // aucun champ de saisie rapide ne renseigne cette date) n'ont AUCUN ordre garanti par
+        // Postgres — d'éventuelles lignes en double (historiques ou futures) pouvaient donc
+        // remonter tantôt l'une tantôt l'autre selon le hasard du plan de requête, avec des
+        // montants incohérents d'un chargement à l'autre. Les saisies manuelles (is_estimated =
+        // faux) gagnent toujours sur les estimations automatiques, puis la plus récente gagne —
+        // un ordre stable et reproductible à chaque fois.
+        .order("expense_date", { ascending: false })
+        .order("is_estimated", { ascending: true })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -208,7 +230,18 @@ export function useEtapeExpenses(etapeId: string | undefined) {
         .from("voyage_expenses")
         .select("*")
         .eq("etape_id", etapeId as string)
-        .order("expense_date", { ascending: false });
+        // Toute recherche de la "première" ligne pour une catégorie/sous-catégorie donnée
+        // (voir EditableExpenseAmount, budget-overview-table.tsx...) dépend de cet ordre : sans
+        // second critère, deux lignes avec le même expense_date (souvent toutes les deux null,
+        // aucun champ de saisie rapide ne renseigne cette date) n'ont AUCUN ordre garanti par
+        // Postgres — d'éventuelles lignes en double (historiques ou futures) pouvaient donc
+        // remonter tantôt l'une tantôt l'autre selon le hasard du plan de requête, avec des
+        // montants incohérents d'un chargement à l'autre. Les saisies manuelles (is_estimated =
+        // faux) gagnent toujours sur les estimations automatiques, puis la plus récente gagne —
+        // un ordre stable et reproductible à chaque fois.
+        .order("expense_date", { ascending: false })
+        .order("is_estimated", { ascending: true })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -226,7 +259,18 @@ export function useVoyageAllExpenses(voyageId: string | undefined) {
         .from("voyage_all_expenses")
         .select("*")
         .eq("resolved_voyage_id", voyageId as string)
-        .order("expense_date", { ascending: false });
+        // Toute recherche de la "première" ligne pour une catégorie/sous-catégorie donnée
+        // (voir EditableExpenseAmount, budget-overview-table.tsx...) dépend de cet ordre : sans
+        // second critère, deux lignes avec le même expense_date (souvent toutes les deux null,
+        // aucun champ de saisie rapide ne renseigne cette date) n'ont AUCUN ordre garanti par
+        // Postgres — d'éventuelles lignes en double (historiques ou futures) pouvaient donc
+        // remonter tantôt l'une tantôt l'autre selon le hasard du plan de requête, avec des
+        // montants incohérents d'un chargement à l'autre. Les saisies manuelles (is_estimated =
+        // faux) gagnent toujours sur les estimations automatiques, puis la plus récente gagne —
+        // un ordre stable et reproductible à chaque fois.
+        .order("expense_date", { ascending: false })
+        .order("is_estimated", { ascending: true })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
