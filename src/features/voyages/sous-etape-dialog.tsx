@@ -20,12 +20,12 @@ import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-sug
 import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
 import { toast } from "@/hooks/use-toast";
 import type { ClimateRating, TravelStyle, VoyageEtape, VoyageSousEtape } from "@/types/database";
-import { Plus, Trash2, Sparkles } from "lucide-react";
+import { Plus, Trash2, Sparkles, RotateCcw } from "lucide-react";
 
 /** Champ compact pour ajuster un taux journalier (logement/nuit, nourriture/jour,
  * transport sur place/jour) — persiste sur l'étape (pays) parente au blur, donc partagé par
- * toutes les villes de ce pays. Vider le champ efface l'override et revient à l'estimation
- * automatique. */
+ * toutes les villes de ce pays. Vider le champ (ou cliquer sur le bouton de réinitialisation)
+ * efface l'override et revient à l'estimation automatique. */
 function DailyRateInput({ value, onCommit, suffix }: { value: number; onCommit: (v: number | null) => void; suffix: string }) {
   const [text, setText] = useState(value.toFixed(2));
   useEffect(() => {
@@ -46,6 +46,9 @@ function DailyRateInput({ value, onCommit, suffix }: { value: number; onCommit: 
         className="h-7 w-20 text-xs"
       />
       <span className="whitespace-nowrap text-xs text-muted-foreground">{suffix}</span>
+      <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onCommit(null)} title="Revenir au taux estimé automatiquement">
+        <RotateCcw className="h-3 w-3" />
+      </Button>
     </span>
   );
 }

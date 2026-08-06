@@ -221,12 +221,10 @@ export function BudgetOverviewTable({
                 cities={citiesByEtape.get(etape.id) ?? []}
                 expenses={expenses}
                 view={view}
-                voyageId={voyageId}
                 travelerCount={travelerCount}
                 referenceCurrency={referenceCurrency}
                 flat={flat}
                 lockedByCity={lockedByCity}
-                dataReady={expensesLoaded}
                 updateSousEtape={updateSousEtape}
                 onSelectCell={setSelectedCell}
               />
@@ -385,12 +383,10 @@ function CountrySection({
   cities,
   expenses,
   view,
-  voyageId,
   travelerCount,
   referenceCurrency,
   flat,
   lockedByCity,
-  dataReady,
   updateSousEtape,
   onSelectCell,
 }: {
@@ -398,12 +394,10 @@ function CountrySection({
   cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
   view: "planned" | "actual";
-  voyageId: string;
   travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   lockedByCity: Record<string, CityLockedCosts>;
-  dataReady: boolean;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
   onSelectCell: (cell: SelectedCell) => void;
 }) {
@@ -451,12 +445,10 @@ function CountrySection({
             key={se.id}
             se={se}
             rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
-            voyageId={voyageId}
             travelerCount={travelerCount}
             referenceCurrency={referenceCurrency}
             flat={flat}
             locked={lockedByCity[se.id]}
-            dataReady={dataReady}
             updateSousEtape={updateSousEtape}
           />
         ) : (
@@ -519,22 +511,18 @@ function NightsStepper({
 function CityPlannedRow({
   se,
   rows,
-  voyageId,
   travelerCount,
   referenceCurrency,
   flat,
   locked,
-  dataReady,
   updateSousEtape,
 }: {
   se: VoyageSousEtape;
   rows: VoyageAllExpense[];
-  voyageId: string;
   travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   locked: CityLockedCosts | undefined;
-  dataReady: boolean;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
   // Calcul synchrone et pur (pas d'appel réseau) : toujours à jour au rendu, sans effet ni état
@@ -556,7 +544,6 @@ function CityPlannedRow({
   };
 
   const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
-  const invalidateKey = ["voyage-all-expenses", voyageId];
 
   return (
     <tr className="border-b border-border last:border-0">
@@ -564,28 +551,20 @@ function CityPlannedRow({
       <td className="px-2 py-1.5 text-center">
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
-      {CITY_COLUMNS.map((c) =>
-        c.locked ? (
+      {CITY_COLUMNS.map((c) => {
+        // Transport (vers la suivante) et Activités restent modifiables, mais uniquement dans la
+        // fenêtre de modification de la ville (voir SousEtapeDialog) — ici, en lecture seule, pour
+        // que ce tableau reste une vue d'ensemble sans double point de saisie pour le même montant.
+        // Si aucune ligne n'existe encore (ville jamais ouverte), on affiche l'estimation en direct
+        // plutôt que 0, pour rester cohérent avec ce que la fenêtre de modification créerait.
+        const existingRow = rows.find((e) => matchesColumn(e, c));
+        const amount = c.locked ? cityColumnAmount(c, rows, locked) : existingRow ? existingRow.amount * existingRow.manual_rate_to_reference : estimateFor[c.key] ?? 0;
+        return (
           <td key={c.key} className="px-2 py-1.5 text-center">
-            <ComputedCostAmount amount={cityColumnAmount(c, rows, locked)} className="mx-auto w-20 text-center" />
+            <ComputedCostAmount amount={amount} className="mx-auto w-20 text-center" />
           </td>
-        ) : (
-          <td key={c.key} className="px-2 py-1.5 text-center">
-            <EditableExpenseAmount
-              scope={{ sousEtapeId: se.id }}
-              category={c.category}
-              subCategory={c.subCategory ?? (c.category === "transport" ? se.transport_next_mode : null)}
-              planned
-              existing={rows.find((e) => matchesColumn(e, c))}
-              estimate={estimateFor[c.key]}
-              referenceCurrency={referenceCurrency}
-              invalidateKey={invalidateKey}
-              dataReady={dataReady}
-              className="mx-auto w-20 text-center"
-            />
-          </td>
-        )
-      )}
+        );
+      })}
       <td className="border-l border-border bg-muted/10 px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
     </tr>
   );
