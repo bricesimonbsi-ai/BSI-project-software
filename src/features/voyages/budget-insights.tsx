@@ -16,7 +16,7 @@ import {
   computeAdminSantePlannedTotal,
   computeAdminSanteVisaPlannedTotal,
 } from "@/features/voyages/use-expenses";
-import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
+import { CategoryComparisonChart, ConsumedPctBadge, consumedPct, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
@@ -33,6 +33,24 @@ function toRows(map: Map<string, { planned: number; actual: number }>, labels: R
   return Array.from(map.entries())
     .map(([key, v]) => ({ key, label: labels[key] ?? key, ...v }))
     .filter((r) => r.planned > 0 || r.actual > 0);
+}
+
+/** Combine un détail prévisionnel et un détail réel (deux listes {key,label,amount} séparées,
+ * voir les anneaux de détail) en lignes {planned,actual} pour les sous-barres dépliables du
+ * graphique en barres — mêmes clés/libellés que les anneaux, pour ne jamais afficher un détail
+ * différent d'un graphique à l'autre. */
+function mergeAmountItems(
+  planned: { key: string; label: string; amount: number }[],
+  actual: { key: string; label: string; amount: number }[]
+): { key: string; label: string; planned: number; actual: number }[] {
+  const byKey = new Map<string, { label: string; planned: number; actual: number }>();
+  for (const p of planned) byKey.set(p.key, { label: p.label, planned: p.amount, actual: 0 });
+  for (const a of actual) {
+    const existing = byKey.get(a.key);
+    if (existing) existing.actual = a.amount;
+    else byKey.set(a.key, { label: a.label, planned: 0, actual: a.amount });
+  }
+  return Array.from(byKey.entries()).map(([key, v]) => ({ key, ...v }));
 }
 
 /**
@@ -119,6 +137,29 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     };
   }, [expenses]);
 
+  // L'anneau Transport (et le détail dépliable de la barre Transport ci-dessous) ne détaille QUE
+  // les trajets entre étapes par mode (avion, train, ferry...), jamais le transport sur place
+  // (calculé en direct, sans mode associé) — donc son propre total exclut lockedTotal.localTransport,
+  // contrairement à celui du graphique en barres qui regroupe les deux sous la même catégorie
+  // "Transport".
+  const transportLegPlannedTotal = categoryRows.find((r) => r.key === "transport")?.planned ?? 0;
+  const transportLegActualTotal = categoryRows.find((r) => r.key === "transport")?.actual ?? 0;
+  const transportPlannedItems = transportRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned }));
+  const transportActualItems = transportRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
+  // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
+  // sommerait toutes les lignes correspondantes, doublons compris) — le visa y est rajouté à part
+  // (voir computeAdminSanteVisaPlannedTotal) puisqu'il est saisi par pays, pas par voyage.
+  const adminPlannedItems = [
+    ...computeAdminSantePlannedBySubCategory(expenses, voyageId),
+    ...(visaPlannedTotal > 0.01 ? [{ key: "visa", label: "Visa", amount: visaPlannedTotal }] : []),
+  ];
+  const adminActualItems = adminSanteRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
+  // Même détail (et mêmes clés/libellés) que les anneaux ci-dessous, réutilisé comme sous-lignes
+  // dépliables de la barre Transport / Administratif & santé — jamais un calcul indépendant qui
+  // pourrait diverger de ce que montre l'anneau pour la même catégorie.
+  const transportSubRows = mergeAmountItems(transportPlannedItems, transportActualItems);
+  const adminSubRows = mergeAmountItems(adminPlannedItems, adminActualItems);
+
   // Toutes les catégories unifiées apparaissent dans le graphique principal, même à 0, pour que
   // sa forme (6 catégories fixes) reste stable d'un voyage à l'autre. Équipement, logement,
   // nourriture, transport sur place et administratif & santé sont injectés depuis leur calcul en
@@ -136,40 +177,32 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     }
     if (c.value === "transport") {
       const base = categoryRows.find((r) => r.key === "transport");
-      return { key: "transport", label: c.label, planned: (base?.planned ?? 0) + lockedTotal.localTransport, actual: base?.actual ?? 0 };
+      return {
+        key: "transport",
+        label: c.label,
+        planned: (base?.planned ?? 0) + lockedTotal.localTransport,
+        actual: base?.actual ?? 0,
+        subRows: transportSubRows,
+      };
     }
     if (c.value === "administratif_sante") {
       const actual = categoryRows.find((r) => r.key === "administratif_sante")?.actual ?? 0;
-      return { key: "administratif_sante", label: c.label, planned: adminSantePlannedTotalWithVisa, actual };
+      return { key: "administratif_sante", label: c.label, planned: adminSantePlannedTotalWithVisa, actual, subRows: adminSubRows };
     }
     return categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 };
   });
 
   const adminRow = mainRows.find((r) => r.key === "administratif_sante")!;
 
-  // L'anneau Transport ne détaille QUE les trajets entre étapes par mode (avion, train, ferry...),
-  // jamais le transport sur place (calculé en direct, sans mode associé) — donc son propre total
-  // exclut lockedTotal.localTransport, contrairement à celui du graphique en barres ci-dessus qui
-  // regroupe les deux sous la même catégorie "Transport".
-  const transportLegPlannedTotal = categoryRows.find((r) => r.key === "transport")?.planned ?? 0;
-  const transportLegActualTotal = categoryRows.find((r) => r.key === "transport")?.actual ?? 0;
-  const transportPlannedItems = transportRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned }));
-  const transportActualItems = transportRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
-  // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
-  // sommerait toutes les lignes correspondantes, doublons compris) — le visa y est rajouté à part
-  // (voir computeAdminSanteVisaPlannedTotal) puisqu'il est saisi par pays, pas par voyage.
-  const adminPlannedItems = [
-    ...computeAdminSantePlannedBySubCategory(expenses, voyageId),
-    ...(visaPlannedTotal > 0.01 ? [{ key: "visa", label: "Visa", amount: visaPlannedTotal }] : []),
-  ];
-  const adminActualItems = adminSanteRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
-
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
+              <ConsumedPctBadge pct={consumedPct(totalActual, totalPlanned)} className="text-xs" title="% du budget prévisionnel déjà consommé" />
+            </div>
             <p className="text-lg font-bold">
               {formatCurrency(totalPlanned, voyage.reference_currency)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>

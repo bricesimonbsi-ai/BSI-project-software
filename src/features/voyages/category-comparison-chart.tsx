@@ -1,6 +1,16 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 
-export type CategoryComparisonRow = { key: string; label: string; planned: number; actual: number };
+export type CategoryComparisonRow = {
+  key: string;
+  label: string;
+  planned: number;
+  actual: number;
+  /** Détail par sous-type (ex. mode de transport, type de frais administratif) — replié par
+   * défaut, dépliable au clic sur la ligne. Un seul niveau (les sous-lignes n'ont pas les leurs). */
+  subRows?: { key: string; label: string; planned: number; actual: number }[];
+};
 
 const HUE_CLASSES = {
   sky: { track: "bg-sky-500/8", band: "bg-sky-400/35 dark:bg-sky-500/40", fill: "bg-sky-500 dark:bg-sky-400", tick: "bg-sky-900 dark:bg-sky-50" },
@@ -30,33 +40,51 @@ export const CATEGORY_HUES: Record<string, keyof typeof HUE_CLASSES> = {
  * plage de valeurs habituelle entre ex. équipement et logement) — la racine carrée compresse
  * l'écart pour que les petits montants restent visibles tout en gardant l'ordre et un écart net
  * avec les plus gros. Plancher à 2% pour qu'un montant non nul, même minime, reste toujours visible. */
-function barPct(value: number, globalMax: number): number {
+function barPct(value: number, groupMax: number): number {
   if (value <= 0) return 0;
-  if (globalMax <= 0) return 0;
-  return Math.max(2, Math.min(100, Math.sqrt(value / globalMax) * 100));
+  if (groupMax <= 0) return 0;
+  return Math.max(2, Math.min(100, Math.sqrt(value / groupMax) * 100));
 }
 
-/** % du prévisionnel déjà consommé (réel / prévu) : null si rien n'est prévu pour cette
- * catégorie (pourcentage non significatif sans référence à comparer). */
-function consumedPct(actual: number, planned: number): number | null {
+/** % du prévisionnel déjà consommé (réel / prévu) : null si rien n'est prévu (pourcentage non
+ * significatif sans référence à comparer). Exporté : réutilisé pour le % de consommation global
+ * du voyage entier, avec les mêmes seuils de couleur. */
+export function consumedPct(actual: number, planned: number): number | null {
   if (planned <= 0) return null;
   return Math.round((actual / planned) * 100);
 }
 
-/** Vert = large marge, ambre = proche du budget, rouge = dépassement — mêmes seuils que le
- * reste de l'application pour tout indicateur de consommation de budget. */
-function consumedPctClasses(pct: number): string {
+/** Vert = large marge, ambre = proche du budget, rouge = dépassement — mêmes seuils partout où
+ * un pourcentage de consommation de budget est affiché. */
+export function consumedPctClasses(pct: number): string {
   if (pct > 105) return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
   if (pct >= 85) return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
   return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
 }
 
+/** Pastille de pourcentage de consommation (réel / prévu), colorée — utilisée à toutes les
+ * échelles (globale, par catégorie, par sous-type) pour un langage visuel cohérent. Exportée :
+ * réutilisée pour le % de consommation global du voyage (hors de ce graphique). */
+export function ConsumedPctBadge({ pct, className, title }: { pct: number | null; className?: string; title?: string }) {
+  return (
+    <span
+      className={cn("shrink-0 rounded-full py-0.5 text-center font-semibold", pct != null ? consumedPctClasses(pct) : "text-muted-foreground", className)}
+      title={title}
+    >
+      {pct != null ? `${pct}%` : "—"}
+    </span>
+  );
+}
+
 /**
  * Graphique en "bullet" (une ligne par catégorie) : le remplissage plein est TOUJOURS le réel,
  * la bande plus claire TOUJOURS le prévisionnel (avec un repère net à son bord) — jamais
- * l'inverse d'un graphique à l'autre. Toutes les lignes partagent la même échelle (voir barPct)
- * pour que la longueur des barres reste comparable d'une catégorie à l'autre, les valeurs exactes
- * toujours lisibles en clair à droite.
+ * l'inverse d'un graphique à l'autre. Toutes les lignes principales partagent la même échelle
+ * (voir barPct) pour que la longueur des barres reste comparable d'une catégorie à l'autre, les
+ * valeurs exactes et le % du budget consommé toujours lisibles à droite. Une catégorie avec un
+ * détail par sous-type (transport, administratif & santé) se déplie au clic sur son libellé pour
+ * afficher des sous-barres, à une échelle propre à ce détail (pour rester lisible même si la
+ * catégorie parente est petite face aux autres).
  */
 export function CategoryComparisonChart({
   rows,
@@ -67,9 +95,20 @@ export function CategoryComparisonChart({
   currency: string;
   hue?: keyof typeof HUE_CLASSES;
 }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">Aucune dépense pour l'instant.</p>;
 
   const globalMax = Math.max(...rows.flatMap((r) => [r.planned, r.actual]), 1);
+
+  function toggle(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -86,21 +125,67 @@ export function CategoryComparisonChart({
         const actualPct = barPct(r.actual, globalMax);
         const plannedPct = barPct(r.planned, globalMax);
         const pct = consumedPct(r.actual, r.planned);
+        const hasSubRows = !!r.subRows && r.subRows.length > 0;
+        const isExpanded = hasSubRows && expanded.has(r.key);
+        const subGroupMax = hasSubRows ? Math.max(...r.subRows!.flatMap((s) => [s.planned, s.actual]), 1) : 1;
         return (
-          <div key={r.key} className="flex items-center gap-3">
-            <span className="w-36 shrink-0 whitespace-normal text-xs font-medium leading-tight">{r.label}</span>
-            <div className={cn("relative h-4 flex-1 overflow-hidden rounded-sm", h.track)}>
-              <div className={cn("absolute inset-y-0 left-0 rounded-sm", h.band)} style={{ width: `${plannedPct}%` }} />
-              <div className={cn("absolute inset-y-1 left-0 rounded-sm", h.fill)} style={{ width: `${actualPct}%` }} />
-              {r.planned > 0 && <div className={cn("absolute inset-y-0 w-0.5", h.tick)} style={{ left: `${plannedPct}%` }} />}
+          <div key={r.key}>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => hasSubRows && toggle(r.key)}
+                disabled={!hasSubRows}
+                className={cn(
+                  "flex w-36 shrink-0 items-center gap-1 text-left text-xs font-medium leading-tight",
+                  hasSubRows ? "cursor-pointer hover:text-foreground" : "cursor-default"
+                )}
+                title={hasSubRows ? (isExpanded ? "Replier le détail" : "Déplier le détail") : undefined}
+              >
+                {hasSubRows ? (
+                  isExpanded ? (
+                    <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  )
+                ) : (
+                  <span className="w-3 shrink-0" />
+                )}
+                <span className="whitespace-normal">{r.label}</span>
+              </button>
+              <div className={cn("relative h-4 flex-1 overflow-hidden rounded-sm", h.track)}>
+                <div className={cn("absolute inset-y-0 left-0 rounded-sm", h.band)} style={{ width: `${plannedPct}%` }} />
+                <div className={cn("absolute inset-y-1 left-0 rounded-sm", h.fill)} style={{ width: `${actualPct}%` }} />
+                {r.planned > 0 && <div className={cn("absolute inset-y-0 w-0.5", h.tick)} style={{ left: `${plannedPct}%` }} />}
+              </div>
+              <span className="w-36 shrink-0 text-right text-xs">
+                <span className="font-semibold">{formatCurrency(r.actual, currency)}</span>
+                <span className="text-muted-foreground"> / {formatCurrency(r.planned, currency)}</span>
+              </span>
+              <ConsumedPctBadge pct={pct} className="w-12 text-[0.7rem]" />
             </div>
-            <span className="w-36 shrink-0 text-right text-xs">
-              <span className="font-semibold">{formatCurrency(r.actual, currency)}</span>
-              <span className="text-muted-foreground"> / {formatCurrency(r.planned, currency)}</span>
-            </span>
-            <span className={cn("w-12 shrink-0 rounded-full py-0.5 text-center text-[0.7rem] font-semibold", pct != null ? consumedPctClasses(pct) : "text-muted-foreground")}>
-              {pct != null ? `${pct}%` : "—"}
-            </span>
+            {isExpanded && (
+              <div className="ml-8 mt-1.5 space-y-1.5 border-l border-border py-0.5 pl-3">
+                {r.subRows!.map((s) => {
+                  const sActualPct = barPct(s.actual, subGroupMax);
+                  const sPlannedPct = barPct(s.planned, subGroupMax);
+                  const sPct = consumedPct(s.actual, s.planned);
+                  return (
+                    <div key={s.key} className="flex items-center gap-3">
+                      <span className="w-28 shrink-0 whitespace-normal text-[0.7rem] leading-tight text-muted-foreground">{s.label}</span>
+                      <div className={cn("relative h-2.5 flex-1 overflow-hidden rounded-sm", h.track)}>
+                        <div className={cn("absolute inset-y-0 left-0 rounded-sm", h.band)} style={{ width: `${sPlannedPct}%` }} />
+                        <div className={cn("absolute inset-y-0.5 left-0 rounded-sm", h.fill)} style={{ width: `${sActualPct}%` }} />
+                      </div>
+                      <span className="w-32 shrink-0 text-right text-[0.7rem]">
+                        <span className="font-medium">{formatCurrency(s.actual, currency)}</span>
+                        <span className="text-muted-foreground"> / {formatCurrency(s.planned, currency)}</span>
+                      </span>
+                      <ConsumedPctBadge pct={sPct} className="w-10 text-[0.65rem]" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
