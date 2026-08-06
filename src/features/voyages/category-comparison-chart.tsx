@@ -32,6 +32,17 @@ export const CATEGORY_HUES: Record<string, keyof typeof HUE_CLASSES> = {
   administratif_sante: "rose",
 };
 
+/** Même teinte que CATEGORY_HUES, en hexadécimal — pour les graphiques SVG (anneaux) qui ne
+ * peuvent pas utiliser les classes Tailwind ci-dessus. */
+export const CATEGORY_HUE_HEX: Record<string, string> = {
+  transport: "#0ea5e9",
+  logement: "#8b5cf6",
+  nourriture: "#f59e0b",
+  activites: "#10b981",
+  equipement: "#f97316",
+  administratif_sante: "#f43f5e",
+};
+
 /** Longueur de barre (%) pour une valeur donnée par rapport au maximum COMMUN à toutes les
  * lignes du graphique (pas au maximum de sa propre ligne) — indispensable pour que les barres
  * restent comparables entre catégories (une catégorie deux fois plus chère qu'une autre doit
@@ -54,11 +65,13 @@ export function consumedPct(actual: number, planned: number): number | null {
   return Math.round((actual / planned) * 100);
 }
 
-/** Vert = large marge, ambre = proche du budget, rouge = dépassement — mêmes seuils partout où
- * un pourcentage de consommation de budget est affiché. */
+/** Dégradé vert (0%) → rouge (100% ou plus), en 5 paliers — mêmes seuils partout où un
+ * pourcentage de consommation de budget est affiché. */
 export function consumedPctClasses(pct: number): string {
-  if (pct > 105) return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
-  if (pct >= 85) return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+  if (pct >= 100) return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  if (pct >= 75) return "bg-orange-500/15 text-orange-700 dark:text-orange-300";
+  if (pct >= 50) return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+  if (pct >= 25) return "bg-lime-500/15 text-lime-700 dark:text-lime-300";
   return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
 }
 
@@ -166,8 +179,12 @@ export function CategoryComparisonChart({
             {isExpanded && (
               <div className="ml-8 mt-1.5 space-y-1.5 border-l border-border py-0.5 pl-3">
                 {r.subRows!.map((s) => {
-                  const sActualPct = barPct(s.actual, subGroupMax);
-                  const sPlannedPct = barPct(s.planned, subGroupMax);
+                  // Mise à l'échelle propre au détail (barPct sur subGroupMax) PUIS ramenée dans
+                  // la largeur de la barre parente (actualPct/plannedPct) : une sous-barre ne doit
+                  // jamais paraître plus grande que la barre de sa catégorie, même si elle occupe
+                  // la totalité de son propre sous-groupe.
+                  const sActualPct = (barPct(s.actual, subGroupMax) * actualPct) / 100;
+                  const sPlannedPct = (barPct(s.planned, subGroupMax) * plannedPct) / 100;
                   const sPct = consumedPct(s.actual, s.planned);
                   return (
                     <div key={s.key} className="flex items-center gap-3">

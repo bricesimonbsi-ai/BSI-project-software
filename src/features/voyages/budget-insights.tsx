@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProjectPeople } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
@@ -16,13 +16,19 @@ import {
   computeAdminSantePlannedTotal,
   computeAdminSanteVisaPlannedTotal,
 } from "@/features/voyages/use-expenses";
-import { CategoryComparisonChart, ConsumedPctBadge, consumedPct, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
+import {
+  CategoryComparisonChart,
+  ConsumedPctBadge,
+  consumedPct,
+  CATEGORY_HUE_HEX,
+  type CategoryComparisonRow,
+} from "@/features/voyages/category-comparison-chart";
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
 import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { useCityLockedCostsMap, isLegacyLockedPlannedRow } from "@/features/voyages/use-city-locked-costs";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { TravelStyle, Voyage } from "@/types/database";
 
 const SUB_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
@@ -64,6 +70,7 @@ function mergeAmountItems(
  */
 export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectId: string }) {
   const voyageId = voyage.id;
+  const [chartView, setChartView] = useState<"bar" | "ring">("bar");
   const { data: linkedPeople } = useProjectPeople(projectId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
   const { data: equipmentItems } = useVoyageEquipment(voyageId);
@@ -193,16 +200,31 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   });
 
   const adminRow = mainRows.find((r) => r.key === "administratif_sante")!;
+  // Vue "Cercle" du graphique principal : mêmes 6 catégories, mêmes couleurs que la vue "Barre"
+  // (voir CATEGORY_HUE_HEX) pour qu'un basculement entre les deux vues reste immédiatement
+  // reconnaissable catégorie par catégorie.
+  const mainPlannedItems = mainRows
+    .filter((r) => r.planned > 0)
+    .map((r) => ({ key: r.key, label: r.label, amount: r.planned, color: CATEGORY_HUE_HEX[r.key] }));
+  const mainActualItems = mainRows
+    .filter((r) => r.actual > 0)
+    .map((r) => ({ key: r.key, label: r.label, amount: r.actual, color: CATEGORY_HUE_HEX[r.key] }));
+
+  const globalPct = consumedPct(totalActual, totalPlanned);
 
   return (
     <div className="space-y-5">
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm font-semibold text-muted-foreground">Budget prévisionnel consommé</p>
+          <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
+        </CardContent>
+      </Card>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="space-y-1 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
-              <ConsumedPctBadge pct={consumedPct(totalActual, totalPlanned)} className="text-xs" title="% du budget prévisionnel déjà consommé" />
-            </div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
             <p className="text-lg font-bold">
               {formatCurrency(totalPlanned, voyage.reference_currency)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
@@ -246,8 +268,33 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       </div>
 
       <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévisionnel / réel par catégorie</h3>
-        <CategoryComparisonChart rows={mainRows} currency={voyage.reference_currency} />
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévisionnel / réel par catégorie</h3>
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            <button
+              type="button"
+              onClick={() => setChartView("bar")}
+              className={cn("rounded px-3 py-1 text-xs font-medium", chartView === "bar" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+            >
+              Barres
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartView("ring")}
+              className={cn("rounded px-3 py-1 text-xs font-medium", chartView === "ring" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+            >
+              Cercle
+            </button>
+          </div>
+        </div>
+        {chartView === "bar" ? (
+          <CategoryComparisonChart rows={mainRows} currency={voyage.reference_currency} />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <CategoryBreakdownRing title="Toutes catégories · prévisionnel" total={totalPlanned} items={mainPlannedItems} currency={voyage.reference_currency} size={140} />
+            <CategoryBreakdownRing title="Toutes catégories · réel" total={totalActual} items={mainActualItems} currency={voyage.reference_currency} size={140} />
+          </div>
+        )}
       </div>
 
       <div>

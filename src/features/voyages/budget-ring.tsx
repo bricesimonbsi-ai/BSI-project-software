@@ -19,7 +19,10 @@ export function CategoryBreakdownRing({
 }: {
   title: string;
   total: number;
-  items: { key: string; label: string; amount: number }[];
+  /** `color` optionnel : impose une couleur précise (ex. pour faire correspondre exactement la
+   * teinte utilisée dans le graphique en barres pour la même catégorie) — sinon la palette
+   * générique ci-dessus s'applique dans l'ordre d'apparition. */
+  items: { key: string; label: string; amount: number; color?: string }[];
   currency: string;
   size?: number;
 }) {
@@ -49,7 +52,7 @@ export function CategoryBreakdownRing({
                   strokeWidth={strokeWidth}
                   strokeDasharray={`${dash} ${circumference - dash}`}
                   strokeDashoffset={-offset}
-                  stroke={SLICE_COLORS[i % SLICE_COLORS.length]}
+                  stroke={item.color ?? SLICE_COLORS[i % SLICE_COLORS.length]}
                 />
               );
               offset += dash;
@@ -65,7 +68,7 @@ export function CategoryBreakdownRing({
           {items.map((item, i) => (
             <li key={item.key} className="flex items-center justify-between gap-2 text-[0.7rem] text-muted-foreground">
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} />
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color ?? SLICE_COLORS[i % SLICE_COLORS.length] }} />
                 <span className="truncate">{item.label}</span>
               </span>
               <span className="shrink-0">{formatCurrency(item.amount, currency)}</span>
