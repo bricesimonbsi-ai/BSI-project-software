@@ -126,6 +126,11 @@ export function SousEtapeDialog({
   const deleteSousEtape = useDeleteSousEtape(etapeId);
   const updateEtape = useUpdateEtape(etape.voyage_id);
   const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
+  // Tant que cette requête n'a jamais chargé, "pas de ligne trouvée" ne veut pas dire "elle
+  // n'existe pas" : sans ce garde-fou, EditableExpenseAmount en créerait une en double à chaque
+  // ouverture du dialogue pendant le chargement (observé : le nombre de doublons augmentait à
+  // chaque visite).
+  const onSiteExpensesLoaded = onSiteExpenses !== undefined;
   // Le trajet vers la ville suivante et le transport sur place partagent la même catégorie
   // unifiée "transport" mais pas le même sub_category : exclure explicitement "sur_place" ici
   // (et le cibler précisément plus bas) pour ne jamais les confondre dans le même champ.
@@ -404,6 +409,7 @@ export function SousEtapeDialog({
                       estimate={plannedCosts.transport}
                       referenceCurrency={referenceCurrency ?? "EUR"}
                       invalidateKey={["sous-etape-expenses", existing.id]}
+                      dataReady={onSiteExpensesLoaded}
                       className="w-24"
                     />
                   </div>
@@ -476,6 +482,7 @@ export function SousEtapeDialog({
                       estimate={0}
                       referenceCurrency={referenceCurrency ?? "EUR"}
                       invalidateKey={["sous-etape-expenses", existing.id]}
+                      dataReady={onSiteExpensesLoaded}
                       className="w-24"
                     />
                   </div>

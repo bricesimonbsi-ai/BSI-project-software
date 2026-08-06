@@ -111,6 +111,11 @@ export function BudgetOverviewTable({
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
   const { data: equipmentItems } = useVoyageEquipment(voyageId);
+  // Tant que cette requête n'a jamais chargé, `existing` (déduit de allExpenses) vaut undefined
+  // parce qu'on n'a pas encore la réponse, PAS parce que la ligne n'existe pas : sans ce garde-
+  // fou, EditableExpenseAmount créerait une ligne en double à chaque montage pendant le
+  // chargement (observé : le nombre de doublons augmentait à chaque visite de l'onglet Budget).
+  const expensesLoaded = allExpenses !== undefined;
   const [view, setView] = useState<"planned" | "actual">("planned");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
@@ -203,10 +208,12 @@ export function BudgetOverviewTable({
                 cities={citiesByEtape.get(etape.id) ?? []}
                 expenses={expenses}
                 view={view}
+                voyageId={voyageId}
                 travelerCount={travelerCount}
                 referenceCurrency={referenceCurrency}
                 flat={flat}
                 lockedByCity={lockedByCity}
+                dataReady={expensesLoaded}
                 updateSousEtape={updateSousEtape}
                 onSelectCell={setSelectedCell}
               />
@@ -317,6 +324,7 @@ export function BudgetOverviewTable({
                       estimate={null}
                       referenceCurrency={referenceCurrency}
                       invalidateKey={["voyage-all-expenses", voyageId]}
+                      dataReady={expensesLoaded}
                     />
                   </div>
                 );
@@ -361,10 +369,12 @@ function CountrySection({
   cities,
   expenses,
   view,
+  voyageId,
   travelerCount,
   referenceCurrency,
   flat,
   lockedByCity,
+  dataReady,
   updateSousEtape,
   onSelectCell,
 }: {
@@ -372,10 +382,12 @@ function CountrySection({
   cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
   view: "planned" | "actual";
+  voyageId: string;
   travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   lockedByCity: Record<string, CityLockedCosts>;
+  dataReady: boolean;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
   onSelectCell: (cell: SelectedCell) => void;
 }) {
@@ -423,10 +435,12 @@ function CountrySection({
             key={se.id}
             se={se}
             rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
+            voyageId={voyageId}
             travelerCount={travelerCount}
             referenceCurrency={referenceCurrency}
             flat={flat}
             locked={lockedByCity[se.id]}
+            dataReady={dataReady}
             updateSousEtape={updateSousEtape}
           />
         ) : (
@@ -489,18 +503,22 @@ function NightsStepper({
 function CityPlannedRow({
   se,
   rows,
+  voyageId,
   travelerCount,
   referenceCurrency,
   flat,
   locked,
+  dataReady,
   updateSousEtape,
 }: {
   se: VoyageSousEtape;
   rows: VoyageAllExpense[];
+  voyageId: string;
   travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   locked: CityLockedCosts | undefined;
+  dataReady: boolean;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
   // Calcul synchrone et pur (pas d'appel réseau) : toujours à jour au rendu, sans effet ni état
@@ -513,7 +531,7 @@ function CityPlannedRow({
   };
 
   const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
-  const invalidateKey = ["voyage-all-expenses", se.id];
+  const invalidateKey = ["voyage-all-expenses", voyageId];
 
   return (
     <tr className="border-b border-border last:border-0">
@@ -537,6 +555,7 @@ function CityPlannedRow({
               estimate={estimateFor[c.key]}
               referenceCurrency={referenceCurrency}
               invalidateKey={invalidateKey}
+              dataReady={dataReady}
               className="mx-auto w-20 text-center"
             />
           </td>

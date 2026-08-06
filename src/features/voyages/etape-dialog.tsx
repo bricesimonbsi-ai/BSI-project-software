@@ -60,6 +60,10 @@ export function EtapeDialog({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { data: etapeExpenses } = useEtapeExpenses(existing?.id);
+  // Tant que cette requête n'a jamais chargé, "pas de ligne trouvée" ne veut pas dire "elle
+  // n'existe pas" : sans ce garde-fou, EditableExpenseAmount en créerait une en double à chaque
+  // ouverture du dialogue pendant le chargement.
+  const etapeExpensesLoaded = etapeExpenses !== undefined;
   const plannedVisa = (etapeExpenses ?? []).find((e) => e.planned && e.category === "administratif_sante" && e.sub_category === "visa");
   const [suggestingClimate, setSuggestingClimate] = useState(false);
   const createEtape = useCreateEtape(voyageId);
@@ -220,6 +224,7 @@ export function EtapeDialog({
                 estimate={estimateVisaCostEur(travelStyle ?? "standard", travelerCount ?? 1)}
                 referenceCurrency="EUR"
                 invalidateKey={["etape-expenses", existing.id]}
+                dataReady={etapeExpensesLoaded}
                 className="w-32"
               />
             </div>

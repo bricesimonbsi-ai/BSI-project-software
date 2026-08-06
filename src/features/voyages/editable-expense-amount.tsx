@@ -26,6 +26,14 @@ export function EditableExpenseAmount({
   referenceCurrency,
   invalidateKey,
   className,
+  /** Vrai une fois que la requête d'où vient `existing` a fini de charger AU MOINS une fois.
+   * Indispensable : tant que la requête est encore en cours (donc `existing` vaut `undefined`
+   * parce qu'on n'a pas encore la réponse, pas parce que la ligne n'existe vraiment pas), il ne
+   * faut surtout pas créer de nouvelle ligne — sinon une ligne en double se crée à chaque montage
+   * du composant pendant que les données chargent (observé : le nombre de lignes en double
+   * augmentait à chaque visite de l'onglet). Par défaut à `true` pour les appelants qui n'ont pas
+   * cette notion de chargement (formulaires de saisie manuelle sans auto-création). */
+  dataReady = true,
 }: {
   scope: { voyageId?: string; sousEtapeId?: string; etapeId?: string };
   category: ExpenseCategory;
@@ -37,6 +45,7 @@ export function EditableExpenseAmount({
   referenceCurrency: string;
   invalidateKey: unknown[];
   className?: string;
+  dataReady?: boolean;
 }) {
   const createExpense = useCreateExpense(scope, invalidateKey);
   const updateExpense = useUpdateExpense(invalidateKey);
@@ -48,7 +57,7 @@ export function EditableExpenseAmount({
   }, [existing?.amount]);
 
   useEffect(() => {
-    if (estimate == null) return;
+    if (!dataReady || estimate == null) return;
     if (!existing) {
       if (creatingRef.current || estimate < 0) return;
       creatingRef.current = true;
@@ -67,7 +76,7 @@ export function EditableExpenseAmount({
       updateExpense.mutate({ id: existing.id, amount: Math.round(estimate * 100) / 100 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existing, estimate]);
+  }, [existing, estimate, dataReady]);
 
   function handleBlur() {
     const amount = value.trim() === "" ? 0 : Math.max(0, Number(value));
