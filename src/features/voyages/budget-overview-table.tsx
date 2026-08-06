@@ -150,18 +150,32 @@ export function BudgetOverviewTable({
   // pas compter en double.
   const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
   const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
-  const totalPlanned =
-    sumAmount(expenses.filter((e) => e.planned)) + equipmentPlannedTotal + lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
-  const totalActual = sumAmount(expenses.filter((e) => !e.planned));
   const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
-  const adminPlannedTotal = sumAmount(adminRows.filter((e) => e.planned));
+  // Même principe que les colonnes du tableau villes : le total prévisionnel est la somme de ce
+  // qui est RÉELLEMENT affiché dans chaque champ (première ligne trouvée par sous-catégorie),
+  // jamais une somme indépendante de toutes les lignes en base — sinon d'éventuelles anciennes
+  // lignes en double (invisibles dans la grille) gonflent le total sans qu'on puisse comprendre
+  // pourquoi. Le réel n'a pas ce problème : ses cases listent déjà toutes les lignes correspondantes.
+  const adminPlannedTotal = ADMIN_SUB_COLUMNS.reduce((sum, s) => {
+    const row = adminRows.find((e) => e.planned && (e.sub_category || "") === s.value);
+    return sum + (row ? row.amount * row.manual_rate_to_reference : 0);
+  }, 0);
+  const plannedTotalExcludingAdmin = sumAmount(expenses.filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante"));
+  const totalPlanned =
+    plannedTotalExcludingAdmin + adminPlannedTotal + equipmentPlannedTotal + lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
+  const totalActual = sumAmount(expenses.filter((e) => !e.planned));
 
   if (!etapes) return null;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail des dépenses</h3>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail des dépenses</h3>
+          <p className="text-xs text-muted-foreground">
+            Chaque montant est un total : pour tous les voyageurs ({travelerCount}) et, pour le logement, pour tous les logements saisis.
+          </p>
+        </div>
         <div className="inline-flex rounded-md border border-border p-0.5">
           <button
             type="button"
@@ -308,6 +322,9 @@ export function BudgetOverviewTable({
             <p className="text-sm font-semibold">Administratif & santé</p>
             {view === "planned" && <span className="font-semibold">{formatCurrency(adminPlannedTotal, referenceCurrency)}</span>}
           </div>
+          {view === "planned" && (
+            <p className="text-xs text-muted-foreground">Chaque champ est un montant total pour tous les voyageurs ({travelerCount}), pas par personne.</p>
+          )}
           {view === "planned" ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {ADMIN_SUB_COLUMNS.map((s) => {
