@@ -12,10 +12,9 @@ import type { ExpenseCategory, VoyageExpense } from "@/types/database";
  * sans action de l'utilisateur. Dès qu'il tape une valeur lui-même, `is_estimated` passe à faux
  * et la ligne reste figée sur sa saisie, même si l'estimation évolue ensuite.
  *
- * En mode `readOnly`, l'affichage ignore complètement la ligne synchronisée et montre
- * `estimate` en direct (voir `displayValue` plus bas) : la synchronisation en base tourne
- * quand même en arrière-plan pour les agrégats, mais jamais au prix d'un affichage périmé le
- * temps qu'elle rattrape son retard.
+ * Pour un montant qui ne doit JAMAIS être saisissable (ex. logement/nourriture, calculés depuis
+ * un taux journalier), ne pas utiliser ce composant : voir `ComputedCostAmount` ci-dessous, qui
+ * n'écrit rien en base et ne peut donc jamais être périmé.
  */
 export function EditableExpenseAmount({
   scope,
@@ -27,11 +26,6 @@ export function EditableExpenseAmount({
   referenceCurrency,
   invalidateKey,
   className,
-  /** Si vrai, le champ n'est jamais saisissable : la ligne reste verrouillée sur l'estimation
-   * (taux journalier x nuits...) et se resynchronise donc TOUJOURS avec elle, sans jamais
-   * pouvoir être figée par une saisie manuelle. Utilisé pour les coûts que l'utilisateur ne
-   * doit ajuster qu'indirectement (via le taux journalier ou le nombre de nuits). */
-  readOnly = false,
 }: {
   scope: { voyageId?: string; sousEtapeId?: string; etapeId?: string };
   category: ExpenseCategory;
@@ -43,7 +37,6 @@ export function EditableExpenseAmount({
   referenceCurrency: string;
   invalidateKey: unknown[];
   className?: string;
-  readOnly?: boolean;
 }) {
   const createExpense = useCreateExpense(scope, invalidateKey);
   const updateExpense = useUpdateExpense(invalidateKey);
@@ -76,14 +69,6 @@ export function EditableExpenseAmount({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing, estimate]);
 
-  // En lecture seule, l'affichage vient DIRECTEMENT de `estimate` (calculé en direct par
-  // l'appelant à partir du taux journalier x nuits), jamais de la ligne `voyage_expenses`
-  // elle-même : la synchroniser en base ci-dessus reste utile pour les agrégats/exports, mais
-  // ne doit jamais conditionner ce qui s'affiche. Sans ça, l'utilisateur voit un montant périmé
-  // tant que le cycle mutation -> invalidation -> refetch de la ligne n'a pas fini de tourner —
-  // exactement le bug déjà rencontré (et corrigé de la même façon) sur le total équipement.
-  const displayValue = readOnly ? (estimate != null ? (Math.round(estimate * 100) / 100).toString() : "0") : value;
-
   function handleBlur() {
     const amount = value.trim() === "" ? 0 : Math.max(0, Number(value));
     if (existing) {
@@ -112,14 +97,31 @@ export function EditableExpenseAmount({
       type="number"
       step="0.01"
       min="0"
-      value={displayValue}
+      value={value}
       placeholder={estimate != null && estimate > 0 ? Math.round(estimate).toString() : "0"}
-      onChange={readOnly ? undefined : (e) => setValue(e.target.value)}
-      onBlur={readOnly ? undefined : handleBlur}
-      readOnly={readOnly}
-      disabled={readOnly}
-      title={readOnly ? "Calculé automatiquement (taux journalier x nombre de nuits) — ajuste le taux ou les nuits pour le changer" : undefined}
-      className={cn(className, readOnly && "cursor-default disabled:opacity-100 bg-muted/40 text-muted-foreground")}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={handleBlur}
+      className={className}
+    />
+  );
+}
+
+/**
+ * Montant purement calculé (taux journalier x nuits, forfait...) : aucune ligne
+ * `voyage_expenses` associée, donc rien à synchroniser et rien qui puisse être périmé — la
+ * valeur affichée est TOUJOURS le calcul du moment. À utiliser pour tout coût prévisionnel que
+ * l'utilisateur n'ajuste qu'indirectement (via le taux journalier ou le nombre de nuits), jamais
+ * en tapant directement dedans.
+ */
+export function ComputedCostAmount({ amount, className }: { amount: number; className?: string }) {
+  return (
+    <Input
+      type="text"
+      readOnly
+      disabled
+      value={(Math.round(amount * 100) / 100).toString()}
+      title="Calculé automatiquement (taux journalier x nombre de nuits) — ajuste le taux ou les nuits pour le changer"
+      className={cn(className, "cursor-default disabled:opacity-100 bg-muted/40 text-muted-foreground")}
     />
   );
 }

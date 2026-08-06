@@ -208,9 +208,11 @@ type ExpenseInput = {
  * (vue d'ensemble du voyage, dialogue d'une ville, dialogue d'un pays...) : on invalide donc
  * systématiquement TOUTES les clés de requête de dépenses, pas seulement celle passée en
  * paramètre, pour qu'une modification faite n'importe où se reflète immédiatement partout
- * ailleurs sans avoir à revisiter l'onglet concerné. */
-function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>, invalidateKey: unknown[]) {
-  queryClient.invalidateQueries({ queryKey: invalidateKey });
+ * ailleurs sans avoir à revisiter l'onglet concerné. Exportée pour que les mutations qui
+ * suppriment/modifient un pays ou une ville (dont les dépenses cascadent en base) invalident
+ * les mêmes clés — sinon le total prévisionnel reste basé sur un cache périmé jusqu'à ce qu'un
+ * refetch sans rapport se déclenche par hasard. */
+export function invalidateAllExpenseQueries(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
   queryClient.invalidateQueries({ queryKey: ["etape-budget-summary"] });
   queryClient.invalidateQueries({ queryKey: ["voyage-category-budget-summary"] });
@@ -219,6 +221,11 @@ function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>,
   queryClient.invalidateQueries({ queryKey: ["etape-expenses"] });
   queryClient.invalidateQueries({ queryKey: ["sous-etape-expenses"] });
   queryClient.invalidateQueries({ queryKey: ["voyage-expenses"] });
+}
+
+function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>, invalidateKey: unknown[]) {
+  queryClient.invalidateQueries({ queryKey: invalidateKey });
+  invalidateAllExpenseQueries(queryClient);
 }
 
 export function useCreateExpense(

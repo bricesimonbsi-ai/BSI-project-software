@@ -1,10 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import { invalidateAllExpenseQueries } from "@/features/voyages/use-expenses";
 import type { VoyageSousEtape } from "@/types/database";
 
 function invalidateAll(queryClient: ReturnType<typeof useQueryClient>, etapeId: string) {
   queryClient.invalidateQueries({ queryKey: ["sous-etapes", etapeId] });
   queryClient.invalidateQueries({ queryKey: ["voyage-sous-etapes"] });
+  // Le nombre de nuits/la ville pilotent les estimations prévisionnelles affichées ailleurs
+  // (tableau budget, dialogue), et supprimer une ville cascade en base sur ses dépenses :
+  // invalider ici évite tout décalage entre ce qui est affiché et l'état réel.
+  invalidateAllExpenseQueries(queryClient);
 }
 
 /** Toutes les sous-étapes (villes) de tous les pays d'un voyage, en une requête. */

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import { invalidateAllExpenseQueries } from "@/features/voyages/use-expenses";
 import type { VoyageEtape } from "@/types/database";
 
 export function useEtapes(voyageId: string | undefined) {
@@ -36,7 +37,13 @@ export function useUpdateEtape(voyageId: string) {
       const { error } = await supabase.from("voyage_etapes").update(updates).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] });
+      // Les taux journaliers (logement/nourriture/transport sur place) vivent sur l'étape :
+      // les invalider ici garantit que tout ce qui affiche un montant qui en dépend se
+      // recalcule immédiatement, sans dépendre d'un refetch déclenché ailleurs par hasard.
+      invalidateAllExpenseQueries(queryClient);
+    },
   });
 }
 
@@ -47,7 +54,13 @@ export function useDeleteEtape(voyageId: string) {
       const { error } = await supabase.from("voyage_etapes").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapes", voyageId] });
+      // Supprimer un pays cascade en base sur toutes ses villes et leurs dépenses : sans ça,
+      // le cache des dépenses reste périmé (total prévisionnel qui inclut encore les dépenses
+      // du pays supprimé) jusqu'à ce qu'un refetch sans rapport se déclenche par hasard.
+      invalidateAllExpenseQueries(queryClient);
+    },
   });
 }
 

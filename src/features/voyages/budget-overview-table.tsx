@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useEtapes } from "@/features/voyages/use-etapes";
@@ -11,10 +11,11 @@ import {
 } from "@/features/voyages/use-expenses";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
 import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
-import { CountryFlag, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
-import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
+import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
+import { estimateTransportLegCost } from "@/features/voyages/budget-estimate";
+import { useCityLockedCostsMap, isLegacyLockedPlannedRow, type CityLockedCosts } from "@/features/voyages/use-city-locked-costs";
 import { buildFlatRows, cascadeDatesFrom, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
-import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
+import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/editable-expense-amount";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
@@ -28,8 +29,9 @@ function sumAmount(rows: VoyageAllExpense[]): number {
 /** Le trajet vers la ville suivante et le transport sur place partagent la même catégorie
  * unifiée "transport" mais pas le même sub_category (voir sous-etape-dialog.tsx) : chaque
  * colonne précise explicitement quel sub_category elle représente (ou exclut) pour ne jamais
- * confondre les deux dans la même case. Une colonne "locked" est calculée automatiquement
- * (taux journalier x nuits, voir SousEtapeDialog) et non éditable directement dans ce tableau. */
+ * confondre les deux dans la même case. Une colonne "locked" (avec `lockedField`) est calculée
+ * à 100% côté client depuis `useCityLockedCostsMap`, jamais depuis une ligne `voyage_expenses` —
+ * voir `cityColumnAmount` plus bas. */
 type CityColumn = {
   key: string;
   label: string;
@@ -37,6 +39,7 @@ type CityColumn = {
   subCategory?: string;
   excludeSubCategories?: string[];
   locked?: boolean;
+  lockedField?: keyof CityLockedCosts;
 };
 
 function matchesColumn(e: { category: ExpenseCategory; sub_category: string | null }, col: CityColumn): boolean {
@@ -46,18 +49,23 @@ function matchesColumn(e: { category: ExpenseCategory; sub_category: string | nu
   return true;
 }
 
-/** Total d'une ligne = somme des colonnes réellement affichées (jamais un total "à côté"
- * calculé indépendamment) : garantit par construction qu'il ne peut jamais diverger de ce qui
- * est visible à l'écran, même si d'anciennes lignes en double existent pour une catégorie. */
-function sumByColumns(rows: VoyageAllExpense[]): number {
-  return CITY_COLUMNS.reduce((sum, c) => sum + sumAmount(rows.filter((e) => matchesColumn(e, c))), 0);
+/** Montant d'UNE ville pour UNE colonne, côté Prévisionnel : pour une colonne verrouillée,
+ * toujours la valeur calculée en direct (jamais une ligne voyage_expenses) ; sinon, la ligne
+ * TROUVÉE pour cette ville/colonne (jamais une somme de toutes les lignes correspondantes) —
+ * c'est exactement ce qui est affiché dans la case éditable, donc les totaux (pays, général) ne
+ * peuvent jamais diverger de ce qui est visible à l'écran, même si d'anciennes lignes en double
+ * traînent encore en base. */
+function cityColumnAmount(col: CityColumn, cityRows: VoyageAllExpense[], locked: CityLockedCosts | undefined): number {
+  if (col.locked && col.lockedField) return locked?.[col.lockedField] ?? 0;
+  const row = cityRows.find((e) => matchesColumn(e, col));
+  return row ? row.amount * row.manual_rate_to_reference : 0;
 }
 
 const CITY_COLUMNS: CityColumn[] = [
-  { key: "transport", label: "Transport", category: "transport", excludeSubCategories: ["sur_place"] },
-  { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true },
-  { key: "logement", label: "Logement", category: "logement", locked: true },
-  { key: "nourriture", label: "Nourriture", category: "nourriture", locked: true },
+  { key: "transport", label: "Transport vers l'étape suivante", category: "transport", excludeSubCategories: ["sur_place"] },
+  { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true, lockedField: "localTransport" },
+  { key: "logement", label: "Logement", category: "logement", locked: true, lockedField: "lodging" },
+  { key: "nourriture", label: "Nourriture", category: "nourriture", locked: true, lockedField: "food" },
   { key: "activites", label: "Activités", category: "activites" },
 ];
 
@@ -67,16 +75,16 @@ type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; subCategor
 
 /**
  * Détail des dépenses : une ligne par VILLE (groupées par pays), une colonne par catégorie
- * (transport, transport sur place, logement, nourriture, activités) — la ligne du pays est un
- * total calculé de ses villes, non modifiable (la source d'entrée, c'est la ville). Équipement
- * et administratif & santé, transverses au voyage, apparaissent en fin de tableau. Bascule
- * Prévisionnel/Réel : même forme des deux côtés pour rester comparable, mais côté Prévisionnel,
- * Transport sur place/Logement/Nourriture sont verrouillées (calculées automatiquement depuis
- * le taux journalier x le nombre de nuits, ajustables uniquement via SousEtapeDialog ou le
- * compteur de nuits ci-dessous) — seuls Transport (trajet) et Activités restent librement
- * modifiables ici, comme toutes les cases côté Réel. Chaque case est une vraie ligne
- * `voyage_expenses`, la même que celle modifiable depuis le dialogue de la ville correspondante
- * — éditer d'un côté (quand ce n'est pas verrouillé) met donc toujours à jour l'autre.
+ * (transport vers l'étape suivante, transport sur place, logement, nourriture, activités) — la
+ * ligne du pays est un total calculé de ses villes, non modifiable (la source d'entrée, c'est la
+ * ville). Équipement et administratif & santé, transverses au voyage, apparaissent en fin de
+ * tableau. Bascule Prévisionnel/Réel : même forme des deux côtés pour rester comparable, mais
+ * côté Prévisionnel, Transport sur place/Logement/Nourriture sont verrouillées — calculées à
+ * 100% côté client (taux journalier x nombre de nuits, voir useCityLockedCostsMap), jamais
+ * depuis une ligne `voyage_expenses` à resynchroniser : aucun délai de mise à jour possible,
+ * quel que soit l'endroit où le nombre de nuits ou le taux a été modifié. Seuls Transport (vers
+ * l'étape suivante) et Activités restent librement modifiables ici, comme toutes les cases côté
+ * Réel.
  */
 export function BudgetOverviewTable({
   voyageId,
@@ -116,16 +124,26 @@ export function BudgetOverviewTable({
   const flat = useMemo(() => buildFlatRows(etapes ?? [], citiesByEtape), [etapes, citiesByEtape]);
   const updateSousEtape = useUpdateSousEtape(voyageId);
 
-  // L'équipement n'est plus une ligne de dépense séparée à resynchroniser : son coût est
-  // calculé en direct depuis l'onglet Équipement à chaque affichage, donc toujours à jour
-  // immédiatement (pas besoin de revenir sur cet onglet pour que le total se propage). Les
-  // catégories "equipement" restantes dans voyage_expenses (anciennes lignes synchronisées
-  // avant ce changement) sont donc exclues des totaux pour ne pas compter en double.
-  const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement");
+  const { byCity: lockedByCity, total: lockedTotal } = useCityLockedCostsMap({
+    etapes,
+    sousEtapes: allSousEtapes,
+    travelStyle,
+    travelerCount,
+    lodgingCount,
+  });
+
+  // L'équipement et les coûts verrouillés (logement/nourriture/transport sur place) ne sont
+  // plus des lignes de dépense à resynchroniser : leur coût est calculé en direct à chaque
+  // affichage, donc toujours à jour immédiatement. Les lignes correspondantes qui traînent
+  // encore dans voyage_expenses (créées avant ce changement) sont exclues des totaux pour ne
+  // pas compter en double.
+  const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
   const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
-  const totalPlanned = sumAmount(expenses.filter((e) => e.planned)) + equipmentPlannedTotal;
+  const totalPlanned =
+    sumAmount(expenses.filter((e) => e.planned)) + equipmentPlannedTotal + lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
   const totalActual = sumAmount(expenses.filter((e) => !e.planned));
   const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
+  const adminPlannedTotal = sumAmount(adminRows.filter((e) => e.planned));
 
   if (!etapes) return null;
 
@@ -160,9 +178,9 @@ export function BudgetOverviewTable({
       <div className="overflow-x-auto rounded-md border border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-3 py-2">Pays / ville</th>
-              <th className="px-2 py-2 text-center">Nuits</th>
+            <tr className="border-b border-border text-center text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2 text-left">Pays / ville</th>
+              <th className="px-2 py-2">Nuits</th>
               {CITY_COLUMNS.map((c) => (
                 <th key={c.key} className="px-2 py-2">
                   {c.label}
@@ -179,12 +197,10 @@ export function BudgetOverviewTable({
                 cities={citiesByEtape.get(etape.id) ?? []}
                 expenses={expenses}
                 view={view}
-                travelStyle={travelStyle}
                 travelerCount={travelerCount}
-                lodgingCount={lodgingCount}
                 referenceCurrency={referenceCurrency}
-                voyageId={voyageId}
                 flat={flat}
+                lockedByCity={lockedByCity}
                 updateSousEtape={updateSousEtape}
                 onSelectCell={setSelectedCell}
               />
@@ -244,21 +260,41 @@ export function BudgetOverviewTable({
           Dépenses transverses (pas propres à un pays)
         </p>
 
-        {view === "planned" && (
-          <div className="space-y-2 rounded-md border border-border/70 p-2.5">
+        <div className="space-y-2 rounded-md border border-border/70 p-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-semibold">Équipement</p>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="text-xs text-muted-foreground">Somme des articles à acheter (voir l'onglet Équipement)</span>
-              <span>
-                <span className="font-semibold">{formatCurrency(equipmentPlannedTotal, referenceCurrency)}</span>
-                <span className="ml-1.5 text-xs text-muted-foreground">réglable dans l'onglet Équipement</span>
-              </span>
-            </div>
+            {view === "planned" && <span className="font-semibold">{formatCurrency(equipmentPlannedTotal, referenceCurrency)}</span>}
           </div>
-        )}
+          {view === "planned" ? (
+            <p className="text-xs text-muted-foreground">Somme des articles à acheter, réglable dans l'onglet Équipement</p>
+          ) : (
+            <div className="space-y-2">
+              <ExpenseFormDialog
+                scope={{ voyageId }}
+                categories={[{ value: "equipement", label: "Équipement" }]}
+                referenceCurrency={referenceCurrency}
+                invalidateKey={["voyage-all-expenses", voyageId]}
+                projectId={projectId}
+                defaultPlanned={false}
+                lockPlanned
+              />
+              <ExpenseList
+                expenses={(allExpenses ?? []).filter((e) => groupedCategory(e.category) === "equipement" && !e.planned)}
+                invalidateKey={["voyage-all-expenses", voyageId]}
+                projectId={projectId}
+                categories={TRANSVERSE_CATEGORIES}
+                referenceCurrency={referenceCurrency}
+                lockPlanned
+              />
+            </div>
+          )}
+        </div>
 
         <div className="space-y-2 rounded-md border border-border/70 p-2.5">
-          <p className="text-sm font-semibold">Administratif & santé</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Administratif & santé</p>
+            {view === "planned" && <span className="font-semibold">{formatCurrency(adminPlannedTotal, referenceCurrency)}</span>}
+          </div>
           {view === "planned" ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {ADMIN_SUB_COLUMNS.map((s) => {
@@ -319,12 +355,10 @@ function CountrySection({
   cities,
   expenses,
   view,
-  travelStyle,
   travelerCount,
-  lodgingCount,
   referenceCurrency,
-  voyageId,
   flat,
+  lockedByCity,
   updateSousEtape,
   onSelectCell,
 }: {
@@ -332,19 +366,33 @@ function CountrySection({
   cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
   view: "planned" | "actual";
-  travelStyle: TravelStyle;
   travelerCount: number;
-  lodgingCount: number;
   referenceCurrency: string;
-  voyageId: string;
   flat: FlatRow[];
+  lockedByCity: Record<string, CityLockedCosts>;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
   onSelectCell: (cell: SelectedCell) => void;
 }) {
-  const cityIds = new Set(cities.map((c) => c.id));
-  const countryRows = expenses.filter((e) => e.sous_etape_id && cityIds.has(e.sous_etape_id) && e.planned === (view === "planned"));
-  const countryTotal = sumByColumns(countryRows);
   const totalNights = cities.reduce((sum, c) => sum + (c.duration_days ?? 0), 0);
+
+  // Côté Prévisionnel, le total par colonne d'un pays est la somme de ce qui est AFFICHÉ dans
+  // chaque ville (cityColumnAmount) — jamais une somme indépendante de toutes les lignes en
+  // base, qui pourrait diverger si d'anciennes lignes en double traînent encore. Côté Réel, les
+  // cases sont déjà des boutons qui résument TOUTES les lignes correspondantes (voir
+  // CityActualRow), donc sommer par ligne correspondante reste cohérent.
+  const columnAmounts = CITY_COLUMNS.map((c) => {
+    if (view === "planned") {
+      return cities.reduce((sum, city) => {
+        const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && e.planned);
+        return sum + cityColumnAmount(c, cityRows, lockedByCity[city.id]);
+      }, 0);
+    }
+    return cities.reduce((sum, city) => {
+      const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && !e.planned);
+      return sum + sumAmount(cityRows.filter((e) => matchesColumn(e, c)));
+    }, 0);
+  });
+  const countryTotal = columnAmounts.reduce((a, b) => a + b, 0);
 
   return (
     <>
@@ -356,9 +404,9 @@ function CountrySection({
           </span>
         </td>
         <td className="px-2 py-2 text-center">{totalNights}</td>
-        {CITY_COLUMNS.map((c) => (
-          <td key={c.key} className="px-2 py-2 text-right">
-            {formatCurrency(sumAmount(countryRows.filter((e) => matchesColumn(e, c))), referenceCurrency)}
+        {CITY_COLUMNS.map((c, i) => (
+          <td key={c.key} className="px-2 py-2 text-center">
+            {formatCurrency(columnAmounts[i], referenceCurrency)}
           </td>
         ))}
         <td className="border-l border-border bg-muted/20 px-3 py-2 text-right">{formatCurrency(countryTotal, referenceCurrency)}</td>
@@ -368,14 +416,11 @@ function CountrySection({
           <CityPlannedRow
             key={se.id}
             se={se}
-            etape={etape}
             rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
-            travelStyle={travelStyle}
             travelerCount={travelerCount}
-            lodgingCount={lodgingCount}
             referenceCurrency={referenceCurrency}
-            voyageId={voyageId}
             flat={flat}
+            locked={lockedByCity[se.id]}
             updateSousEtape={updateSousEtape}
           />
         ) : (
@@ -437,80 +482,32 @@ function NightsStepper({
 
 function CityPlannedRow({
   se,
-  etape,
   rows,
-  travelStyle,
   travelerCount,
-  lodgingCount,
   referenceCurrency,
-  voyageId,
   flat,
+  locked,
   updateSousEtape,
 }: {
   se: VoyageSousEtape;
-  etape: VoyageEtape;
   rows: VoyageAllExpense[];
-  travelStyle: TravelStyle;
   travelerCount: number;
-  lodgingCount: number;
   referenceCurrency: string;
-  voyageId: string;
   flat: FlatRow[];
+  locked: CityLockedCosts | undefined;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
-  const countryCode = findCountryByName(etape.country_region)?.cca2 ?? null;
-  const [estimate, setEstimate] = useState<CityPlannedCosts>({
-    transport: 0,
-    lodging: 0,
-    food: 0,
-    localTransport: 0,
-    rates: { lodging: 0, food: 0, localTransport: 0 },
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      const result = await estimateCityPlannedCosts({
-        nights: se.duration_days ?? 0,
-        distanceKm: se.distance_km,
-        transportMode: se.transport_next_mode,
-        countryCode,
-        style: travelStyle,
-        travelerCount,
-        lodgingCount,
-        lodgingOverride: etape.lodging_cost_per_night,
-        foodOverride: etape.food_cost_per_day,
-        localTransportOverride: etape.local_transport_cost_per_day,
-      });
-      if (!cancelled) setEstimate(result);
-    }
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    se.duration_days,
-    se.distance_km,
-    se.transport_next_mode,
-    countryCode,
-    travelStyle,
-    travelerCount,
-    lodgingCount,
-    etape.lodging_cost_per_night,
-    etape.food_cost_per_day,
-    etape.local_transport_cost_per_day,
-  ]);
-
+  // Calcul synchrone et pur (pas d'appel réseau) : toujours à jour au rendu, sans effet ni état
+  // local à resynchroniser — la même fonction, avec les mêmes entrées, que celle utilisée dans
+  // SousEtapeDialog, pour garantir une valeur identique partout où elle est affichée.
+  const transportEstimate = estimateTransportLegCost(se.distance_km, se.transport_next_mode, travelerCount);
   const estimateFor: Record<string, number> = {
-    transport: estimate.transport,
-    transport_local: estimate.localTransport,
-    nourriture: estimate.food,
-    logement: estimate.lodging,
+    transport: transportEstimate,
     activites: 0,
   };
 
-  const total = sumByColumns(rows);
-  const invalidateKey = ["voyage-all-expenses", voyageId];
+  const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
+  const invalidateKey = ["voyage-all-expenses", se.id];
 
   return (
     <tr className="border-b border-border last:border-0">
@@ -518,22 +515,27 @@ function CityPlannedRow({
       <td className="px-2 py-1.5 text-center">
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
-      {CITY_COLUMNS.map((c) => (
-        <td key={c.key} className="px-2 py-1.5">
-          <EditableExpenseAmount
-            scope={{ sousEtapeId: se.id }}
-            category={c.category}
-            subCategory={c.subCategory ?? (c.category === "transport" ? se.transport_next_mode : null)}
-            planned
-            existing={rows.find((e) => matchesColumn(e, c))}
-            estimate={estimateFor[c.key]}
-            referenceCurrency={referenceCurrency}
-            invalidateKey={invalidateKey}
-            className="w-20"
-            readOnly={c.locked}
-          />
-        </td>
-      ))}
+      {CITY_COLUMNS.map((c) =>
+        c.locked ? (
+          <td key={c.key} className="px-2 py-1.5 text-center">
+            <ComputedCostAmount amount={cityColumnAmount(c, rows, locked)} className="mx-auto w-20 text-center" />
+          </td>
+        ) : (
+          <td key={c.key} className="px-2 py-1.5 text-center">
+            <EditableExpenseAmount
+              scope={{ sousEtapeId: se.id }}
+              category={c.category}
+              subCategory={c.subCategory ?? (c.category === "transport" ? se.transport_next_mode : null)}
+              planned
+              existing={rows.find((e) => matchesColumn(e, c))}
+              estimate={estimateFor[c.key]}
+              referenceCurrency={referenceCurrency}
+              invalidateKey={invalidateKey}
+              className="mx-auto w-20 text-center"
+            />
+          </td>
+        )
+      )}
       <td className="border-l border-border bg-muted/10 px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
     </tr>
   );
@@ -554,7 +556,7 @@ function CityActualRow({
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
   onSelectCell: (cell: SelectedCell) => void;
 }) {
-  const total = sumByColumns(rows);
+  const total = CITY_COLUMNS.reduce((sum, c) => sum + sumAmount(rows.filter((e) => matchesColumn(e, c))), 0);
   return (
     <tr className="border-b border-border last:border-0">
       <td className="whitespace-nowrap px-3 py-1.5 pl-8 text-muted-foreground">{se.city}</td>
@@ -564,10 +566,10 @@ function CityActualRow({
       {CITY_COLUMNS.map((c) => {
         const sum = sumAmount(rows.filter((e) => matchesColumn(e, c)));
         return (
-          <td key={c.key} className="px-2 py-1.5">
+          <td key={c.key} className="px-2 py-1.5 text-center">
             <button
               type="button"
-              className="w-20 rounded px-1.5 py-1 text-right text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
+              className="mx-auto w-20 rounded px-1.5 py-1 text-center text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
               onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.category, subCategory: c.subCategory ?? null, label: `${se.city} · ${c.label}` })}
             >
               {formatCurrency(sum, referenceCurrency)}

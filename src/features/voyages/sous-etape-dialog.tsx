@@ -14,7 +14,7 @@ import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/loca
 import { ClimateMonthPicker } from "@/features/voyages/itinerary/climate-month-picker";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseList } from "@/features/voyages/expense-list";
-import { EditableExpenseAmount } from "@/features/voyages/editable-expense-amount";
+import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/editable-expense-amount";
 import { Badge } from "@/components/ui/badge";
 import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
 import { estimateCityPlannedCosts, type CityPlannedCosts } from "@/features/voyages/cost-of-living";
@@ -130,9 +130,6 @@ export function SousEtapeDialog({
   // unifiée "transport" mais pas le même sub_category : exclure explicitement "sur_place" ici
   // (et le cibler précisément plus bas) pour ne jamais les confondre dans le même champ.
   const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport" && e.sub_category !== "sur_place");
-  const plannedLocalTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport" && e.sub_category === "sur_place");
-  const plannedLodging = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "logement");
-  const plannedFood = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "nourriture");
   const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
   // Filtre explicite sur !planned (et pas seulement une exclusion par id des 4 lignes structurées
   // ci-dessus) : garantit qu'aucune dépense prévisionnelle ne peut jamais apparaître dans la
@@ -419,18 +416,7 @@ export function SousEtapeDialog({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                      <EditableExpenseAmount
-                        scope={{ sousEtapeId: existing.id }}
-                        category="transport"
-                        subCategory="sur_place"
-                        planned
-                        existing={plannedLocalTransport}
-                        estimate={plannedCosts.localTransport}
-                        referenceCurrency={referenceCurrency ?? "EUR"}
-                        invalidateKey={["sous-etape-expenses", existing.id]}
-                        className="w-24"
-                        readOnly
-                      />
+                      <ComputedCostAmount amount={plannedCosts.localTransport} className="w-24" />
                     </div>
                   </div>
                   <DailyRateInput
@@ -447,17 +433,7 @@ export function SousEtapeDialog({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                      <EditableExpenseAmount
-                        scope={{ sousEtapeId: existing.id }}
-                        category="logement"
-                        planned
-                        existing={plannedLodging}
-                        estimate={plannedCosts.lodging}
-                        referenceCurrency={referenceCurrency ?? "EUR"}
-                        invalidateKey={["sous-etape-expenses", existing.id]}
-                        className="w-24"
-                        readOnly
-                      />
+                      <ComputedCostAmount amount={plannedCosts.lodging} className="w-24" />
                     </div>
                   </div>
                   <DailyRateInput
@@ -476,17 +452,7 @@ export function SousEtapeDialog({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                      <EditableExpenseAmount
-                        scope={{ sousEtapeId: existing.id }}
-                        category="nourriture"
-                        planned
-                        existing={plannedFood}
-                        estimate={plannedCosts.food}
-                        referenceCurrency={referenceCurrency ?? "EUR"}
-                        invalidateKey={["sous-etape-expenses", existing.id]}
-                        className="w-24"
-                        readOnly
-                      />
+                      <ComputedCostAmount amount={plannedCosts.food} className="w-24" />
                     </div>
                   </div>
                   <DailyRateInput

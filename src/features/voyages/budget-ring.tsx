@@ -1,90 +1,79 @@
 import { formatCurrency } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+
+/** Palette catégorielle fixe (une couleur par sous-type dans l'ordre d'apparition) — les
+ * couleurs identifient un sous-type, pas un statut, donc pas de sens vert/ambre/rouge ici. */
+const SLICE_COLORS = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#ec4899", "#14b8a6", "#6366f1", "#a3a3a3"];
 
 /**
- * Anneau de type "compteur" (meter) : le remplissage représente la part du budget
- * prévisionnel déjà dépensée en réel, coloré par statut (vert = confortable, ambre =
- * proche, rouge = dépassé) — jamais deux couleurs pour deux séries (ce serait une
- * identité, pas un statut), le remplissage et le fond utilisent la même famille de teinte.
+ * Anneau de répartition : le détail des sous-types (avion/train/bus... ou visa/vaccin/frais
+ * bancaires...) d'UN total (prévisionnel OU réel, jamais les deux en même temps — voir
+ * budget-insights.tsx qui affiche un anneau prévisionnel et un anneau réel côte à côte par
+ * grande catégorie), une tranche colorée par sous-type avec sa légende en dessous.
  */
-export function BudgetRing({
-  label,
-  planned,
-  actual,
+export function CategoryBreakdownRing({
+  title,
+  total,
+  items,
   currency,
-  size = 96,
-  /** Sous-détail optionnel affiché sous le libellé (ex. avion/train/bus pour un anneau "Transport"). */
-  breakdown,
+  size = 108,
 }: {
-  label: string;
-  planned: number;
-  actual: number;
+  title: string;
+  total: number;
+  items: { key: string; label: string; amount: number }[];
   currency: string;
   size?: number;
-  breakdown?: { key: string; label: string; planned: number; actual: number }[];
 }) {
-  const pct = planned > 0 ? (actual / planned) * 100 : actual > 0 ? 100 : 0;
-  const displayPct = Math.round(pct);
-  const arcPct = Math.min(100, pct);
-  const status = pct >= 100 ? "critical" : pct >= 80 ? "warning" : "good";
-  const ringClass = {
-    good: "stroke-emerald-500",
-    warning: "stroke-amber-500",
-    critical: "stroke-rose-500",
-  }[status];
-  const trackClass = {
-    good: "stroke-emerald-500/15",
-    warning: "stroke-amber-500/15",
-    critical: "stroke-rose-500/15",
-  }[status];
-  const textClass = {
-    good: "text-emerald-700 dark:text-emerald-300",
-    warning: "text-amber-700 dark:text-amber-300",
-    critical: "text-rose-700 dark:text-rose-300",
-  }[status];
-
-  const strokeWidth = 10;
+  const strokeWidth = 14;
   const radius = size / 2 - strokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
-  const dash = (arcPct / 100) * circumference;
+  const sliceTotal = items.reduce((sum, i) => sum + i.amount, 0);
+  let offset = 0;
 
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-md border border-border p-3 text-center">
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} className={trackClass} />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${circumference}`}
-            className={ringClass}
-          />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} className="stroke-muted" />
+          {sliceTotal > 0 &&
+            items.map((item, i) => {
+              const frac = item.amount / sliceTotal;
+              const dash = frac * circumference;
+              const circle = (
+                <circle
+                  key={item.key}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={-offset}
+                  stroke={SLICE_COLORS[i % SLICE_COLORS.length]}
+                />
+              );
+              offset += dash;
+              return circle;
+            })}
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={cn("text-lg font-bold", textClass)}>{displayPct}%</span>
+        <div className="absolute inset-0 flex items-center justify-center px-2">
+          <span className="text-sm font-bold leading-tight">{formatCurrency(total, currency)}</span>
         </div>
       </div>
-      <div className="w-full">
-        <p className="text-xs font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">
-          {formatCurrency(actual, currency)} / {formatCurrency(planned, currency)}
-        </p>
-      </div>
-      {breakdown && breakdown.length > 0 && (
-        <ul className="w-full space-y-0.5 border-t border-border pt-1.5 text-left">
-          {breakdown.map((b) => (
-            <li key={b.key} className="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground">
-              <span className="truncate">{b.label}</span>
-              <span className="whitespace-nowrap">
-                {formatCurrency(b.actual, currency)} / {formatCurrency(b.planned, currency)}
+      {items.length > 0 ? (
+        <ul className="w-full space-y-0.5 text-left">
+          {items.map((item, i) => (
+            <li key={item.key} className="flex items-center justify-between gap-2 text-[0.7rem] text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} />
+                <span className="truncate">{item.label}</span>
               </span>
+              <span className="shrink-0">{formatCurrency(item.amount, currency)}</span>
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="text-[0.7rem] text-muted-foreground">Aucune dépense</p>
       )}
     </div>
   );
