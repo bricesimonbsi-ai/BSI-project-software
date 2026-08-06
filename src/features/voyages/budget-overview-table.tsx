@@ -6,7 +6,8 @@ import { useVoyageSousEtapes, useUpdateSousEtape } from "@/features/voyages/use-
 import {
   useVoyageAllExpenses,
   TRANSVERSE_CATEGORIES,
-  ADMIN_SANTE_SUB_CATEGORIES,
+  ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES,
+  computeAdminSantePlannedTotal,
   groupedCategory,
 } from "@/features/voyages/use-expenses";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
@@ -69,13 +70,7 @@ const CITY_COLUMNS: CityColumn[] = [
   { key: "activites", label: "Activités", category: "activites" },
 ];
 
-// Le visa a sa propre estimation dans la fenêtre du pays (etape-dialog.tsx, rattachée à cette
-// étape précise, pas au voyage) : exclu ici pour éviter la confusion avec les frais
-// administratifs & santé transverses au voyage. "Autre" reste affiché : sans lui, d'éventuelles
-// anciennes lignes (ex. catégories "administratif"/"financement" d'avant l'unification, qui se
-// regroupent sous "autre") comptaient dans le total affiché sans jamais apparaître dans la
-// grille, rendant ce total incompréhensible.
-const ADMIN_SUB_COLUMNS = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa");
+const ADMIN_SUB_COLUMNS = ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES;
 
 type SelectedCell = { sousEtapeId: string; category: ExpenseCategory; subCategory?: string | null; label: string };
 
@@ -151,15 +146,9 @@ export function BudgetOverviewTable({
   const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
   const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
   const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
-  // Même principe que les colonnes du tableau villes : le total prévisionnel est la somme de ce
-  // qui est RÉELLEMENT affiché dans chaque champ (première ligne trouvée par sous-catégorie),
-  // jamais une somme indépendante de toutes les lignes en base — sinon d'éventuelles anciennes
-  // lignes en double (invisibles dans la grille) gonflent le total sans qu'on puisse comprendre
-  // pourquoi. Le réel n'a pas ce problème : ses cases listent déjà toutes les lignes correspondantes.
-  const adminPlannedTotal = ADMIN_SUB_COLUMNS.reduce((sum, s) => {
-    const row = adminRows.find((e) => e.planned && (e.sub_category || "") === s.value);
-    return sum + (row ? row.amount * row.manual_rate_to_reference : 0);
-  }, 0);
+  // Source unique (voir use-expenses.ts) : partagée avec budget-insights.tsx pour que le tableau
+  // et le graphique/résumé du budget affichent toujours exactement le même chiffre.
+  const adminPlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
   const plannedTotalExcludingAdmin = sumAmount(expenses.filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante"));
   const totalPlanned =
     plannedTotalExcludingAdmin + adminPlannedTotal + equipmentPlannedTotal + lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;

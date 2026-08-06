@@ -12,6 +12,8 @@ import {
   ADMIN_SANTE_SUB_CATEGORIES,
   groupedCategory,
   groupedSubCategory,
+  computeAdminSantePlannedBySubCategory,
+  computeAdminSantePlannedTotal,
 } from "@/features/voyages/use-expenses";
 import { CategoryComparisonChart, type CategoryComparisonRow } from "@/features/voyages/category-comparison-chart";
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
@@ -70,9 +72,19 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
   const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
   const lockedPlannedTotal = lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
+  // Source unique (voir use-expenses.ts) : partagée avec budget-overview-table.tsx pour que le
+  // tableau et ce résumé affichent toujours exactement le même chiffre (jamais une somme brute
+  // de toutes les lignes en base, qui compterait en double d'éventuelles anciennes lignes
+  // devenues invisibles dans la grille).
+  const adminSantePlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
 
   const totalPlanned =
-    expenses.filter((e) => e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0) + equipmentPlannedTotal + lockedPlannedTotal;
+    expenses
+      .filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante")
+      .reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0) +
+    adminSantePlannedTotal +
+    equipmentPlannedTotal +
+    lockedPlannedTotal;
   const totalActual = expenses.filter((e) => !e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
 
   const { categoryRows, transportRows, adminSanteRows } = useMemo(() => {
@@ -105,8 +117,9 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
 
   // Toutes les catégories unifiées apparaissent dans le graphique principal, même à 0, pour que
   // sa forme (6 catégories fixes) reste stable d'un voyage à l'autre. Équipement, logement,
-  // nourriture et transport sur place sont injectés depuis leur calcul en direct (voir plus
-  // haut), pas depuis categoryRows (qui ne les contient plus, exclus de `expenses`).
+  // nourriture, transport sur place et administratif & santé sont injectés depuis leur calcul en
+  // direct (voir plus haut), pas depuis categoryRows (qui compterait en double d'éventuelles
+  // anciennes lignes en double pour administratif & santé).
   const mainRows: CategoryComparisonRow[] = EXPENSE_CATEGORIES.map((c) => {
     if (c.value === "equipement") return { key: "equipement", label: c.label, planned: equipmentPlannedTotal, actual: 0 };
     if (c.value === "logement") {
@@ -120,6 +133,10 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     if (c.value === "transport") {
       const base = categoryRows.find((r) => r.key === "transport");
       return { key: "transport", label: c.label, planned: (base?.planned ?? 0) + lockedTotal.localTransport, actual: base?.actual ?? 0 };
+    }
+    if (c.value === "administratif_sante") {
+      const actual = categoryRows.find((r) => r.key === "administratif_sante")?.actual ?? 0;
+      return { key: "administratif_sante", label: c.label, planned: adminSantePlannedTotal, actual };
     }
     return categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 };
   });
@@ -135,7 +152,9 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     ...(lockedTotal.localTransport > 0.01 ? [{ key: "sur_place", label: "Transport sur place", amount: lockedTotal.localTransport }] : []),
   ];
   const transportActualItems = transportRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
-  const adminPlannedItems = adminSanteRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned }));
+  // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
+  // sommerait toutes les lignes correspondantes, doublons compris).
+  const adminPlannedItems = computeAdminSantePlannedBySubCategory(expenses, voyageId);
   const adminActualItems = adminSanteRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
 
   return (

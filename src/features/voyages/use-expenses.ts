@@ -122,6 +122,34 @@ export function groupedSubCategory(e: { category: ExpenseCategory; sub_category:
   return e.sub_category || LEGACY_SUB_CATEGORY[e.category] || "autre";
 }
 
+/** Sous-catégories affichées dans la grille "Administratif & santé" transverse au voyage — le
+ * visa a sa propre estimation, rattachée au pays qui le nécessite (voir etape-dialog.tsx), donc
+ * exclue ici pour ne pas la confondre avec les frais transverses au voyage entier. */
+export const ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES = ADMIN_SANTE_SUB_CATEGORIES.filter((s) => s.value !== "visa");
+
+/** Détail prévisionnel "Administratif & santé" transverse au voyage, un montant par
+ * sous-catégorie affichée — toujours la PREMIÈRE ligne trouvée pour cette sous-catégorie, jamais
+ * une somme de toutes les lignes correspondantes en base : sinon d'éventuelles anciennes lignes
+ * en double (devenues invisibles dans la grille) gonflent le montant sans qu'on puisse comprendre
+ * pourquoi. Source unique utilisée par le tableau détail des dépenses ET le résumé/graphique du
+ * budget (total et détail par anneau), pour qu'ils affichent toujours exactement les mêmes
+ * chiffres. */
+export function computeAdminSantePlannedBySubCategory(
+  expenses: VoyageAllExpense[],
+  voyageId: string
+): { key: string; label: string; amount: number }[] {
+  const adminRows = expenses.filter((e) => e.voyage_id === voyageId && groupedCategory(e.category) === "administratif_sante");
+  return ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES.map((s) => {
+    const row = adminRows.find((e) => e.planned && (e.sub_category || "") === s.value);
+    return { key: s.value, label: s.label, amount: row ? row.amount * row.manual_rate_to_reference : 0 };
+  }).filter((r) => r.amount > 0);
+}
+
+/** Total prévisionnel "Administratif & santé" = somme du détail par sous-catégorie ci-dessus. */
+export function computeAdminSantePlannedTotal(expenses: VoyageAllExpense[], voyageId: string): number {
+  return computeAdminSantePlannedBySubCategory(expenses, voyageId).reduce((sum, r) => sum + r.amount, 0);
+}
+
 export function useVoyageExpenses(voyageId: string | undefined) {
   return useQuery({
     queryKey: ["voyage-expenses", voyageId],
