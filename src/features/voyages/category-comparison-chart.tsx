@@ -57,6 +57,17 @@ function barPct(value: number, groupMax: number): number {
   return Math.max(2, Math.min(100, Math.sqrt(value / groupMax) * 100));
 }
 
+/** Longueur d'une sous-barre (%), part linéaire de la SOMME du sous-groupe (pas de son max comme
+ * barPct), ramenée dans la largeur de la barre parente : la somme des sous-barres correspond donc
+ * à peu près à la barre de la catégorie, plutôt que plusieurs sous-barres pouvant chacune
+ * s'approcher indépendamment de 100% de cette largeur. Plancher minime (toujours < parentPct) pour
+ * qu'un montant non nul, même très petit face aux autres, reste visible. */
+function subBarPct(value: number, sumInDirection: number, parentPct: number): number {
+  if (value <= 0 || sumInDirection <= 0 || parentPct <= 0) return 0;
+  const linear = (value / sumInDirection) * parentPct;
+  return Math.max(Math.min(1.5, parentPct * 0.2), linear);
+}
+
 /** % du prévisionnel déjà consommé (réel / prévu) : null si rien n'est prévu (pourcentage non
  * significatif sans référence à comparer). Exporté : réutilisé pour le % de consommation global
  * du voyage entier, avec les mêmes seuils de couleur. */
@@ -140,7 +151,8 @@ export function CategoryComparisonChart({
         const pct = consumedPct(r.actual, r.planned);
         const hasSubRows = !!r.subRows && r.subRows.length > 0;
         const isExpanded = hasSubRows && expanded.has(r.key);
-        const subGroupMax = hasSubRows ? Math.max(...r.subRows!.flatMap((s) => [s.planned, s.actual]), 1) : 1;
+        const subPlannedSum = hasSubRows ? r.subRows!.reduce((sum, s) => sum + s.planned, 0) : 0;
+        const subActualSum = hasSubRows ? r.subRows!.reduce((sum, s) => sum + s.actual, 0) : 0;
         return (
           <div key={r.key}>
             <div className="flex items-center gap-3">
@@ -179,12 +191,8 @@ export function CategoryComparisonChart({
             {isExpanded && (
               <div className="ml-8 mt-1.5 space-y-1.5 border-l border-border py-0.5 pl-3">
                 {r.subRows!.map((s) => {
-                  // Mise à l'échelle propre au détail (barPct sur subGroupMax) PUIS ramenée dans
-                  // la largeur de la barre parente (actualPct/plannedPct) : une sous-barre ne doit
-                  // jamais paraître plus grande que la barre de sa catégorie, même si elle occupe
-                  // la totalité de son propre sous-groupe.
-                  const sActualPct = (barPct(s.actual, subGroupMax) * actualPct) / 100;
-                  const sPlannedPct = (barPct(s.planned, subGroupMax) * plannedPct) / 100;
+                  const sActualPct = subBarPct(s.actual, subActualSum, actualPct);
+                  const sPlannedPct = subBarPct(s.planned, subPlannedSum, plannedPct);
                   const sPct = consumedPct(s.actual, s.planned);
                   return (
                     <div key={s.key} className="flex items-center gap-3">

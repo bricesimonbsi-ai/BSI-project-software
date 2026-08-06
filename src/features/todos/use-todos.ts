@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { Todo } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export function useTodos(projectId?: string) {
   return useQuery({
@@ -39,6 +44,7 @@ export function useCreateTodo() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+    onError: onMutationError,
   });
 }
 
@@ -59,6 +65,7 @@ export function useUpdateTodo() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+    onError: onMutationError,
   });
 }
 
@@ -70,6 +77,7 @@ export function useToggleTodo() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+    onError: onMutationError,
   });
 }
 
@@ -81,5 +89,6 @@ export function useDeleteTodo() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+    onError: onMutationError,
   });
 }

@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { Project } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export type ProjectWithCategory = Project & {
   categories: { name: string; color: string; module_key: string | null } | null;
@@ -60,6 +65,7 @@ export function useCreateProject() {
       return data as Project;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onError: onMutationError,
   });
 }
 
@@ -74,6 +80,7 @@ export function useUpdateProject() {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["projects", variables.id] });
     },
+    onError: onMutationError,
   });
 }
 
@@ -88,5 +95,6 @@ export function useDeleteProject() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onError: onMutationError,
   });
 }

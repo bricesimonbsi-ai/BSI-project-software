@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { Person, ProjectPerson } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 /** Liste globale des personnes du compte (paramétrable, réutilisable sur tous les projets). */
 export function usePeople() {
@@ -30,6 +35,7 @@ export function useCreatePerson() {
       return data as Person;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["people"] }),
+    onError: onMutationError,
   });
 }
 
@@ -44,6 +50,7 @@ export function useDeletePerson() {
       queryClient.invalidateQueries({ queryKey: ["people"] });
       queryClient.invalidateQueries({ queryKey: ["project-people"] });
     },
+    onError: onMutationError,
   });
 }
 
@@ -73,6 +80,7 @@ export function useAddPersonToProject(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-people", projectId] }),
+    onError: onMutationError,
   });
 }
 
@@ -86,6 +94,7 @@ export function useUpdateProjectPersonBudgetTarget(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-people", projectId] }),
+    onError: onMutationError,
   });
 }
 
@@ -97,5 +106,6 @@ export function useRemovePersonFromProject(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-people", projectId] }),
+    onError: onMutationError,
   });
 }

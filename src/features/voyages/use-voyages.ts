@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import type { Voyage } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export function useVoyage(projectId: string | undefined) {
   return useQuery({
@@ -22,5 +27,6 @@ export function useUpdateVoyage(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage", projectId] }),
+    onError: onMutationError,
   });
 }

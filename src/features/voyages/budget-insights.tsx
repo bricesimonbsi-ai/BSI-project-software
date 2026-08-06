@@ -144,13 +144,10 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     };
   }, [expenses]);
 
-  // L'anneau Transport (et le détail dépliable de la barre Transport ci-dessous) ne détaille QUE
-  // les trajets entre étapes par mode (avion, train, ferry...), jamais le transport sur place
-  // (calculé en direct, sans mode associé) — donc son propre total exclut lockedTotal.localTransport,
-  // contrairement à celui du graphique en barres qui regroupe les deux sous la même catégorie
-  // "Transport".
-  const transportLegPlannedTotal = categoryRows.find((r) => r.key === "transport")?.planned ?? 0;
-  const transportLegActualTotal = categoryRows.find((r) => r.key === "transport")?.actual ?? 0;
+  // Le détail dépliable de la barre Transport ne détaille QUE les trajets entre étapes par mode
+  // (avion, train, ferry...), jamais le transport sur place (calculé en direct, sans mode
+  // associé) — mêmes items que ceux réutilisés dans le détail par sous-type de l'anneau "Toutes
+  // catégories" (voir mainPlannedItems/mainActualItems, qui eux gardent le total combiné).
   const transportPlannedItems = transportRows.filter((r) => r.planned > 0).map((r) => ({ key: r.key, label: r.label, amount: r.planned }));
   const transportActualItems = transportRows.filter((r) => r.actual > 0).map((r) => ({ key: r.key, label: r.label, amount: r.actual }));
   // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
@@ -199,7 +196,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     return categoryRows.find((r) => r.key === c.value) ?? { key: c.value, label: c.label, planned: 0, actual: 0 };
   });
 
-  const adminRow = mainRows.find((r) => r.key === "administratif_sante")!;
   // Vue "Cercle" du graphique principal : mêmes 6 catégories, mêmes couleurs que la vue "Barre"
   // (voir CATEGORY_HUE_HEX) pour qu'un basculement entre les deux vues reste immédiatement
   // reconnaissable catégorie par catégorie.
@@ -318,20 +314,10 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
           <CategoryComparisonChart rows={mainRows} currency={voyage.reference_currency} />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <CategoryBreakdownRing title="Toutes catégories · prévisionnel" total={totalPlanned} items={mainPlannedItems} currency={voyage.reference_currency} size={140} />
-            <CategoryBreakdownRing title="Toutes catégories · réel" total={totalActual} items={mainActualItems} currency={voyage.reference_currency} size={140} />
+            <CategoryBreakdownRing title="Toutes catégories · prévisionnel" total={totalPlanned} items={mainPlannedItems} currency={voyage.reference_currency} size={140} strokeWidth={18} />
+            <CategoryBreakdownRing title="Toutes catégories · réel" total={totalActual} items={mainActualItems} currency={voyage.reference_currency} size={140} strokeWidth={18} />
           </div>
         )}
-      </div>
-
-      <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail transport et administratif & santé</h3>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <CategoryBreakdownRing title="Transport · prévisionnel" total={transportLegPlannedTotal} items={transportPlannedItems} currency={voyage.reference_currency} />
-          <CategoryBreakdownRing title="Transport · réel" total={transportLegActualTotal} items={transportActualItems} currency={voyage.reference_currency} />
-          <CategoryBreakdownRing title="Admin. & santé · prévisionnel" total={adminRow.planned} items={adminPlannedItems} currency={voyage.reference_currency} />
-          <CategoryBreakdownRing title="Admin. & santé · réel" total={adminRow.actual} items={adminActualItems} currency={voyage.reference_currency} />
-        </div>
       </div>
 
       <BudgetOverviewTable

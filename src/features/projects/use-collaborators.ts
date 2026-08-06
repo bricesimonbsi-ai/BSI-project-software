@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { Permission, ProjectCollaborator } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export function useCollaborators(projectId: string) {
   return useQuery({
@@ -29,6 +34,7 @@ export function useAddCollaborator(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collaborators", projectId] }),
+    onError: onMutationError,
   });
 }
 
@@ -40,5 +46,6 @@ export function useRemoveCollaborator(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collaborators", projectId] }),
+    onError: onMutationError,
   });
 }

@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { DocumentRow } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 const BUCKET = "project-documents";
 
@@ -40,6 +45,7 @@ export function useUploadDocument(projectId: string, voyageEtapeId?: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", projectId] }),
+    onError: onMutationError,
   });
 }
 
@@ -52,6 +58,7 @@ export function useDeleteDocument(projectId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", projectId] }),
+    onError: onMutationError,
   });
 }
 

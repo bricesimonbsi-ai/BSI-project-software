@@ -16,6 +16,7 @@ export function CategoryBreakdownRing({
   items,
   currency,
   size = 108,
+  strokeWidth = 14,
 }: {
   title: string;
   total: number;
@@ -25,8 +26,8 @@ export function CategoryBreakdownRing({
   items: { key: string; label: string; amount: number; color?: string }[];
   currency: string;
   size?: number;
+  strokeWidth?: number;
 }) {
-  const strokeWidth = 14;
   const radius = size / 2 - strokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
   const sliceTotal = items.reduce((sum, i) => sum + i.amount, 0);

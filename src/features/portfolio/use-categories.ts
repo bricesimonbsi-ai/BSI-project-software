@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import type { Category } from "@/types/database";
+
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+}
 
 export function useCategories() {
   return useQuery({
@@ -21,6 +26,7 @@ export function useCreateCategory() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
+    onError: onMutationError,
   });
 }
 
@@ -32,5 +38,6 @@ export function useUpdateCategory() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
+    onError: onMutationError,
   });
 }
