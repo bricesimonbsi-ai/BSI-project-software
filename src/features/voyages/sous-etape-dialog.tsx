@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateSousEtape, useUpdateSousEtape, useInsertSousEtapeAt, useDeleteSousEtape } from "@/features/voyages/use-sous-etapes";
-import { useUpdateEtape } from "@/features/voyages/use-etapes";
 import { useSousEtapeExpenses, ETAPE_CATEGORIES } from "@/features/voyages/use-expenses";
 import { TRANSPORT_MODE_OPTIONS, haversineDistanceKm } from "@/features/voyages/itinerary/itinerary-model";
 import { CityPicker, findCountryByName } from "@/features/voyages/itinerary/location-pickers";
@@ -134,7 +133,6 @@ export function SousEtapeDialog({
   const insertSousEtapeAt = useInsertSousEtapeAt(etapeId);
   const updateAnySousEtape = useUpdateSousEtape(etapeId);
   const deleteSousEtape = useDeleteSousEtape(etapeId);
-  const updateEtape = useUpdateEtape(etape.voyage_id);
   const { data: onSiteExpenses } = useSousEtapeExpenses(existing?.id);
   // Tant que cette requête n'a jamais chargé, "pas de ligne trouvée" ne veut pas dire "elle
   // n'existe pas" : sans ce garde-fou, EditableExpenseAmount en créerait une en double à chaque
@@ -176,9 +174,11 @@ export function SousEtapeDialog({
         style: travelStyle ?? "standard",
         travelerCount: travelerCount ?? 1,
         lodgingCount: lodgingCount ?? 1,
-        lodgingOverride: etape.lodging_cost_per_night,
-        foodOverride: etape.food_cost_per_day,
-        localTransportOverride: etape.local_transport_cost_per_day,
+        // Overrides propres à cette ville (pas au pays) : ajuster le taux ici ne doit jamais
+        // changer le montant affiché pour les autres villes du même pays.
+        lodgingOverride: existing?.lodging_cost_per_night ?? null,
+        foodOverride: existing?.food_cost_per_day ?? null,
+        localTransportOverride: existing?.local_transport_cost_per_day ?? null,
       });
       if (!cancelled) setPlannedCosts(result);
     }
@@ -195,9 +195,9 @@ export function SousEtapeDialog({
     travelStyle,
     travelerCount,
     lodgingCount,
-    etape.lodging_cost_per_night,
-    etape.food_cost_per_day,
-    etape.local_transport_cost_per_day,
+    existing?.lodging_cost_per_night,
+    existing?.food_cost_per_day,
+    existing?.local_transport_cost_per_day,
   ]);
 
   async function handleSuggestClimate(latOverride?: number, lonOverride?: number) {
@@ -412,9 +412,9 @@ export function SousEtapeDialog({
               <p className="text-xs text-muted-foreground">
                 Logement, nourriture et transport sur place se calculent automatiquement (taux journalier x nombre de
                 nuits, voir l'unité sous chaque ligne) et ne se saisissent plus directement ici : ajuste le taux ou le
-                nombre de nuits ci-dessus, le total se recalcule seul. Le taux journalier s'applique à tout le pays
-                "{etape.country_region}" (partagé par toutes ses villes). Transport (vers la suivante) et Activités
-                restent librement modifiables.
+                nombre de nuits ci-dessus, le total se recalcule seul. Le taux journalier ne s'applique qu'à cette
+                ville — l'ajuster ne change rien pour les autres villes du pays. Transport (vers la suivante) et
+                Activités restent librement modifiables.
               </p>
               <ul className="divide-y divide-border rounded-md border border-border">
                 <li className="flex items-center justify-between gap-3 p-3">
@@ -451,7 +451,7 @@ export function SousEtapeDialog({
                   </div>
                   <DailyRateInput
                     value={plannedCosts.rates.localTransport}
-                    onCommit={(v) => updateEtape.mutate({ id: etape.id, local_transport_cost_per_day: v })}
+                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, local_transport_cost_per_day: v })}
                     suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
                   />
                 </li>
@@ -468,7 +468,7 @@ export function SousEtapeDialog({
                   </div>
                   <DailyRateInput
                     value={plannedCosts.rates.lodging}
-                    onCommit={(v) => updateEtape.mutate({ id: etape.id, lodging_cost_per_night: v })}
+                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, lodging_cost_per_night: v })}
                     suffix={`${referenceCurrency ?? "EUR"} / logement / nuit`}
                   />
                 </li>
@@ -487,7 +487,7 @@ export function SousEtapeDialog({
                   </div>
                   <DailyRateInput
                     value={plannedCosts.rates.food}
-                    onCommit={(v) => updateEtape.mutate({ id: etape.id, food_cost_per_day: v })}
+                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, food_cost_per_day: v })}
                     suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
                   />
                 </li>

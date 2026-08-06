@@ -58,9 +58,11 @@ export function useCityLockedCostsMap(params: {
           const rates = await estimateCityDailyRates({
             countryCode,
             style: travelStyle,
-            lodgingOverride: etape.lodging_cost_per_night,
-            foodOverride: etape.food_cost_per_day,
-            localTransportOverride: etape.local_transport_cost_per_day,
+            // Overrides propres à CETTE ville, pas au pays : ajuster le taux d'une ville ne doit
+            // jamais changer le montant affiché pour les autres villes du même pays.
+            lodgingOverride: se.lodging_cost_per_night,
+            foodOverride: se.food_cost_per_day,
+            localTransportOverride: se.local_transport_cost_per_day,
           });
           const nights = se.duration_days ?? 0;
           const rooms = Math.max(1, lodgingCount || 1);

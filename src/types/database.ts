@@ -167,13 +167,13 @@ export type VoyageEtape = {
   latitude: number | null;
   longitude: number | null;
   climate_by_month: ClimateRating[] | null;
-  /** Override manuel du tarif hébergement/nuit utilisé dans l'estimation budgétaire pour ce
-   * pays (EUR) ; null = utiliser l'estimation automatique (coût de la vie par pays). */
+  /** @deprecated Les taux journaliers sont désormais overridables par VILLE, pas par pays (voir
+   * les mêmes champs sur VoyageSousEtape) — ces colonnes restent en base pour ne pas perdre
+   * d'anciennes valeurs déjà saisies, mais l'application n'y écrit plus. */
   lodging_cost_per_night: number | null;
-  /** Override manuel du tarif nourriture/jour et par personne (EUR) ; null = estimation auto. */
+  /** @deprecated voir lodging_cost_per_night. */
   food_cost_per_day: number | null;
-  /** Override manuel du forfait transport sur place, par jour et par personne (EUR) ; null =
-   * forfait par défaut (voir DEFAULT_LOCAL_TRANSPORT_EUR_PER_DAY dans cost-of-living.ts). */
+  /** @deprecated voir lodging_cost_per_night. */
   local_transport_cost_per_day: number | null;
   created_at: string;
   updated_at: string;
@@ -197,6 +197,16 @@ export type VoyageSousEtape = {
   longitude: number | null;
   distance_km: number | null;
   climate_by_month: ClimateRating[] | null;
+  /** Override manuel du tarif hébergement/nuit pour CETTE ville (EUR) ; null = estimation
+   * automatique (coût de la vie par pays). Propre à la ville, pas partagé avec les autres villes
+   * du même pays. */
+  lodging_cost_per_night: number | null;
+  /** Override manuel du tarif nourriture/jour et par personne pour cette ville (EUR) ; null =
+   * estimation auto. */
+  food_cost_per_day: number | null;
+  /** Override manuel du forfait transport sur place, par jour et par personne, pour cette ville
+   * (EUR) ; null = forfait par défaut (voir DEFAULT_LOCAL_TRANSPORT_EUR_PER_DAY). */
+  local_transport_cost_per_day: number | null;
   created_at: string;
   updated_at: string;
 };
