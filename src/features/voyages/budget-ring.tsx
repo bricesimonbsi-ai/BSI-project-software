@@ -13,12 +13,15 @@ export function BudgetRing({
   actual,
   currency,
   size = 96,
+  /** Sous-détail optionnel affiché sous le libellé (ex. avion/train/bus pour un anneau "Transport"). */
+  breakdown,
 }: {
   label: string;
   planned: number;
   actual: number;
   currency: string;
   size?: number;
+  breakdown?: { key: string; label: string; planned: number; actual: number }[];
 }) {
   const pct = planned > 0 ? (actual / planned) * 100 : actual > 0 ? 100 : 0;
   const displayPct = Math.round(pct);
@@ -65,12 +68,24 @@ export function BudgetRing({
           <span className={cn("text-lg font-bold", textClass)}>{displayPct}%</span>
         </div>
       </div>
-      <div>
+      <div className="w-full">
         <p className="text-xs font-medium">{label}</p>
         <p className="text-xs text-muted-foreground">
           {formatCurrency(actual, currency)} / {formatCurrency(planned, currency)}
         </p>
       </div>
+      {breakdown && breakdown.length > 0 && (
+        <ul className="w-full space-y-0.5 border-t border-border pt-1.5 text-left">
+          {breakdown.map((b) => (
+            <li key={b.key} className="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground">
+              <span className="truncate">{b.label}</span>
+              <span className="whitespace-nowrap">
+                {formatCurrency(b.actual, currency)} / {formatCurrency(b.planned, currency)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

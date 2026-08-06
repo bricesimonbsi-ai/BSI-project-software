@@ -123,35 +123,29 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         </Card>
       </div>
 
-      <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévisionnel / réel par catégorie</h3>
-        <CategoryComparisonChart rows={mainRows} currency={voyage.reference_currency} />
-      </div>
-
-      {(transportRows.length > 0 || adminSanteRows.length > 0) && (
-        <div className="grid gap-5 sm:grid-cols-2">
-          {transportRows.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail transport</h3>
-              <div className="flex flex-wrap gap-4">
-                {transportRows.map((r) => (
-                  <BudgetRing key={r.key} label={r.label} planned={r.planned} actual={r.actual} currency={voyage.reference_currency} size={84} />
-                ))}
-              </div>
-            </div>
-          )}
-          {adminSanteRows.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail administratif & santé</h3>
-              <div className="flex flex-wrap gap-4">
-                {adminSanteRows.map((r) => (
-                  <BudgetRing key={r.key} label={r.label} planned={r.planned} actual={r.actual} currency={voyage.reference_currency} size={84} />
-                ))}
-              </div>
-            </div>
-          )}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévisionnel / réel par catégorie</h3>
+          <CategoryComparisonChart rows={mainRows} currency={voyage.reference_currency} />
         </div>
-      )}
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail par catégorie</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2">
+            {mainRows.map((r) => (
+              <div key={r.key} className="flex flex-col items-center gap-1.5 rounded-md border border-border p-2.5">
+                <BudgetRing
+                  label={r.label}
+                  planned={r.planned}
+                  actual={r.actual}
+                  currency={voyage.reference_currency}
+                  size={72}
+                  breakdown={r.key === "transport" ? transportRows : r.key === "administratif_sante" ? adminSanteRows : undefined}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <BudgetOverviewTable
         voyageId={voyageId}

@@ -1,11 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
+import { toast } from "@/hooks/use-toast";
 import type { VoyageEquipment } from "@/types/database";
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, voyageId: string) {
   queryClient.invalidateQueries({ queryKey: ["voyage-equipment", voyageId] });
   queryClient.invalidateQueries({ queryKey: ["todos"] });
+}
+
+/** Affiche l'erreur au lieu de la laisser silencieuse : sans ça, un échec de mutation (ex. la
+ * migration ajoutant une colonne pas encore appliquée côté base) se traduit juste par une case
+ * qui semble se cocher puis "revient en arrière" sans explication au prochain changement d'onglet. */
+function onMutationError(err: unknown) {
+  toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
 }
 
 export function useVoyageEquipment(voyageId: string | undefined) {
@@ -41,6 +49,7 @@ export function useCheckEquipment(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(queryClient, voyageId),
+    onError: onMutationError,
   });
 }
 
@@ -53,6 +62,7 @@ export function useUncheckEquipment(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(queryClient, voyageId),
+    onError: onMutationError,
   });
 }
 
@@ -64,6 +74,7 @@ export function useUpdateEquipmentQuantity(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(queryClient, voyageId),
+    onError: onMutationError,
   });
 }
 
@@ -76,6 +87,7 @@ export function useUpdateEquipmentPrice(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(queryClient, voyageId),
+    onError: onMutationError,
   });
 }
 
@@ -89,5 +101,6 @@ export function useUpdateEquipmentOwned(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(queryClient, voyageId),
+    onError: onMutationError,
   });
 }

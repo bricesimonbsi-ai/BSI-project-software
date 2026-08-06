@@ -67,7 +67,10 @@ export function EditableExpenseAmount({
   function handleBlur() {
     const amount = value.trim() === "" ? 0 : Math.max(0, Number(value));
     if (existing) {
-      if (amount !== existing.amount || existing.is_estimated) {
+      // Ne fige la ligne (is_estimated -> false) que si la valeur a réellement changé : un
+      // simple focus/blur sans saisie (ex. tabulation dans le tableau) ne doit pas figer un
+      // montant encore auto-estimé, sinon il ne se resynchroniserait plus jamais tout seul.
+      if (amount !== existing.amount) {
         updateExpense.mutate({ id: existing.id, amount, is_estimated: false });
       }
     } else if (amount > 0 && !creatingRef.current) {

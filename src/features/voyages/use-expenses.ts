@@ -201,6 +201,11 @@ type ExpenseInput = {
   is_estimated?: boolean;
 };
 
+/** Une dépense peut être affichée à travers plusieurs requêtes différentes selon l'endroit
+ * (vue d'ensemble du voyage, dialogue d'une ville, dialogue d'un pays...) : on invalide donc
+ * systématiquement TOUTES les clés de requête de dépenses, pas seulement celle passée en
+ * paramètre, pour qu'une modification faite n'importe où se reflète immédiatement partout
+ * ailleurs sans avoir à revisiter l'onglet concerné. */
 function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>, invalidateKey: unknown[]) {
   queryClient.invalidateQueries({ queryKey: invalidateKey });
   queryClient.invalidateQueries({ queryKey: ["voyage-budget-summary"] });
@@ -209,6 +214,8 @@ function invalidateBudgetQueries(queryClient: ReturnType<typeof useQueryClient>,
   queryClient.invalidateQueries({ queryKey: ["voyage-person-expense-summary"] });
   queryClient.invalidateQueries({ queryKey: ["voyage-all-expenses"] });
   queryClient.invalidateQueries({ queryKey: ["etape-expenses"] });
+  queryClient.invalidateQueries({ queryKey: ["sous-etape-expenses"] });
+  queryClient.invalidateQueries({ queryKey: ["voyage-expenses"] });
 }
 
 export function useCreateExpense(

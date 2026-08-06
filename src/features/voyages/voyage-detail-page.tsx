@@ -170,9 +170,19 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Style de voyage</Label>
+                  {/* Enregistré immédiatement (pas seulement via le bouton "Enregistrer" du
+                   * reste du formulaire) : ce choix pilote les estimations prévisionnelles
+                   * affichées dans tout l'onglet Budget, elles doivent se recalculer sans
+                   * action supplémentaire dès qu'il change. */}
                   <Select
                     value={form.travel_style}
-                    onValueChange={(v) => setForm({ ...form, travel_style: v as TravelStyle })}
+                    onValueChange={(v) => {
+                      setForm({ ...form, travel_style: v as TravelStyle });
+                      updateVoyage.mutate(
+                        { travel_style: v as TravelStyle },
+                        { onError: (err) => toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" }) }
+                      );
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
