@@ -83,6 +83,12 @@ export type Todo = {
   done: boolean;
   due_date: string | null;
   assignee_id: string | null;
+  /** Personne (répertoire "people", ex. un voyageur) à qui la tâche est assignée ; null si non
+   * assignée à une personne précise (voir aussi `assigned_to_all`). */
+  assigned_person_id: string | null;
+  /** Vrai = assignée à tous les voyageurs/personnes du projet plutôt qu'à une personne précise ;
+   * mutuellement exclusif avec `assigned_person_id` (géré côté application). */
+  assigned_to_all: boolean;
   category: TodoCategory | null;
   auto_generated: boolean;
   source_etape_id: string | null;

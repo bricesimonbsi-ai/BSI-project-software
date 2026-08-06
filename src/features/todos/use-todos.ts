@@ -20,12 +20,20 @@ export function useCreateTodo() {
   const queryClient = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async (input: { title: string; project_id?: string | null; due_date?: string | null }) => {
+    mutationFn: async (input: {
+      title: string;
+      project_id?: string | null;
+      due_date?: string | null;
+      assigned_person_id?: string | null;
+      assigned_to_all?: boolean;
+    }) => {
       if (!session) throw new Error("Non authentifié");
       const { error } = await supabase.from("todos").insert({
         title: input.title,
         project_id: input.project_id ?? null,
         due_date: input.due_date ?? null,
+        assigned_person_id: input.assigned_person_id ?? null,
+        assigned_to_all: input.assigned_to_all ?? false,
         created_by: session.user.id,
       });
       if (error) throw error;
@@ -37,7 +45,16 @@ export function useCreateTodo() {
 export function useUpdateTodo() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; title?: string; due_date?: string | null }) => {
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: string;
+      title?: string;
+      due_date?: string | null;
+      assigned_person_id?: string | null;
+      assigned_to_all?: boolean;
+    }) => {
       const { error } = await supabase.from("todos").update(updates).eq("id", id);
       if (error) throw error;
     },
