@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useCreateExpense, useUpdateExpense } from "@/features/voyages/use-expenses";
 import { cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
+import { RotateCcw } from "lucide-react";
 
 /**
  * Case éditable liée à UNE dépense réelle (`voyage_expenses`), pas à un calcul parallèle.
@@ -119,17 +121,59 @@ export function EditableExpenseAmount({
     }
   }
 
+  // Remet la ligne sur l'estimation courante (et la fait ressuivre les estimations futures, en
+  // repassant is_estimated à vrai) — pour annuler une saisie manuelle sans avoir à retaper le
+  // chiffre à la main, ni deviner ce que l'estimation vaut actuellement.
+  function handleResetToEstimate() {
+    if (estimate == null) return;
+    const rounded = Math.round(estimate * 100) / 100;
+    setValue(rounded.toString());
+    if (existing) {
+      if (existing.amount !== rounded || !existing.is_estimated) {
+        updateExpense.mutate({ id: existing.id, amount: rounded, is_estimated: true });
+      }
+    } else if (rounded > 0 && !creatingRef.current) {
+      creatingRef.current = true;
+      createExpense.mutate(
+        {
+          category,
+          sub_category: subCategory,
+          planned,
+          amount: rounded,
+          currency: referenceCurrency,
+          manual_rate_to_reference: 1,
+          is_estimated: true,
+        },
+        { onError: () => { creatingRef.current = false; } }
+      );
+    }
+  }
+
   return (
-    <Input
-      type="number"
-      step="0.01"
-      min="0"
-      value={value}
-      placeholder={estimate != null && estimate > 0 ? Math.round(estimate).toString() : "0"}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-      className={className}
-    />
+    <div className="flex items-center gap-1">
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        value={value}
+        placeholder={estimate != null && estimate > 0 ? Math.round(estimate).toString() : "0"}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleBlur}
+        className={className}
+      />
+      {estimate != null && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={handleResetToEstimate}
+          title="Revenir à l'estimation automatique"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
   );
 }
 
