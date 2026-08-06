@@ -43,7 +43,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
     reference_currency: "EUR",
     lodging_count: "",
     travel_style: "standard" as TravelStyle,
-    budget_target_per_person: "",
   });
 
   useEffect(() => {
@@ -52,7 +51,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         reference_currency: voyage.reference_currency,
         lodging_count: voyage.lodging_count?.toString() ?? "",
         travel_style: voyage.travel_style ?? "standard",
-        budget_target_per_person: voyage.budget_target_per_person?.toString() ?? "",
       });
     }
     if (project?.categories?.color) setAccentColor(project.categories.color);
@@ -77,7 +75,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         reference_currency: form.reference_currency,
         lodging_count: form.lodging_count ? Number(form.lodging_count) : null,
         travel_style: form.travel_style,
-        budget_target_per_person: form.budget_target_per_person ? Number(form.budget_target_per_person) : null,
       });
       toast({ title: "Voyage mis à jour" });
     } catch (err) {
@@ -204,16 +201,6 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Budget cible par personne (optionnel)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.budget_target_per_person}
-                    onChange={(e) => setForm({ ...form, budget_target_per_person: e.target.value })}
-                  />
                 </div>
               </div>
               <Button onClick={handleSaveOverview}>Enregistrer</Button>

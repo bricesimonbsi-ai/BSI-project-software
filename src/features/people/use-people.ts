@@ -76,6 +76,19 @@ export function useAddPersonToProject(projectId: string) {
   });
 }
 
+/** Budget cible d'un voyageur pour ce projet précis (rattaché au lien personne <-> projet, voir
+ * ProjectPerson.budget_target) — jamais à la personne elle-même. */
+export function useUpdateProjectPersonBudgetTarget(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, budget_target }: { id: string; budget_target: number | null }) => {
+      const { error } = await supabase.from("project_people").update({ budget_target }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-people", projectId] }),
+  });
+}
+
 export function useRemovePersonFromProject(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

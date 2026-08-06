@@ -211,13 +211,42 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     .map((r) => ({ key: r.key, label: r.label, amount: r.actual, color: CATEGORY_HUE_HEX[r.key] }));
 
   const globalPct = consumedPct(totalActual, totalPlanned);
+  // Les montants saisis sont des totaux partagés, jamais rattachés à un voyageur en particulier
+  // (voir plus haut pourquoi "Dépenses par personne" a été retiré) : le réel "par personne" est
+  // donc la moyenne du total sur le nombre de voyageurs, comparée à la cible propre de CHAQUE
+  // voyageur — deux voyageurs peuvent ainsi avoir un % très différent avec le même montant moyen,
+  // selon leur propre budget cible.
+  const actualPerTraveler = totalActual / travelerCount;
 
   return (
     <div className="space-y-5">
       <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-sm font-semibold text-muted-foreground">Budget prévisionnel consommé</p>
-          <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-muted-foreground">Budget prévisionnel consommé</p>
+            <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
+          </div>
+          {linkedPeople && linkedPeople.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+              {linkedPeople.map((l, i) => (
+                <div key={l.person_id} className="flex items-center gap-1.5">
+                  <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-6 w-6 text-xs" />
+                  <span className="text-xs text-muted-foreground">{l.people.name}</span>
+                  {l.budget_target != null ? (
+                    <ConsumedPctBadge
+                      pct={consumedPct(actualPerTraveler, l.budget_target)}
+                      className="text-[0.7rem]"
+                      title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
+                    />
+                  ) : (
+                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[0.7rem] font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
+                      cible manquante
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -255,9 +284,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
             </div>
             <p className="text-lg font-bold">
               {formatCurrency(totalPlanned / travelerCount, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">
-                prévu{voyage.budget_target_per_person ? ` / cible ${formatCurrency(voyage.budget_target_per_person, voyage.reference_currency)}` : ""}
-              </span>
+              <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
             </p>
             <p className="text-lg font-bold">
               {formatCurrency(totalActual / travelerCount, voyage.reference_currency)}

@@ -145,6 +145,10 @@ export type ProjectPerson = {
   id: string;
   project_id: string;
   person_id: string;
+  /** Budget cible pour CETTE personne sur CE projet (EUR) ; null = pas encore renseigné. Propre
+   * au lien personne <-> projet (pas à la personne elle-même), une même personne pouvant avoir
+   * une cible différente d'un voyage à l'autre. */
+  budget_target: number | null;
   created_at: string;
 };
 
