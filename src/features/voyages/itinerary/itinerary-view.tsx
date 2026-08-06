@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, CarTaxiFront, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEtapes, useReorderEtapes, useDeleteEtape } from "@/features/voyages/use-etapes";
 import {
@@ -58,6 +58,7 @@ function transportIcon(mode: string | null) {
   if (m.includes("avion")) return Plane;
   if (m.includes("train")) return TrainFront;
   if (m.includes("bus")) return Bus;
+  if (m.includes("taxi") || m.includes("vtc")) return CarTaxiFront;
   if (m.includes("voiture")) return Car;
   if (m.includes("ferry") || m.includes("bateau")) return Ship;
   return MoveRight;
@@ -70,6 +71,7 @@ function transportIconColorClass(mode: string | null): string {
   if (m.includes("avion")) return "text-sky-600 dark:text-sky-400";
   if (m.includes("train")) return "text-violet-600 dark:text-violet-400";
   if (m.includes("bus")) return "text-amber-600 dark:text-amber-400";
+  if (m.includes("taxi") || m.includes("vtc")) return "text-rose-600 dark:text-rose-400";
   if (m.includes("voiture")) return "text-slate-600 dark:text-slate-400";
   if (m.includes("ferry") || m.includes("bateau")) return "text-cyan-600 dark:text-cyan-400";
   return "text-muted-foreground";

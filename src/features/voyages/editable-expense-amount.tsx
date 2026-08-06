@@ -11,6 +11,11 @@ import type { ExpenseCategory, VoyageExpense } from "@/types/database";
  * nuits) — c'est ce qui permet à un ajustement en amont (dates, distance...) de se répercuter
  * sans action de l'utilisateur. Dès qu'il tape une valeur lui-même, `is_estimated` passe à faux
  * et la ligne reste figée sur sa saisie, même si l'estimation évolue ensuite.
+ *
+ * En mode `readOnly`, l'affichage ignore complètement la ligne synchronisée et montre
+ * `estimate` en direct (voir `displayValue` plus bas) : la synchronisation en base tourne
+ * quand même en arrière-plan pour les agrégats, mais jamais au prix d'un affichage périmé le
+ * temps qu'elle rattrape son retard.
  */
 export function EditableExpenseAmount({
   scope,
@@ -71,6 +76,14 @@ export function EditableExpenseAmount({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing, estimate]);
 
+  // En lecture seule, l'affichage vient DIRECTEMENT de `estimate` (calculé en direct par
+  // l'appelant à partir du taux journalier x nuits), jamais de la ligne `voyage_expenses`
+  // elle-même : la synchroniser en base ci-dessus reste utile pour les agrégats/exports, mais
+  // ne doit jamais conditionner ce qui s'affiche. Sans ça, l'utilisateur voit un montant périmé
+  // tant que le cycle mutation -> invalidation -> refetch de la ligne n'a pas fini de tourner —
+  // exactement le bug déjà rencontré (et corrigé de la même façon) sur le total équipement.
+  const displayValue = readOnly ? (estimate != null ? (Math.round(estimate * 100) / 100).toString() : "0") : value;
+
   function handleBlur() {
     const amount = value.trim() === "" ? 0 : Math.max(0, Number(value));
     if (existing) {
@@ -99,7 +112,7 @@ export function EditableExpenseAmount({
       type="number"
       step="0.01"
       min="0"
-      value={value}
+      value={displayValue}
       placeholder={estimate != null && estimate > 0 ? Math.round(estimate).toString() : "0"}
       onChange={readOnly ? undefined : (e) => setValue(e.target.value)}
       onBlur={readOnly ? undefined : handleBlur}

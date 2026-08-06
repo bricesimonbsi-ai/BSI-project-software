@@ -138,6 +138,7 @@ export const TRANSPORT_MODE_OPTIONS: { value: string; label: string }[] = [
   { value: "avion", label: "Avion" },
   { value: "train", label: "Train" },
   { value: "bus", label: "Bus" },
+  { value: "taxi", label: "Taxi / VTC" },
   { value: "voiture", label: "Voiture" },
   { value: "ferry", label: "Ferry / bateau" },
   { value: "autre", label: "Autre" },

@@ -40,7 +40,7 @@ export const TRANSPORT_SUB_CATEGORIES: { value: string; label: string }[] = [
   { value: "avion", label: "Avion" },
   { value: "train", label: "Train" },
   { value: "bus", label: "Bus" },
-  { value: "taxi", label: "Taxi" },
+  { value: "taxi", label: "Taxi / VTC" },
   { value: "voiture", label: "Voiture" },
   { value: "ferry_bateau", label: "Ferry / Bateau" },
   { value: "sur_place", label: "Transport sur place" },
