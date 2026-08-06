@@ -438,64 +438,70 @@ export function SousEtapeDialog({
                     />
                   </div>
                 </li>
-                <li className="flex flex-col gap-2 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Transport sur place</p>
                       <p className="text-xs text-muted-foreground">Taux par personne / jour x {nights || existing.duration_days || 0} nuit(s) x {travelerCount ?? 1} voyageur(s)</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <DailyRateInput
+                      value={plannedCosts.rates.localTransport}
+                      onCommit={(v) => updateSousEtape.mutate({ id: existing.id, local_transport_cost_per_day: v })}
+                      suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    {/* Même imbrication (gap-2 puis gap-1) que EditableExpenseAmount, pour que la
+                        largeur totale — donc la position de l'étiquette "Prévisionnel" — soit
+                        rigoureusement identique aux lignes qui ont un vrai bouton. */}
+                    <div className="flex items-center gap-1">
                       <ComputedCostAmount amount={plannedCosts.localTransport} className="w-24" />
-                      {/* Espace réservé de la même taille que le bouton de réinitialisation (voir
-                          EditableExpenseAmount) pour que l'étiquette "Prévisionnel" reste alignée
-                          entre les lignes, avec ou sans bouton. */}
                       <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
-                  <DailyRateInput
-                    value={plannedCosts.rates.localTransport}
-                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, local_transport_cost_per_day: v })}
-                    suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
-                  />
                 </li>
-                <li className="flex flex-col gap-2 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Logement</p>
                       <p className="text-xs text-muted-foreground">Taux par logement / nuit x {nights || existing.duration_days || 0} nuit(s)</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <DailyRateInput
+                      value={plannedCosts.rates.lodging}
+                      onCommit={(v) => updateSousEtape.mutate({ id: existing.id, lodging_cost_per_night: v })}
+                      suffix={`${referenceCurrency ?? "EUR"} / logement / nuit`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <div className="flex items-center gap-1">
                       <ComputedCostAmount amount={plannedCosts.lodging} className="w-24" />
                       <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
-                  <DailyRateInput
-                    value={plannedCosts.rates.lodging}
-                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, lodging_cost_per_night: v })}
-                    suffix={`${referenceCurrency ?? "EUR"} / logement / nuit`}
-                  />
                 </li>
-                <li className="flex flex-col gap-2 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                <li className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Nourriture</p>
                       <p className="text-xs text-muted-foreground">
                         Taux par personne / jour x {nights || existing.duration_days || 0} nuit(s) x {travelerCount ?? 1} voyageur(s)
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <DailyRateInput
+                      value={plannedCosts.rates.food}
+                      onCommit={(v) => updateSousEtape.mutate({ id: existing.id, food_cost_per_day: v })}
+                      suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
+                    <div className="flex items-center gap-1">
                       <ComputedCostAmount amount={plannedCosts.food} className="w-24" />
                       <span className="h-9 w-9 shrink-0" aria-hidden="true" />
                     </div>
                   </div>
-                  <DailyRateInput
-                    value={plannedCosts.rates.food}
-                    onCommit={(v) => updateSousEtape.mutate({ id: existing.id, food_cost_per_day: v })}
-                    suffix={`${referenceCurrency ?? "EUR"} / personne / jour`}
-                  />
                 </li>
                 <li className="flex items-center justify-between gap-3 p-3">
                   <div>
