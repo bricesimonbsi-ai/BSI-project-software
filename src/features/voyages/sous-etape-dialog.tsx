@@ -58,6 +58,7 @@ export function SousEtapeDialog({
   trigger,
   previousPoint,
   previousRowId,
+  nextPoint,
   insertAtIndex,
   isFirstOverall,
   projectId,
@@ -77,6 +78,12 @@ export function SousEtapeDialog({
   trigger?: ReactNode | null;
   previousPoint?: { lat: number; lng: number } | null;
   previousRowId?: string;
+  /** Coordonnées de la ville SUIVANTE dans l'itinéraire (si connues) : sert à recalculer en
+   * direct la distance du trajet sortant pour l'estimation "Transport (vers la suivante)",
+   * sans dépendre du champ `distance_km` persisté — qui n'est recalculé qu'au chargement de
+   * l'onglet Itinéraire (auto-guérison) et peut donc être encore vide/périmé juste après un
+   * ajout ou déplacement de ville. Null si cette ville est la dernière de l'itinéraire. */
+  nextPoint?: { lat: number; lng: number } | null;
   insertAtIndex?: number;
   /** Vrai uniquement pour la toute première ville de l'ensemble de l'itinéraire (l'ancre) :
    * c'est la seule dont la date de début est librement modifiable ici. Pour toutes les autres,
@@ -141,12 +148,26 @@ export function SousEtapeDialog({
   // section "Dépenses réelles", même s'il existe d'anciennes lignes en doublon.
   const actualExpenses = (onSiteExpenses ?? []).filter((e) => !e.planned);
 
+  // La distance stockée (`distance_km`) n'est recalculée qu'à l'ouverture de l'onglet Itinéraire
+  // (auto-guérison, voir ItineraryView) : juste après un ajout/déplacement de ville, elle peut
+  // donc être encore vide alors que les coordonnées GPS des deux villes sont déjà connues. On
+  // recalcule ici en direct dès que possible, pour que l'estimation du trajet ne dépende jamais
+  // d'un champ potentiellement pas encore synchronisé.
+  const liveLat = latitude ? Number(latitude) : existing?.latitude ?? null;
+  const liveLon = longitude ? Number(longitude) : existing?.longitude ?? null;
+  const effectiveDistanceKm =
+    liveLat != null && liveLon != null && nextPoint
+      ? haversineDistanceKm(liveLat, liveLon, nextPoint.lat, nextPoint.lng)
+      : distanceKm
+        ? Number(distanceKm)
+        : null;
+
   useEffect(() => {
     let cancelled = false;
     async function run() {
       const result = await estimateCityPlannedCosts({
         nights: Number(nights) || existing?.duration_days || 0,
-        distanceKm: distanceKm ? Number(distanceKm) : null,
+        distanceKm: effectiveDistanceKm,
         transportMode: transportMode || null,
         countryCode: countryCode ?? null,
         style: travelStyle ?? "standard",
@@ -165,7 +186,7 @@ export function SousEtapeDialog({
   }, [
     nights,
     existing?.duration_days,
-    distanceKm,
+    effectiveDistanceKm,
     transportMode,
     countryCode,
     travelStyle,

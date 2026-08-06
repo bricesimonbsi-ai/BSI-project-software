@@ -22,11 +22,26 @@ export const CATEGORY_HUES: Record<string, keyof typeof HUE_CLASSES> = {
   administratif_sante: "rose",
 };
 
+/** Longueur de barre (%) pour une valeur donnée par rapport au maximum COMMUN à toutes les
+ * lignes du graphique (pas au maximum de sa propre ligne) — indispensable pour que les barres
+ * restent comparables entre catégories (une catégorie deux fois plus chère qu'une autre doit
+ * avoir une barre visiblement plus longue). Racine carrée plutôt que linéaire : purement
+ * proportionnel, une catégorie à 1% du budget total aurait une barre quasi invisible (large
+ * plage de valeurs habituelle entre ex. équipement et logement) — la racine carrée compresse
+ * l'écart pour que les petits montants restent visibles tout en gardant l'ordre et un écart net
+ * avec les plus gros. Plancher à 2% pour qu'un montant non nul, même minime, reste toujours visible. */
+function barPct(value: number, globalMax: number): number {
+  if (value <= 0) return 0;
+  if (globalMax <= 0) return 0;
+  return Math.max(2, Math.min(100, Math.sqrt(value / globalMax) * 100));
+}
+
 /**
  * Graphique en "bullet" (une ligne par catégorie) : le remplissage plein est TOUJOURS le réel,
  * la bande plus claire TOUJOURS le prévisionnel (avec un repère net à son bord) — jamais
- * l'inverse d'un graphique à l'autre. Chaque ligne est auto-cadrée sur son propre maximum, les
- * valeurs exactes toujours lisibles en clair à droite.
+ * l'inverse d'un graphique à l'autre. Toutes les lignes partagent la même échelle (voir barPct)
+ * pour que la longueur des barres reste comparable d'une catégorie à l'autre, les valeurs exactes
+ * toujours lisibles en clair à droite.
  */
 export function CategoryComparisonChart({
   rows,
@@ -38,6 +53,8 @@ export function CategoryComparisonChart({
   hue?: keyof typeof HUE_CLASSES;
 }) {
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">Aucune dépense pour l'instant.</p>;
+
+  const globalMax = Math.max(...rows.flatMap((r) => [r.planned, r.actual]), 1);
 
   return (
     <div className="space-y-3">
@@ -51,9 +68,8 @@ export function CategoryComparisonChart({
       </div>
       {rows.map((r) => {
         const h = HUE_CLASSES[hue ?? CATEGORY_HUES[r.key] ?? "sky"];
-        const max = Math.max(r.planned, r.actual, 1) * 1.1;
-        const actualPct = Math.min(100, (r.actual / max) * 100);
-        const plannedPct = Math.min(100, (r.planned / max) * 100);
+        const actualPct = barPct(r.actual, globalMax);
+        const plannedPct = barPct(r.planned, globalMax);
         return (
           <div key={r.key} className="flex items-center gap-3">
             <span className="w-36 shrink-0 whitespace-normal text-xs font-medium leading-tight">{r.label}</span>

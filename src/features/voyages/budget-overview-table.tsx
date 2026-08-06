@@ -16,7 +16,7 @@ import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-prici
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { estimateTransportLegCost } from "@/features/voyages/budget-estimate";
 import { useCityLockedCostsMap, isLegacyLockedPlannedRow, type CityLockedCosts } from "@/features/voyages/use-city-locked-costs";
-import { buildFlatRows, cascadeDatesFrom, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
+import { buildFlatRows, cascadeDatesFrom, haversineDistanceKm, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/editable-expense-amount";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
@@ -539,8 +539,17 @@ function CityPlannedRow({
 }) {
   // Calcul synchrone et pur (pas d'appel réseau) : toujours à jour au rendu, sans effet ni état
   // local à resynchroniser — la même fonction, avec les mêmes entrées, que celle utilisée dans
-  // SousEtapeDialog, pour garantir une valeur identique partout où elle est affichée.
-  const transportEstimate = estimateTransportLegCost(se.distance_km, se.transport_next_mode, travelerCount);
+  // SousEtapeDialog, pour garantir une valeur identique partout où elle est affichée. La distance
+  // stockée (`se.distance_km`) n'est recalculée qu'à l'ouverture de l'onglet Itinéraire (auto-
+  // guérison) : on la recalcule ici en direct depuis les coordonnées GPS dès qu'elles sont
+  // connues, pour ne jamais afficher 0 juste parce que l'itinéraire n'a pas encore été rouvert.
+  const currentRow = flat.find((r) => r.sousEtape.id === se.id);
+  const nextRow = currentRow ? flat.find((r) => r.globalIndex === currentRow.globalIndex + 1) : undefined;
+  const liveDistanceKm =
+    se.latitude != null && se.longitude != null && nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
+      ? haversineDistanceKm(se.latitude, se.longitude, nextRow.sousEtape.latitude, nextRow.sousEtape.longitude)
+      : se.distance_km;
+  const transportEstimate = estimateTransportLegCost(liveDistanceKm, se.transport_next_mode, travelerCount);
   const estimateFor: Record<string, number> = {
     transport: transportEstimate,
     activites: 0,

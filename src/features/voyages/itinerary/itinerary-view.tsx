@@ -571,6 +571,11 @@ function CityRow({
     previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
       ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
       : null;
+  const nextRow = allFlat.find((r) => r.globalIndex === row.globalIndex + 1);
+  const nextPoint =
+    nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
+      ? { lat: nextRow.sousEtape.latitude, lng: nextRow.sousEtape.longitude }
+      : null;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -638,6 +643,7 @@ function CityRow({
             existing={se}
             previousPoint={previousPoint}
             previousRowId={previousRow?.sousEtape.id}
+            nextPoint={nextPoint}
             isFirstOverall={row.globalIndex === 1}
             projectId={projectId}
             referenceCurrency={referenceCurrency}
