@@ -189,12 +189,14 @@ export function ItineraryView({
             <TabsTrigger value="carbone">Bilan carbone</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button
-          size="sm"
-          onClick={() => setCreatingCountryAt(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
-        >
-          <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
-        </Button>
+        {(tab === "climat" || tab === "dates") && (
+          <Button
+            size="sm"
+            onClick={() => setCreatingCountryAt(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
+          </Button>
+        )}
       </div>
 
       <EtapeDialog
