@@ -8,7 +8,6 @@ import {
   TRANSVERSE_CATEGORIES,
   ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES,
   computeAdminSantePlannedTotal,
-  computeAdminSanteVisaPlannedTotal,
   groupedCategory,
 } from "@/features/voyages/use-expenses";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
@@ -131,7 +130,7 @@ export function BudgetOverviewTable({
   const flat = useMemo(() => buildFlatRows(etapes ?? [], citiesByEtape), [etapes, citiesByEtape]);
   const updateSousEtape = useUpdateSousEtape(voyageId);
 
-  const { byCity: lockedByCity, total: lockedTotal } = useCityLockedCostsMap({
+  const { byCity: lockedByCity } = useCityLockedCostsMap({
     etapes,
     sousEtapes: allSousEtapes,
     travelStyle,
@@ -150,19 +149,27 @@ export function BudgetOverviewTable({
   // Source unique (voir use-expenses.ts) : partagée avec budget-insights.tsx pour que le tableau
   // et le graphique/résumé du budget affichent toujours exactement le même chiffre.
   const adminPlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
-  // Le visa est exclu de adminPlannedTotal (voir use-expenses.ts) car saisi par pays, pas par
-  // voyage — recompté ici à part pour ne pas disparaître du total général.
-  const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
-  const plannedTotalExcludingAdmin = sumAmount(expenses.filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante"));
-  const totalPlanned =
-    plannedTotalExcludingAdmin +
-    adminPlannedTotal +
-    visaPlannedTotal +
-    equipmentPlannedTotal +
-    lockedTotal.lodging +
-    lockedTotal.food +
-    lockedTotal.localTransport;
-  const totalActual = sumAmount(expenses.filter((e) => !e.planned));
+
+  // Ligne de total en bas du tableau "Détail des dépenses" : nuits + les 5 colonnes ville
+  // (transport vers la suivante, transport sur place, logement, nourriture, activités) sommées
+  // sur TOUTES les villes de TOUS les pays — même logique que columnAmounts dans CountrySection
+  // (somme de ce qui est AFFICHÉ par ville, jamais une somme indépendante de toutes les lignes en
+  // base), volontairement sans équipement ni administratif & santé (transverses, hors tableau).
+  const allCities = allSousEtapes ?? [];
+  const grandTotalNights = allCities.reduce((sum, c) => sum + (c.duration_days ?? 0), 0);
+  const grandTotalColumns = CITY_COLUMNS.map((c) => {
+    if (view === "planned") {
+      return allCities.reduce((sum, city) => {
+        const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && e.planned);
+        return sum + cityColumnAmount(c, cityRows, lockedByCity[city.id]);
+      }, 0);
+    }
+    return allCities.reduce((sum, city) => {
+      const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && !e.planned);
+      return sum + sumAmount(cityRows.filter((e) => matchesColumn(e, c)));
+    }, 0);
+  });
+  const grandTotal = grandTotalColumns.reduce((a, b) => a + b, 0);
 
   if (!etapes) return null;
 
@@ -230,6 +237,18 @@ export function BudgetOverviewTable({
               />
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-border bg-muted/50 font-bold">
+              <td className="whitespace-nowrap px-3 py-2">Total</td>
+              <td className="px-2 py-2 text-center">{grandTotalNights}</td>
+              {CITY_COLUMNS.map((c, i) => (
+                <td key={c.key} className="px-2 py-2 text-center">
+                  {formatCurrency(grandTotalColumns[i], referenceCurrency)}
+                </td>
+              ))}
+              <td className="border-l border-border px-3 py-2 text-right">{formatCurrency(grandTotal, referenceCurrency)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -323,7 +342,7 @@ export function BudgetOverviewTable({
             <p className="text-xs text-muted-foreground">Chaque champ est un montant total pour tous les voyageurs ({travelerCount}), pas par personne.</p>
           )}
           {view === "planned" ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {ADMIN_SUB_COLUMNS.map((s) => {
                 const row = adminRows.find((e) => e.planned && (e.sub_category || "") === s.value);
                 return (
@@ -366,13 +385,6 @@ export function BudgetOverviewTable({
             </div>
           )}
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-base font-bold">
-        <span>TOTAL</span>
-        <span>
-          {formatCurrency(totalPlanned, referenceCurrency)} prévu · {formatCurrency(totalActual, referenceCurrency)} réel
-        </span>
       </div>
     </div>
   );
