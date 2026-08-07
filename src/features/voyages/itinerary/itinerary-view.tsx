@@ -24,7 +24,7 @@ import {
   cascadeDatesFrom,
   buildReorderUpdates,
   recomputeDistances,
-  getPlannedMonthIndices,
+  getPlannedMonthRangePct,
   CLIMATE_COLOR_CLASS,
   MONTH_LABELS,
   type FlatRow,
@@ -210,7 +210,7 @@ export function ItineraryView({
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
 
       {(tab === "climat" || tab === "dates") && (
-        <div className="relative overflow-x-auto rounded-md border border-border pl-5">
+        <div className="relative overflow-x-auto rounded-md border border-border pl-9">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -264,6 +264,18 @@ export function ItineraryView({
                 </SortableContext>
               </DndContext>
             </tbody>
+            {tab === "dates" && flat.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border bg-muted/50 font-bold">
+                  <td className="px-3 py-3 text-center">{flat.length}</td>
+                  <td className="px-3 py-3">Total</td>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-3 py-3">{flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0)} nuits</td>
+                  <td className="px-2 py-3"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
@@ -278,7 +290,7 @@ function AddButton({ onClick, colSpan }: { onClick: () => void; colSpan: number 
         <button
           onClick={onClick}
           title="Ajouter un pays ici"
-          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.65rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
+          className="absolute -left-8 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-violet-400 bg-card text-xs font-bold text-violet-500 opacity-60 hover:opacity-100 hover:border-solid hover:bg-violet-500 hover:text-white"
         >
           +
         </button>
@@ -529,7 +541,7 @@ function AddButtonRow({ colSpan, onClick, title }: { colSpan: number; onClick: (
         <button
           onClick={onClick}
           title={title}
-          className="absolute -left-4 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground bg-card text-[0.65rem] font-bold text-muted-foreground opacity-50 hover:opacity-100 hover:border-solid hover:border-accent hover:bg-accent hover:text-accent-foreground"
+          className="absolute -left-8 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-violet-400 bg-card text-xs font-bold text-violet-500 opacity-60 hover:opacity-100 hover:border-solid hover:bg-violet-500 hover:text-white"
         >
           +
         </button>
@@ -714,19 +726,18 @@ function CityRow({
 
 function ClimateBand({ row }: { row: FlatRow }) {
   const ratings = row.sousEtape.climate_by_month ?? row.etape.climate_by_month ?? Array(12).fill("good");
-  const planned = getPlannedMonthIndices(row.sousEtape.start_date, row.sousEtape.duration_days);
+  const plannedRange = getPlannedMonthRangePct(row.sousEtape.start_date, row.sousEtape.duration_days);
   return (
-    <div className="flex h-7 overflow-hidden rounded-sm">
+    <div className="relative flex h-7 overflow-hidden rounded-sm">
       {ratings.map((r, i) => (
-        <div
-          key={i}
-          className={cn(
-            "flex-1",
-            CLIMATE_COLOR_CLASS[r] ?? "bg-muted",
-            planned.has(i) && "ring-2 ring-inset ring-black dark:ring-white"
-          )}
-        />
+        <div key={i} className={cn("flex-1", CLIMATE_COLOR_CLASS[r] ?? "bg-muted")} />
       ))}
+      {plannedRange && (
+        <div
+          className="pointer-events-none absolute inset-y-0 rounded-[2px] ring-2 ring-inset ring-black dark:ring-white"
+          style={{ left: `${plannedRange.startPct}%`, width: `${plannedRange.endPct - plannedRange.startPct}%` }}
+        />
+      )}
     </div>
   );
 }

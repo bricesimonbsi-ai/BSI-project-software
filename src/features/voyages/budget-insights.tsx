@@ -5,7 +5,6 @@ import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
 import {
-  useVoyageAllExpenses,
   EXPENSE_CATEGORIES,
   CATEGORY_LABELS,
   TRANSPORT_SUB_CATEGORIES,
@@ -13,7 +12,6 @@ import {
   groupedCategory,
   groupedSubCategory,
   computeAdminSantePlannedBySubCategory,
-  computeAdminSantePlannedTotal,
   computeAdminSanteVisaPlannedTotal,
 } from "@/features/voyages/use-expenses";
 import {
@@ -26,9 +24,7 @@ import {
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
 import { ManageExpensesTab } from "@/features/voyages/csv-import/manage-expenses-tab";
-import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
-import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
-import { useCityLockedCostsMap, isLegacyLockedPlannedRow } from "@/features/voyages/use-city-locked-costs";
+import { useVoyageBudgetTotals } from "@/features/voyages/use-voyage-budget-totals";
 import { buildFlatRows } from "@/features/voyages/itinerary/itinerary-model";
 import { buildBudgetTimeline, buildActualAmountByDate, todayISO } from "@/features/voyages/budget-timeline";
 import { BudgetTimelineChart } from "@/features/voyages/budget-timeline-chart";
@@ -36,7 +32,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { TravelStyle, Voyage, VoyageSousEtape } from "@/types/database";
 
-type BudgetTab = "synthese" | "gerer";
+type BudgetTab = "synthese" | "planned" | "actual" | "gerer";
 
 const SUB_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   [...TRANSPORT_SUB_CATEGORIES, ...ADMIN_SANTE_SUB_CATEGORIES].map((s) => [s.value, s.label])
@@ -80,8 +76,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const [budgetTab, setBudgetTab] = useState<BudgetTab>("synthese");
   const [chartView, setChartView] = useState<"bar" | "ring">("bar");
   const { data: linkedPeople } = useProjectPeople(projectId);
-  const { data: allExpenses } = useVoyageAllExpenses(voyageId);
-  const { data: equipmentItems } = useVoyageEquipment(voyageId);
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
 
@@ -90,9 +84,10 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const style: TravelStyle = voyage.travel_style ?? "standard";
   const lodgingCount = voyage.lodging_count ?? travelerCount;
 
-  const { byCity: lockedByCity, total: lockedTotal } = useCityLockedCostsMap({
-    etapes,
-    sousEtapes: allSousEtapes,
+  // Source unique (voir use-voyage-budget-totals.ts) : partagée avec l'onglet Aperçu pour que les
+  // deux affichent toujours exactement le même chiffre.
+  const { expenses, equipmentPlannedTotal, lockedByCity, lockedTotal, adminSantePlannedTotalWithVisa, totalPlanned, totalActual } = useVoyageBudgetTotals({
+    voyageId,
     travelStyle: style,
     travelerCount,
     lodgingCount,
@@ -108,32 +103,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     return map;
   }, [allSousEtapes]);
   const flat = useMemo(() => buildFlatRows(etapes ?? [], citiesByEtape), [etapes, citiesByEtape]);
-
-  // L'équipement et les coûts verrouillés (logement/nourriture/transport sur place) ne sont
-  // plus des lignes de dépense à resynchroniser : leur coût prévisionnel est calculé en direct
-  // (toujours à jour, sans décalage). D'éventuelles anciennes lignes correspondantes dans
-  // voyage_expenses sont ignorées pour ne pas compter en double.
-  const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
-  const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
-  const lockedPlannedTotal = lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
-  // Source unique (voir use-expenses.ts) : partagée avec budget-overview-table.tsx pour que le
-  // tableau et ce résumé affichent toujours exactement le même chiffre (jamais une somme brute
-  // de toutes les lignes en base, qui compterait en double d'éventuelles anciennes lignes
-  // devenues invisibles dans la grille).
-  const adminSantePlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
-  // Le visa est exclu de adminSantePlannedTotal (voir use-expenses.ts) car saisi par pays, pas
-  // par voyage — recompté ici à part pour ne pas disparaître du total général ni du graphique.
-  const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
-  const adminSantePlannedTotalWithVisa = adminSantePlannedTotal + visaPlannedTotal;
-
-  const totalPlanned =
-    expenses
-      .filter((e) => e.planned && groupedCategory(e.category) !== "administratif_sante")
-      .reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0) +
-    adminSantePlannedTotalWithVisa +
-    equipmentPlannedTotal +
-    lockedPlannedTotal;
-  const totalActual = expenses.filter((e) => !e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
 
   // Chronologie prévisionnel/réel cumulés : réutilise cityColumnAmount/CITY_COLUMNS (source
   // unique déjà utilisée par le tableau détail des dépenses) pour ne jamais afficher un rythme
@@ -204,6 +173,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   // Même source dédupliquée que adminSantePlannedTotal ci-dessus, pas adminSanteRows (qui
   // sommerait toutes les lignes correspondantes, doublons compris) — le visa y est rajouté à part
   // (voir computeAdminSanteVisaPlannedTotal) puisqu'il est saisi par pays, pas par voyage.
+  const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
   const adminPlannedItems = [
     ...computeAdminSantePlannedBySubCategory(expenses, voyageId),
     ...(visaPlannedTotal > 0.01 ? [{ key: "visa", label: "Visa", amount: visaPlannedTotal }] : []),
@@ -257,7 +227,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     .filter((r) => r.actual > 0)
     .map((r) => ({ key: r.key, label: r.label, amount: r.actual, color: CATEGORY_HUE_HEX[r.key] }));
 
-  const pendingReviewCount = (allExpenses ?? []).filter((e) => e.needs_review).length;
+  const pendingReviewCount = expenses.filter((e) => e.needs_review).length;
   const globalPct = consumedPct(totalActual, totalPlanned);
   // Les montants saisis sont des totaux partagés, jamais rattachés à un voyageur en particulier
   // (voir plus haut pourquoi "Dépenses par personne" a été retiré) : le réel "par personne" est
@@ -271,6 +241,8 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       <Tabs value={budgetTab} onValueChange={(v) => setBudgetTab(v as BudgetTab)}>
         <TabsList>
           <TabsTrigger value="synthese">Synthèse</TabsTrigger>
+          <TabsTrigger value="planned">Prévisionnel</TabsTrigger>
+          <TabsTrigger value="actual">Réel</TabsTrigger>
           <TabsTrigger value="gerer">
             Gérer mes dépenses
             {pendingReviewCount > 0 && (
@@ -283,6 +255,18 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
       </Tabs>
 
       {budgetTab === "gerer" && <ManageExpensesTab voyageId={voyageId} projectId={projectId} referenceCurrency={voyage.reference_currency} />}
+
+      {(budgetTab === "planned" || budgetTab === "actual") && (
+        <BudgetOverviewTable
+          voyageId={voyageId}
+          projectId={projectId}
+          referenceCurrency={voyage.reference_currency}
+          travelStyle={style}
+          travelerCount={travelerCount}
+          lodgingCount={lodgingCount}
+          view={budgetTab}
+        />
+      )}
 
       {budgetTab === "synthese" && (
         <div className="space-y-5">
@@ -317,12 +301,13 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
                 </div>
                 {linkedPeople && linkedPeople.length > 0 && (
                   <div className="space-y-2 border-t border-border pt-3">
-                    <p className="text-sm text-muted-foreground">% du budget cible propre à chaque voyageur, déjà consommé</p>
+                    <p className="text-sm text-muted-foreground">Total et % du budget cible propre à chaque voyageur, déjà consommé</p>
                     <div className="flex flex-wrap items-center gap-4">
                       {linkedPeople.map((l, i) => (
                         <div key={l.person_id} className="flex items-center gap-2">
                           <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-8 w-8 text-sm" />
                           <span className="text-base font-medium">{l.people.name}</span>
+                          <span className="text-sm font-semibold text-muted-foreground">{formatCurrency(actualPerTraveler, voyage.reference_currency)}</span>
                           {l.budget_target != null ? (
                             <ConsumedPctBadge
                               pct={consumedPct(actualPerTraveler, l.budget_target)}
@@ -381,15 +366,6 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
           </div>
         )}
       </div>
-
-          <BudgetOverviewTable
-            voyageId={voyageId}
-            projectId={projectId}
-            referenceCurrency={voyage.reference_currency}
-            travelStyle={style}
-            travelerCount={travelerCount}
-            lodgingCount={lodgingCount}
-          />
         </div>
       )}
     </div>

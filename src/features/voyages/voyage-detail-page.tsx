@@ -131,7 +131,13 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <VoyageSynthesis voyageId={voyage.id} referenceCurrency={voyage.reference_currency} />
+          <VoyageSynthesis
+            voyageId={voyage.id}
+            referenceCurrency={voyage.reference_currency}
+            travelStyle={voyage.travel_style ?? "standard"}
+            travelerCount={travelerCount}
+            lodgingCount={voyage.lodging_count ?? travelerCount}
+          />
 
           <Card>
             <CardContent className="space-y-2 p-5">

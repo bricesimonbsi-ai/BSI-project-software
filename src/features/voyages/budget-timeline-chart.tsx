@@ -11,6 +11,10 @@ const PAD_TOP = 12;
 const PAD_BOTTOM = 28;
 const PLOT_W = VIEW_W - PAD_LEFT - PAD_RIGHT;
 const PLOT_H = VIEW_H - PAD_TOP - PAD_BOTTOM;
+/** Distance minimale (en unités du viewBox) entre deux étiquettes de date pour éviter qu'elles se
+ * chevauchent — sert à la fois à border "Aujourd'hui" près d'une extrémité et à masquer une
+ * graduation intermédiaire trop proche d'"Aujourd'hui". */
+const LABEL_CLEARANCE = 42;
 
 /** Arrondit l'échelle à un multiple "propre" (1/2/5 x 10^n) pour des graduations lisibles. */
 function niceMax(value: number): number {
@@ -22,12 +26,21 @@ function niceMax(value: number): number {
   return niceFrac * base;
 }
 
+function formatShortDate(dateStr: string): string {
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(new Date(dateStr));
+}
+
 /**
  * Courbe "prévisionnel cumulé selon l'itinéraire planifié" (pointillé) vs "réel cumulé"
  * (plein, aire) — répond à "au jour J, ai-je plus ou moins dépensé que prévu POUR CE STADE du
  * voyage", une question différente du % de consommation global (réel / budget total final)
  * déjà affiché au-dessus : ce dernier ne dit rien du rythme, seulement de l'avancement global.
  * L'encart sous le graphique relie explicitement les deux via la même pastille colorée.
+ *
+ * Le conteneur impose le même ratio largeur/hauteur que le viewBox (`aspectRatio` + `preserve-
+ * AspectRatio="none"`) : sans ça, le SVG peut être étiré/letterboxé différemment de sa grille
+ * interne et la position du curseur de survol calculée depuis `getBoundingClientRect()` dérive
+ * de la position réelle de la souris.
  */
 export function BudgetTimelineChart({
   points,
@@ -73,58 +86,83 @@ export function BudgetTimelineChart({
 
   const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
+  // Dates intermédiaires en abscisse, proportionnelles à la durée du voyage (chaque point = un
+  // jour calendaire, donc un espacement égal en index = un espacement égal en jours). "Aujourd'hui"
+  // a priorité : une graduation régulière trop proche de lui perd son étiquette (mais garde son
+  // trait) pour ne jamais superposer deux textes.
+  const tickFractions = [0, 0.25, 0.5, 0.75, 1];
+  const tickIndices = Array.from(new Set(tickFractions.map((f) => Math.round(f * lastIndex))));
+  const todayLabelX = todayIndex !== -1 ? x(todayIndex) : null;
+  const showTodayLabel = todayLabelX != null && todayLabelX > PAD_LEFT + LABEL_CLEARANCE && todayLabelX < VIEW_W - PAD_RIGHT - LABEL_CLEARANCE;
+
   return (
     <div className="space-y-2">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="w-full"
-        onMouseMove={handleMove}
-        onMouseLeave={() => setHoverIndex(null)}
-      >
-        {gridSteps.map((s) => (
-          <line
-            key={s}
-            x1={PAD_LEFT}
-            x2={VIEW_W - PAD_RIGHT}
-            y1={PAD_TOP + PLOT_H * (1 - s)}
-            y2={PAD_TOP + PLOT_H * (1 - s)}
-            stroke="hsl(var(--border))"
-            strokeWidth={1}
-          />
-        ))}
-        {gridSteps.map((s) => (
-          <text key={s} x={PAD_LEFT - 6} y={PAD_TOP + PLOT_H * (1 - s) + 3} textAnchor="end" className="fill-muted-foreground text-[9px]">
-            {formatCurrency(maxValue * s, currency)}
-          </text>
-        ))}
+      <div className="w-full" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="none"
+          className="h-full w-full"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
+          {gridSteps.map((s) => (
+            <line
+              key={s}
+              x1={PAD_LEFT}
+              x2={VIEW_W - PAD_RIGHT}
+              y1={PAD_TOP + PLOT_H * (1 - s)}
+              y2={PAD_TOP + PLOT_H * (1 - s)}
+              stroke="hsl(var(--border))"
+              strokeWidth={1}
+            />
+          ))}
+          {gridSteps.map((s) => (
+            <text key={s} x={PAD_LEFT - 6} y={PAD_TOP + PLOT_H * (1 - s) + 3} textAnchor="end" className="fill-muted-foreground text-[9px]">
+              {formatCurrency(maxValue * s, currency)}
+            </text>
+          ))}
 
-        {todayIndex !== -1 && (
-          <line x1={x(todayIndex)} x2={x(todayIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} stroke="hsl(var(--accent))" strokeWidth={1} strokeDasharray="2 2" opacity={0.5} />
-        )}
+          {todayIndex !== -1 && (
+            <line x1={x(todayIndex)} x2={x(todayIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} stroke="hsl(var(--accent))" strokeWidth={1} strokeDasharray="2 2" opacity={0.5} />
+          )}
 
-        <path d={actualAreaPath} fill="hsl(var(--accent) / 0.12)" stroke="none" />
-        <path d={plannedPath} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" />
-        <path d={actualPath} fill="none" stroke="hsl(var(--accent))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={actualAreaPath} fill="hsl(var(--accent) / 0.12)" stroke="none" />
+          <path d={plannedPath} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" />
+          <path d={actualPath} fill="none" stroke="hsl(var(--accent))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 
-        <circle cx={x(activeIndex)} cy={y(active.plannedCumulative)} r={4} fill="hsl(var(--muted-foreground))" stroke="hsl(var(--card))" strokeWidth={2} />
-        <circle cx={x(activeIndex)} cy={y(active.actualCumulative)} r={4} fill="hsl(var(--accent))" stroke="hsl(var(--card))" strokeWidth={2} />
-        {hoverIndex != null && (
-          <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} stroke="hsl(var(--foreground))" strokeWidth={1} opacity={0.25} />
-        )}
+          <circle cx={x(activeIndex)} cy={y(active.plannedCumulative)} r={4} fill="hsl(var(--muted-foreground))" stroke="hsl(var(--card))" strokeWidth={2} />
+          <circle cx={x(activeIndex)} cy={y(active.actualCumulative)} r={4} fill="hsl(var(--accent))" stroke="hsl(var(--card))" strokeWidth={2} />
+          {hoverIndex != null && (
+            <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} stroke="hsl(var(--foreground))" strokeWidth={1} opacity={0.25} />
+          )}
 
-        <text x={x(0)} y={VIEW_H - 6} textAnchor="start" className="fill-muted-foreground text-[9px]">
-          {formatDate(points[0].date)}
-        </text>
-        <text x={x(lastIndex)} y={VIEW_H - 6} textAnchor="end" className="fill-muted-foreground text-[9px]">
-          {formatDate(points[lastIndex].date)}
-        </text>
-        {todayIndex !== -1 && todayIndex !== 0 && todayIndex !== lastIndex && (
-          <text x={x(todayIndex)} y={VIEW_H - 6} textAnchor="middle" className="fill-accent text-[9px] font-semibold">
-            Aujourd'hui
-          </text>
-        )}
-      </svg>
+          {tickIndices.map((i) => {
+            const tx = x(i);
+            const hideLabel = todayLabelX != null && Math.abs(tx - todayLabelX) < LABEL_CLEARANCE;
+            return (
+              <g key={i}>
+                <line x1={tx} x2={tx} y1={PAD_TOP + PLOT_H} y2={PAD_TOP + PLOT_H + 3} stroke="hsl(var(--border))" strokeWidth={1} />
+                {!hideLabel && (
+                  <text
+                    x={tx}
+                    y={VIEW_H - 6}
+                    textAnchor={i === 0 ? "start" : i === lastIndex ? "end" : "middle"}
+                    className="fill-muted-foreground text-[9px]"
+                  >
+                    {formatShortDate(points[i].date)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          {showTodayLabel && (
+            <text x={todayLabelX} y={VIEW_H - 6} textAnchor="middle" className="fill-accent text-[9px] font-semibold">
+              Aujourd'hui
+            </text>
+          )}
+        </svg>
+      </div>
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">

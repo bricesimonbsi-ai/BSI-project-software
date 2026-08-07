@@ -20,7 +20,7 @@ import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/ed
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import type { ExpenseCategory, TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
 
 export function sumAmount(rows: VoyageAllExpense[]): number {
@@ -94,6 +94,7 @@ export function BudgetOverviewTable({
   travelStyle,
   travelerCount,
   lodgingCount,
+  view,
 }: {
   voyageId: string;
   projectId: string;
@@ -101,6 +102,10 @@ export function BudgetOverviewTable({
   travelStyle: TravelStyle;
   travelerCount: number;
   lodgingCount: number;
+  /** Prévisionnel/Réel : choisi par le sous-onglet parent (voir budget-insights.tsx), chaque
+   * sous-onglet montant sa propre instance de ce tableau plutôt qu'un bascule interne — pour
+   * que chaque vue ait tout l'écran pour elle. */
+  view: "planned" | "actual";
 }) {
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
@@ -111,7 +116,6 @@ export function BudgetOverviewTable({
   // fou, EditableExpenseAmount créerait une ligne en double à chaque montage pendant le
   // chargement (observé : le nombre de doublons augmentait à chaque visite de l'onglet Budget).
   const expensesLoaded = allExpenses !== undefined;
-  const [view, setView] = useState<"planned" | "actual">("planned");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
   const citiesByEtape = useMemo(() => {
@@ -175,37 +179,13 @@ export function BudgetOverviewTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Détail des dépenses</h3>
-          <p className="text-xs text-muted-foreground">
-            Chaque montant est un total : pour tous les voyageurs ({travelerCount}) et, pour le logement, pour tous les logements saisis.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                setView("planned");
-                setSelectedCell(null);
-              }}
-              className={cn("rounded px-3 py-1 text-xs font-medium", view === "planned" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
-            >
-              Prévisionnel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setView("actual");
-                setSelectedCell(null);
-              }}
-              className={cn("rounded px-3 py-1 text-xs font-medium", view === "actual" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
-            >
-              Réel
-            </button>
-          </div>
-        </div>
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Détail des dépenses {view === "planned" ? "· Prévisionnel" : "· Réel"}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Chaque montant est un total : pour tous les voyageurs ({travelerCount}) et, pour le logement, pour tous les logements saisis.
+        </p>
       </div>
 
       <div className="overflow-x-auto rounded-md border border-border">

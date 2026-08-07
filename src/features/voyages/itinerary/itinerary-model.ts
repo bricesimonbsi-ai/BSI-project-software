@@ -164,22 +164,27 @@ export function parseCalendarDateUTC(dateStr: string): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-/** Mois (0=janvier..11=décembre) réellement couverts par la période planifiée d'une étape. */
-export function getPlannedMonthIndices(arrivalDate: string | null, durationDays: number | null): Set<number> {
-  const indices = new Set<number>();
-  if (!arrivalDate) return indices;
+/** Position (en % de la bande 12 mois, 0 = 1er janvier, 100 = 31 décembre) du début et de la fin
+ * d'un séjour, à la précision du jour dans le mois — pour surligner une SEULE zone continue dans
+ * le tableau climatique (potentiellement à cheval sur plusieurs mois), jamais un rectangle par
+ * mois traversé. La bande représente un cycle annuel générique (pas une année précise) : un
+ * séjour qui franchit le nouvel an est borné à la fin décembre plutôt que de "boucler" au début. */
+export function getPlannedMonthRangePct(arrivalDate: string | null, durationDays: number | null): { startPct: number; endPct: number } | null {
+  if (!arrivalDate) return null;
   const start = parseCalendarDateUTC(arrivalDate);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + Math.max(0, durationDays ?? 0));
 
-  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
-  let guard = 0;
-  while (cursor <= end && guard < 36) {
-    indices.add(cursor.getUTCMonth());
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-    guard++;
+  function fraction(d: Date): number {
+    const month = d.getUTCMonth();
+    const day = d.getUTCDate();
+    const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), month + 1, 0)).getUTCDate();
+    return (month + (day - 1) / daysInMonth) / 12;
   }
-  return indices;
+
+  const startPct = fraction(start) * 100;
+  const endPct = end.getUTCFullYear() > start.getUTCFullYear() ? 100 : fraction(end) * 100;
+  return { startPct, endPct: Math.min(100, Math.max(endPct, startPct + 0.5)) };
 }
 
 /** Additionne des jours calendaires à une date "YYYY-MM-DD", en arithmétique UTC pure (aucun effet de fuseau horaire). */

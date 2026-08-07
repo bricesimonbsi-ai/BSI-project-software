@@ -2,17 +2,33 @@ import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
-import { useVoyageBudgetSummary } from "@/features/voyages/use-expenses";
+import { useVoyageBudgetTotals } from "@/features/voyages/use-voyage-budget-totals";
 import { buildFlatRows, groupByCountry, estimateTotalCo2Kg } from "@/features/voyages/itinerary/itinerary-model";
 import { formatCurrency } from "@/lib/utils";
-import type { VoyageSousEtape } from "@/types/database";
+import type { TravelStyle, VoyageSousEtape } from "@/types/database";
 
 /** Synthèse visuelle du voyage (nombre d'étapes, distance, durée, budget, empreinte carbone),
- * calculée à partir des mêmes données que l'onglet Itinéraire (requêtes déjà en cache). */
-export function VoyageSynthesis({ voyageId, referenceCurrency }: { voyageId: string; referenceCurrency: string }) {
+ * calculée à partir des mêmes données que l'onglet Itinéraire (requêtes déjà en cache). Le budget
+ * prévisionnel vient de la même source unique que l'onglet Budget (voir use-voyage-budget-totals.ts)
+ * — jamais de l'ancienne vue SQL `voyage_budget_summary`, devenue incohérente depuis que
+ * l'équipement et les coûts logement/nourriture/transport sur place sont calculés en direct plutôt
+ * que stockés comme lignes de dépense. */
+export function VoyageSynthesis({
+  voyageId,
+  referenceCurrency,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
+}: {
+  voyageId: string;
+  referenceCurrency: string;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
+}) {
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
-  const { data: budgetSummary } = useVoyageBudgetSummary(voyageId);
+  const { totalPlanned } = useVoyageBudgetTotals({ voyageId, travelStyle, travelerCount, lodgingCount });
 
   const stats = useMemo(() => {
     const sousEtapesByEtape = new Map<string, VoyageSousEtape[]>();
@@ -39,7 +55,7 @@ export function VoyageSynthesis({ voyageId, referenceCurrency }: { voyageId: str
     { label: "Villes / étapes", value: `${stats.cityCount}` },
     { label: "Distance totale", value: `${Math.round(stats.totalKm).toLocaleString("fr-FR")} km` },
     { label: "Durée totale", value: `${stats.totalNights} nuits` },
-    { label: "Budget prévisionnel", value: formatCurrency(budgetSummary?.total_planned ?? 0, referenceCurrency) },
+    { label: "Budget prévisionnel", value: formatCurrency(totalPlanned, referenceCurrency) },
     { label: "Empreinte carbone", value: `${stats.totalCo2.toLocaleString("fr-FR")} kg CO₂e` },
   ];
 
