@@ -14,6 +14,13 @@ export interface ThemePreset {
   swatch: string;
   light: ThemePresetColors;
   dark: ThemePresetColors;
+  /** Arrondi des boutons/cartes/champs (valeur CSS, ex. "1.5rem") — absent = arrondi par défaut.
+   * Réservé aux thèmes "poussés" pour que la forme même des éléments évoque le thème (très
+   * arrondi et doux pour Tarte au citron, plus anguleux pour Sport...). */
+  radius?: string;
+  /** Emoji décoratifs qui flottent en fond d'écran, en filigrane — réservé aux thèmes "poussés"
+   * (les thèmes de couleur simples n'en ont pas, comme au départ). */
+  motifEmojis?: string[];
 }
 
 /** Thèmes de couleur sélectionnables pour toute l'application (indépendants du mode clair/sombre
@@ -67,6 +74,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: "#eab308",
     light: { primary: "50 92% 42%", accent: "45 96% 40%", ring: "50 92% 42%" },
     dark: { primary: "48 96% 58%", accent: "48 96% 58%", ring: "48 96% 58%" },
+    radius: "1.5rem",
+    motifEmojis: ["🍋", "🥧", "✨"],
   },
   {
     id: "sport",
@@ -74,6 +83,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: "#e11d48",
     light: { primary: "355 85% 50%", accent: "5 90% 50%", ring: "355 85% 50%" },
     dark: { primary: "355 85% 64%", accent: "355 85% 64%", ring: "355 85% 64%" },
+    radius: "0.375rem",
+    motifEmojis: ["⚽", "🏆", "🔥", "🎽"],
   },
   {
     id: "nature",
@@ -81,6 +92,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: "#4d7c0f",
     light: { primary: "95 50% 32%", accent: "100 45% 36%", ring: "95 50% 32%" },
     dark: { primary: "95 45% 56%", accent: "95 45% 56%", ring: "95 45% 56%" },
+    radius: "1.25rem",
+    motifEmojis: ["🌿", "🍃", "🌲", "🦋"],
   },
   {
     id: "nuit",
@@ -88,6 +101,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: "#4f46e5",
     light: { primary: "243 75% 59%", accent: "250 80% 62%", ring: "243 75% 59%" },
     dark: { primary: "243 75% 68%", accent: "243 75% 68%", ring: "243 75% 68%" },
+    radius: "1rem",
+    motifEmojis: ["🌙", "⭐", "✨", "🌌"],
   },
 ];
 

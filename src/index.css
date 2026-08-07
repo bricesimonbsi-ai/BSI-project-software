@@ -53,3 +53,23 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+@keyframes theme-motif-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -16px;
+  }
+}
+
+.theme-motif {
+  animation: theme-motif-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-motif {
+    animation: none;
+  }
+}

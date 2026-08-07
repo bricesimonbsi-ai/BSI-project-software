@@ -1,7 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { getThemePreset } from "@/features/theme/theme-presets";
+import { ThemeMotifBackground } from "@/features/theme/theme-motif-background";
 import { hexToHslTriplet } from "@/lib/utils";
+
+const DEFAULT_RADIUS = "0.75rem";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const mode = useThemeStore((s) => s.mode);
@@ -35,7 +38,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // La couleur de la catégorie consultée (accentColor), quand définie, reste prioritaire sur
     // l'accent du thème choisi — comportement inchangé depuis avant l'ajout des thèmes.
     root.style.setProperty("--accent", accentColor ? hexToHslTriplet(accentColor) : colors.accent);
+    // Forme des boutons/cartes/champs : les thèmes "poussés" (citron, sport, nature, nuit)
+    // définissent leur propre arrondi pour que la silhouette même des éléments évoque le thème.
+    root.style.setProperty("--radius", preset.radius ?? DEFAULT_RADIUS);
   }, [themePreset, isDark, accentColor]);
 
-  return <>{children}</>;
+  return (
+    <>
+      <ThemeMotifBackground />
+      {children}
+    </>
+  );
 }
