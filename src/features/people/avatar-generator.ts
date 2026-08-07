@@ -19,6 +19,47 @@ export const AVATAR_HAIR_COLORS = [
   "c93305",
 ];
 
+export type AvatarGender = "homme" | "femme";
+
+export const AVATAR_GENDERS: { value: AvatarGender; label: string }[] = [
+  { value: "homme", label: "Homme" },
+  { value: "femme", label: "Femme" },
+];
+
+const UNISEX_HAIRSTYLE_VALUES = ["hat", "hijab", "turban", "winterHat1", "winterHat02", "winterHat03", "winterHat04"];
+const MALE_HAIRSTYLE_VALUES = [
+  "shortFlat",
+  "shortRound",
+  "shortWaved",
+  "shortCurly",
+  "sides",
+  "shavedSides",
+  "theCaesar",
+  "theCaesarAndSidePart",
+  "dreads01",
+  "dreads02",
+  "shaggy",
+  "shaggyMullet",
+  "frizzle",
+  "fro",
+];
+const FEMALE_HAIRSTYLE_VALUES = [
+  "bob",
+  "bun",
+  "curly",
+  "curvy",
+  "bigHair",
+  "fro",
+  "froBand",
+  "dreads",
+  "straight01",
+  "straight02",
+  "straightAndStrand",
+  "longButNotTooLong",
+  "miaWallace",
+  "frida",
+];
+
 export const AVATAR_HAIRSTYLES: { value: string; label: string }[] = [
   { value: "shortFlat", label: "Courts plats" },
   { value: "shortRound", label: "Courts ronds" },
@@ -56,6 +97,14 @@ export const AVATAR_HAIRSTYLES: { value: string; label: string }[] = [
   { value: "winterHat04", label: "Bonnet d'hiver (4)" },
 ];
 
+/** Coiffures filtrées par genre pour le picker (les coiffures neutres — casquette, turban,
+ * hijab, bonnets — apparaissent dans les deux listes). La valeur stockée reste une coiffure
+ * DiceBear valide quel que soit le genre : ce filtrage ne sert qu'à guider le choix. */
+export const AVATAR_HAIRSTYLES_BY_GENDER: Record<AvatarGender, { value: string; label: string }[]> = {
+  homme: AVATAR_HAIRSTYLES.filter((h) => MALE_HAIRSTYLE_VALUES.includes(h.value) || UNISEX_HAIRSTYLE_VALUES.includes(h.value)),
+  femme: AVATAR_HAIRSTYLES.filter((h) => FEMALE_HAIRSTYLE_VALUES.includes(h.value) || UNISEX_HAIRSTYLE_VALUES.includes(h.value)),
+};
+
 export const AVATAR_ACCESSORIES: { value: string; label: string }[] = [
   { value: "round", label: "Lunettes rondes" },
   { value: "wayfarers", label: "Lunettes wayfarer" },
@@ -66,17 +115,25 @@ export const AVATAR_ACCESSORIES: { value: string; label: string }[] = [
   { value: "eyepatch", label: "Cache-œil" },
 ];
 
+/** Tenues simples uniquement (pas de blazer, tee-shirt à motif ou salopette) : le choix exact
+ * reste dérivé du seed pour varier légèrement d'une personne à l'autre sans jamais être criard. */
+const SIMPLE_CLOTHING = ["shirtCrewNeck", "shirtVNeck", "collarAndSweater"];
+const MALE_FACIAL_HAIR = ["beardLight", "beardMedium"];
+
 export const DEFAULT_AVATAR_CONFIG: PersonAvatarConfig = {
+  gender: "homme",
   skinColor: AVATAR_SKIN_COLORS[3],
   hairColor: AVATAR_HAIR_COLORS[0],
   top: "shortFlat",
   accessories: null,
 };
 
-/** Rendu déterministe : mêmes couleurs/coiffure/accessoire choisis par l'utilisateur, mais les
- * traits non exposés dans le picker (yeux, bouche, vêtements...) restent stables d'un rendu à
- * l'autre grâce au seed (id de la personne) plutôt que de re-tirer au hasard à chaque appel. */
+/** Rendu déterministe : mêmes genre/couleurs/coiffure/accessoire choisis par l'utilisateur (tenue
+ * toujours simple, visage toujours souriant), mais les traits non exposés dans le picker (yeux,
+ * sourcils...) restent stables d'un rendu à l'autre grâce au seed (id de la personne) plutôt que
+ * de re-tirer au hasard à chaque appel. */
 export function generateAvatarDataUri(seed: string, config: PersonAvatarConfig): string {
+  const gender = config.gender ?? "homme";
   const avatar = createAvatar(avataaars, {
     seed,
     size: 128,
@@ -85,6 +142,10 @@ export function generateAvatarDataUri(seed: string, config: PersonAvatarConfig):
     top: [config.top as never],
     accessories: config.accessories ? [config.accessories as never] : [],
     accessoriesProbability: config.accessories ? 100 : 0,
+    mouth: ["smile" as never],
+    clothing: SIMPLE_CLOTHING as never,
+    facialHair: gender === "homme" ? (MALE_FACIAL_HAIR as never) : [],
+    facialHairProbability: gender === "homme" ? 20 : 0,
   });
   return avatar.toDataUri();
 }

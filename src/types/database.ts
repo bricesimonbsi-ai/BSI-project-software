@@ -141,6 +141,7 @@ export type VoyageTraveler = {
  * la personne) pour rester visuellement stable d'un rendu à l'autre. Couleurs en hexadécimal
  * sans le "#". `accessories: null` = aucun accessoire. */
 export type PersonAvatarConfig = {
+  gender: "homme" | "femme";
   skinColor: string;
   hairColor: string;
   top: string;

@@ -16,10 +16,12 @@ import { PERSON_EMOJI_SUGGESTIONS } from "@/features/people/person-avatar";
 import {
   AVATAR_SKIN_COLORS,
   AVATAR_HAIR_COLORS,
-  AVATAR_HAIRSTYLES,
+  AVATAR_HAIRSTYLES_BY_GENDER,
   AVATAR_ACCESSORIES,
+  AVATAR_GENDERS,
   DEFAULT_AVATAR_CONFIG,
   generateAvatarDataUri,
+  type AvatarGender,
 } from "@/features/people/avatar-generator";
 import { cn } from "@/lib/utils";
 import type { Person, PersonAvatarConfig } from "@/types/database";
@@ -55,17 +57,24 @@ export function AvatarPickerDialog({
 }) {
   const updatePerson = useUpdatePerson();
   const [emoji, setEmoji] = useState(person.avatar_emoji ?? "");
-  const [config, setConfig] = useState<PersonAvatarConfig>(person.avatar_config ?? DEFAULT_AVATAR_CONFIG);
+  const [config, setConfig] = useState<PersonAvatarConfig>({ ...DEFAULT_AVATAR_CONFIG, ...person.avatar_config });
   const [mode, setMode] = useState<"emoji" | "custom">(person.avatar_config ? "custom" : "emoji");
 
   useEffect(() => {
     if (!open) return;
     setEmoji(person.avatar_emoji ?? "");
-    setConfig(person.avatar_config ?? DEFAULT_AVATAR_CONFIG);
+    setConfig({ ...DEFAULT_AVATAR_CONFIG, ...person.avatar_config });
     setMode(person.avatar_config ? "custom" : "emoji");
   }, [open, person]);
 
   const previewUri = generateAvatarDataUri(person.id, config);
+  const hairstyles = AVATAR_HAIRSTYLES_BY_GENDER[config.gender];
+
+  function handleGenderChange(gender: AvatarGender) {
+    const list = AVATAR_HAIRSTYLES_BY_GENDER[gender];
+    const top = list.some((h) => h.value === config.top) ? config.top : list[0].value;
+    setConfig({ ...config, gender, top });
+  }
 
   async function handleSave() {
     if (mode === "emoji") {
@@ -126,6 +135,25 @@ export function AvatarPickerDialog({
             </div>
 
             <div className="space-y-2">
+              <Label>Genre</Label>
+              <div className="flex gap-2">
+                {AVATAR_GENDERS.map((g) => (
+                  <button
+                    key={g.value}
+                    type="button"
+                    onClick={() => handleGenderChange(g.value)}
+                    className={cn(
+                      "rounded-md border px-3 py-1.5 text-sm",
+                      config.gender === g.value ? "border-accent bg-accent/10 font-medium text-accent" : "border-border/60 hover:border-border"
+                    )}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>Couleur de peau</Label>
               <div className="flex flex-wrap gap-2">
                 {AVATAR_SKIN_COLORS.map((c) => (
@@ -141,7 +169,7 @@ export function AvatarPickerDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {AVATAR_HAIRSTYLES.map((h) => (
+                  {hairstyles.map((h) => (
                     <SelectItem key={h.value} value={h.value}>
                       {h.label}
                     </SelectItem>
