@@ -2,17 +2,29 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { differenceInCalendarDays, differenceInDays, isFuture, isPast, parseISO } from "date-fns";
 import { useCategories } from "@/features/portfolio/use-categories";
-import { useProjects } from "@/features/projects/use-projects";
+import { useProjects, type ProjectWithCategory } from "@/features/projects/use-projects";
 import { useTodos } from "@/features/todos/use-todos";
+import { useGlobalPendingExpensesCount } from "@/features/voyages/use-expenses";
+import { useThemeStore } from "@/features/theme/theme-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
-import { CalendarClock, ListChecks, ArrowRight, ChevronRight, Shapes } from "lucide-react";
+import { cn, formatDate } from "@/lib/utils";
+import { CalendarClock, ListChecks, ArrowRight, ChevronRight, Shapes, FolderKanban, ReceiptText } from "lucide-react";
+import type { Category } from "@/types/database";
+
+interface CategoryStat {
+  category: Category;
+  projects: ProjectWithCategory[];
+  activeCount: number;
+  upcomingCount: number;
+}
 
 export function PortfolioHome() {
   const { data: categories, isLoading: loadingCategories } = useCategories();
   const { data: projects, isLoading: loadingProjects } = useProjects();
   const { data: todos } = useTodos();
+  const { data: pendingExpensesCount } = useGlobalPendingExpensesCount();
+  const categoryLayout = useThemeStore((s) => s.categoryLayout);
 
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.status === "active"), [categories]);
 
@@ -38,18 +50,27 @@ export function PortfolioHome() {
         return sum + Math.max(0, differenceInDays(parseISO(p.end_date), parseISO(p.start_date)));
       }, 0);
     const openTasks = (todos ?? []).filter((t) => !t.done).length;
-    return { daysPlanned, openTasks };
+    const activeProjects = (projects ?? []).filter((p) => p.status === "active").length;
+    return { daysPlanned, openTasks, activeProjects };
   }, [projects, todos]);
 
-  const projectsByCategory = useMemo(() => {
-    const map = new Map<string, typeof projects>();
+  const categoryStats: CategoryStat[] = useMemo(() => {
+    const map = new Map<string, ProjectWithCategory[]>();
     for (const p of projects ?? []) {
       const list = map.get(p.category_id) ?? [];
       list.push(p);
-      map.set(p.category_id, list as typeof projects);
+      map.set(p.category_id, list);
     }
-    return map;
-  }, [projects]);
+    return activeCategories.map((category) => {
+      const catProjects = map.get(category.id) ?? [];
+      return {
+        category,
+        projects: catProjects,
+        activeCount: catProjects.filter((p) => p.status === "active").length,
+        upcomingCount: catProjects.filter((p) => p.status === "upcoming").length,
+      };
+    });
+  }, [activeCategories, projects]);
 
   if (loadingCategories || loadingProjects) {
     return <p className="text-muted-foreground">Chargement du portefeuille...</p>;
@@ -81,49 +102,18 @@ export function PortfolioHome() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard icon={FolderKanban} label="Projets actifs" value={String(metrics.activeProjects)} />
         <MetricCard icon={CalendarClock} label="Jours planifiés" value={`${metrics.daysPlanned} j`} />
         <MetricCard icon={ListChecks} label="Tâches ouvertes" value={String(metrics.openTasks)} />
+        <MetricCard icon={ReceiptText} label="Dépenses à valider" value={String(pendingExpensesCount ?? 0)} />
       </div>
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
-        <div className="space-y-2">
-          {activeCategories.map((category) => {
-            const catProjects = projectsByCategory.get(category.id) ?? [];
-            const activeCount = catProjects.filter((p) => p.status === "active").length;
-            const upcomingCount = catProjects.filter((p) => p.status === "upcoming").length;
-            return (
-              <Link key={category.id} to={`/categories/${category.id}`}>
-                <Card className="transition-shadow hover:shadow-md">
-                  <CardContent className="flex items-center gap-4 p-4">
-                    <span
-                      className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl"
-                      style={{ backgroundColor: `${category.color}26` }}
-                    >
-                      {category.icon ?? <Shapes className="h-5 w-5" style={{ color: category.color }} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{category.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {catProjects.length} projet{catProjects.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      {activeCount > 0 && (
-                        <Badge variant="secondary">
-                          {activeCount} actif{activeCount > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                      {upcomingCount > 0 && <Badge variant="outline">{upcomingCount} à venir</Badge>}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        {categoryLayout === "list" && <CategoryListLayout stats={categoryStats} />}
+        {categoryLayout === "grid" && <CategoryGridLayout stats={categoryStats} />}
+        {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
       </div>
     </div>
   );
@@ -142,5 +132,102 @@ function MetricCard({ icon: Icon, label, value }: { icon: typeof CalendarClock; 
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function CategoryIcon({ stat, className }: { stat: CategoryStat; className?: string }) {
+  return (
+    <span
+      className={cn("flex flex-shrink-0 items-center justify-center rounded-xl", className)}
+      style={{ backgroundColor: `${stat.category.color}26` }}
+    >
+      {stat.category.icon ?? <Shapes className="h-5 w-5" style={{ color: stat.category.color }} />}
+    </span>
+  );
+}
+
+function CategoryListLayout({ stats }: { stats: CategoryStat[] }) {
+  return (
+    <div className="space-y-2">
+      {stats.map((stat) => (
+        <Link key={stat.category.id} to={`/categories/${stat.category.id}`}>
+          <Card className="transition-shadow hover:shadow-md">
+            <CardContent className="flex items-center gap-4 p-4">
+              <CategoryIcon stat={stat} className="h-12 w-12 text-2xl" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{stat.category.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {stat.projects.length} projet{stat.projects.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                {stat.activeCount > 0 && (
+                  <Badge variant="secondary">
+                    {stat.activeCount} actif{stat.activeCount > 1 ? "s" : ""}
+                  </Badge>
+                )}
+                {stat.upcomingCount > 0 && <Badge variant="outline">{stat.upcomingCount} à venir</Badge>}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function CategoryGridLayout({ stats }: { stats: CategoryStat[] }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {stats.map((stat) => (
+        <Link key={stat.category.id} to={`/categories/${stat.category.id}`}>
+          <Card className="h-full transition-shadow hover:shadow-md">
+            <CardContent className="flex flex-col items-center gap-2 p-5 text-center">
+              <CategoryIcon stat={stat} className="h-16 w-16 rounded-2xl text-3xl" />
+              <p className="font-semibold">{stat.category.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {stat.projects.length} projet{stat.projects.length !== 1 ? "s" : ""}
+              </p>
+              <div className="flex flex-wrap justify-center gap-1">
+                {stat.activeCount > 0 && (
+                  <Badge variant="secondary">
+                    {stat.activeCount} actif{stat.activeCount > 1 ? "s" : ""}
+                  </Badge>
+                )}
+                {stat.upcomingCount > 0 && <Badge variant="outline">{stat.upcomingCount} à venir</Badge>}
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function CategoryCircleLayout({ stats }: { stats: CategoryStat[] }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-6 sm:justify-start">
+      {stats.map((stat) => (
+        <Link key={stat.category.id} to={`/categories/${stat.category.id}`} className="group flex w-24 flex-col items-center gap-2 text-center">
+          <span
+            className="flex h-20 w-20 items-center justify-center rounded-full text-3xl shadow-sm transition group-hover:scale-105"
+            style={{ backgroundColor: `${stat.category.color}26`, border: `2px solid ${stat.category.color}` }}
+          >
+            {stat.category.icon ?? <Shapes className="h-6 w-6" style={{ color: stat.category.color }} />}
+          </span>
+          <p className="text-sm font-medium leading-tight">{stat.category.name}</p>
+          <p className="text-xs leading-tight text-muted-foreground">
+            {stat.projects.length} projet{stat.projects.length !== 1 ? "s" : ""}
+          </p>
+          {(stat.activeCount > 0 || stat.upcomingCount > 0) && (
+            <div className="flex flex-wrap justify-center gap-1">
+              {stat.activeCount > 0 && <Badge variant="secondary">{stat.activeCount}</Badge>}
+              {stat.upcomingCount > 0 && <Badge variant="outline">{stat.upcomingCount}</Badge>}
+            </div>
+          )}
+        </Link>
+      ))}
+    </div>
   );
 }

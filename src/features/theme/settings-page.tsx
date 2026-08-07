@@ -1,16 +1,22 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
-import { useThemeStore, type ThemeMode } from "@/features/theme/theme-store";
+import { useThemeStore, type ThemeMode, type CategoryLayout } from "@/features/theme/theme-store";
 import { THEME_PRESETS } from "@/features/theme/theme-presets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, Shapes, Users, Check } from "lucide-react";
+import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
   { value: "dark", label: "Sombre", icon: Moon },
   { value: "system", label: "Système", icon: Monitor },
+];
+
+const categoryLayouts: { value: CategoryLayout; label: string; icon: typeof List }[] = [
+  { value: "list", label: "Liste", icon: List },
+  { value: "grid", label: "Grille", icon: LayoutGrid },
+  { value: "circle", label: "Cercles", icon: Circle },
 ];
 
 export function SettingsPage() {
@@ -19,6 +25,8 @@ export function SettingsPage() {
   const setMode = useThemeStore((s) => s.setMode);
   const themePreset = useThemeStore((s) => s.themePreset);
   const setThemePreset = useThemeStore((s) => s.setThemePreset);
+  const categoryLayout = useThemeStore((s) => s.categoryLayout);
+  const setCategoryLayout = useThemeStore((s) => s.setCategoryLayout);
 
   return (
     <div className="max-w-xl space-y-6">
@@ -70,6 +78,25 @@ export function SettingsPage() {
               </span>
               <span className="text-xs text-muted-foreground">{preset.label}</span>
             </button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Disposition des catégories</CardTitle>
+          <CardDescription>La façon dont la liste des catégories de projets s'affiche sur la page d'accueil.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex gap-2">
+          {categoryLayouts.map((l) => (
+            <Button
+              key={l.value}
+              variant={categoryLayout === l.value ? "default" : "outline"}
+              onClick={() => setCategoryLayout(l.value)}
+              className="flex-1"
+            >
+              <l.icon className="mr-2 h-4 w-4" /> {l.label}
+            </Button>
           ))}
         </CardContent>
       </Card>

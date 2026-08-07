@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { useProject, useUpdateProject } from "@/features/projects/use-projects";
+import { useNavigate, useParams } from "react-router-dom";
+import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,11 +15,15 @@ import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { toast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const { data: project, isLoading } = useProject(projectId);
   const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  const [deleting, setDeleting] = useState(false);
   const setAccentColor = useThemeStore((s) => s.setAccentColor);
 
   const [form, setForm] = useState({
@@ -47,6 +51,23 @@ export function ProjectDetailPage() {
   }, [project, setAccentColor]);
 
   if (isLoading || !project) return <p className="text-muted-foreground">Chargement...</p>;
+
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        `Supprimer définitivement le projet "${project?.title ?? ""}" ? Tout son contenu (documents, tâches, collaborateurs) sera perdu. Cette action est irréversible.`
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      await deleteProject.mutateAsync(project!.id);
+      navigate("/");
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+      setDeleting(false);
+    }
+  }
 
   async function handleSave() {
     if (!projectId) return;
@@ -79,12 +100,17 @@ export function ProjectDetailPage() {
           />
           <ProjectSwitcher currentProjectId={project.id} currentCategoryId={project.category_id} />
         </div>
-        <div className="flex items-center gap-2">
-          <EmojiPickerButton
-            value={project.icon}
-            onChange={(icon) => updateProject.mutate({ id: project.id, icon })}
-          />
-          <h1 className="text-2xl font-bold">{project.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <EmojiPickerButton
+              value={project.icon}
+              onChange={(icon) => updateProject.mutate({ id: project.id, icon })}
+            />
+            <h1 className="text-2xl font-bold">{project.title}</h1>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting}>
+            <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce projet"}
+          </Button>
         </div>
       </div>
 
