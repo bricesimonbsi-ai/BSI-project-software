@@ -1,4 +1,4 @@
-export type ThemePresetId = "ocean" | "emeraude" | "violet" | "corail" | "rose" | "ambre";
+export type ThemePresetId = "ocean" | "emeraude" | "violet" | "corail" | "rose" | "ambre" | "citron" | "sport" | "nature" | "nuit";
 
 export interface ThemePresetColors {
   /** Triplet HSL sans fonction ("H S% L%"), au format attendu par les variables CSS --primary/--accent/--ring. */
@@ -60,6 +60,34 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: "#f59e0b",
     light: { primary: "38 92% 42%", accent: "43 96% 40%", ring: "38 92% 42%" },
     dark: { primary: "43 96% 58%", accent: "43 96% 58%", ring: "43 96% 58%" },
+  },
+  {
+    id: "citron",
+    label: "Tarte au citron",
+    swatch: "#eab308",
+    light: { primary: "50 92% 42%", accent: "45 96% 40%", ring: "50 92% 42%" },
+    dark: { primary: "48 96% 58%", accent: "48 96% 58%", ring: "48 96% 58%" },
+  },
+  {
+    id: "sport",
+    label: "Sport",
+    swatch: "#e11d48",
+    light: { primary: "355 85% 50%", accent: "5 90% 50%", ring: "355 85% 50%" },
+    dark: { primary: "355 85% 64%", accent: "355 85% 64%", ring: "355 85% 64%" },
+  },
+  {
+    id: "nature",
+    label: "Nature",
+    swatch: "#4d7c0f",
+    light: { primary: "95 50% 32%", accent: "100 45% 36%", ring: "95 50% 32%" },
+    dark: { primary: "95 45% 56%", accent: "95 45% 56%", ring: "95 45% 56%" },
+  },
+  {
+    id: "nuit",
+    label: "Nuit",
+    swatch: "#4f46e5",
+    light: { primary: "243 75% 59%", accent: "250 80% 62%", ring: "243 75% 59%" },
+    dark: { primary: "243 75% 68%", accent: "243 75% 68%", ring: "243 75% 68%" },
   },
 ];
 

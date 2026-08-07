@@ -1,15 +1,14 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { differenceInCalendarDays, differenceInDays, isFuture, isPast, parseISO } from "date-fns";
+import { differenceInCalendarDays, isFuture, isPast, parseISO } from "date-fns";
 import { useCategories } from "@/features/portfolio/use-categories";
 import { useProjects, type ProjectWithCategory } from "@/features/projects/use-projects";
-import { useTodos } from "@/features/todos/use-todos";
-import { useGlobalPendingExpensesCount } from "@/features/voyages/use-expenses";
 import { useThemeStore } from "@/features/theme/theme-store";
+import { FeaturedProjectPanel } from "@/features/portfolio/featured-project-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatDate } from "@/lib/utils";
-import { CalendarClock, ListChecks, ArrowRight, ChevronRight, Shapes, FolderKanban, ReceiptText } from "lucide-react";
+import { ChevronRight, Shapes } from "lucide-react";
 import type { Category } from "@/types/database";
 
 interface CategoryStat {
@@ -22,8 +21,6 @@ interface CategoryStat {
 export function PortfolioHome() {
   const { data: categories, isLoading: loadingCategories } = useCategories();
   const { data: projects, isLoading: loadingProjects } = useProjects();
-  const { data: todos } = useTodos();
-  const { data: pendingExpensesCount } = useGlobalPendingExpensesCount();
   const categoryLayout = useThemeStore((s) => s.categoryLayout);
 
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.status === "active"), [categories]);
@@ -42,17 +39,14 @@ export function PortfolioHome() {
     return null;
   }, [projects]);
 
-  const metrics = useMemo(() => {
-    const daysPlanned = (projects ?? [])
-      .filter((p) => p.status === "active" || p.status === "upcoming")
-      .reduce((sum, p) => {
-        if (!p.start_date || !p.end_date) return sum;
-        return sum + Math.max(0, differenceInDays(parseISO(p.end_date), parseISO(p.start_date)));
-      }, 0);
-    const openTasks = (todos ?? []).filter((t) => !t.done).length;
-    const activeProjects = (projects ?? []).filter((p) => p.status === "active").length;
-    return { daysPlanned, openTasks, activeProjects };
-  }, [projects, todos]);
+  // Les prochains départs/débuts, hors celui déjà mis en avant ci-dessus — occupe l'espace
+  // libéré par les anciens indicateurs génériques avec quelque chose de plus actionnable.
+  const upcomingProjects = useMemo(() => {
+    return (projects ?? [])
+      .filter((p) => p.id !== featuredProject?.project.id && p.start_date && isFuture(parseISO(p.start_date)))
+      .sort((a, b) => parseISO(a.start_date!).getTime() - parseISO(b.start_date!).getTime())
+      .slice(0, 6);
+  }, [projects, featuredProject]);
 
   const categoryStats: CategoryStat[] = useMemo(() => {
     const map = new Map<string, ProjectWithCategory[]>();
@@ -78,36 +72,31 @@ export function PortfolioHome() {
 
   return (
     <div className="space-y-6">
-      {featuredProject && (
-        <Card className="overflow-hidden border-accent/40 bg-gradient-to-br from-accent/15 to-transparent">
-          <CardContent className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-accent">{featuredProject.status === "ongoing" ? "En cours" : "Prochainement"}</p>
-              <h2 className="text-2xl font-bold">
-                {featuredProject.project.icon && <span className="mr-2">{featuredProject.project.icon}</span>}
-                {featuredProject.project.title}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {featuredProject.status === "ongoing"
-                  ? `${formatDate(featuredProject.project.start_date)} → ${formatDate(featuredProject.project.end_date)}`
-                  : `${formatDate(featuredProject.project.start_date)} · dans ${differenceInCalendarDays(parseISO(featuredProject.project.start_date!), new Date())} jours`}
-              </p>
-            </div>
-            <Link to={`/projects/${featuredProject.project.id}`}>
-              <Badge variant="accent" className="flex items-center gap-1 px-3 py-1.5 text-sm">
-                Voir le projet <ArrowRight className="h-3.5 w-3.5" />
-              </Badge>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+      {featuredProject && <FeaturedProjectPanel project={featuredProject.project} status={featuredProject.status} />}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard icon={FolderKanban} label="Projets actifs" value={String(metrics.activeProjects)} />
-        <MetricCard icon={CalendarClock} label="Jours planifiés" value={`${metrics.daysPlanned} j`} />
-        <MetricCard icon={ListChecks} label="Tâches ouvertes" value={String(metrics.openTasks)} />
-        <MetricCard icon={ReceiptText} label="Dépenses à valider" value={String(pendingExpensesCount ?? 0)} />
-      </div>
+      {upcomingProjects.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Prochainement</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {upcomingProjects.map((p) => (
+              <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
+                <Card className="w-56 transition-shadow hover:shadow-md">
+                  <CardContent className="space-y-1 p-4">
+                    <p className="flex items-center gap-1.5 truncate font-semibold">
+                      {p.icon && <span>{p.icon}</span>}
+                      {p.title}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{p.categories?.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(p.start_date)} · dans {differenceInCalendarDays(parseISO(p.start_date!), new Date())} j
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
@@ -116,22 +105,6 @@ export function PortfolioHome() {
         {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
       </div>
     </div>
-  );
-}
-
-function MetricCard({ icon: Icon, label, value }: { icon: typeof CalendarClock; label: string; value: string }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-5">
-        <div className="rounded-md bg-accent/15 p-2 text-accent">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

@@ -255,7 +255,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="todos">
-          <TodoList projectId={projectId} />
+          <TodoList projectId={projectId} isVoyageContext />
         </TabsContent>
 
         <TabsContent value="collaborators">

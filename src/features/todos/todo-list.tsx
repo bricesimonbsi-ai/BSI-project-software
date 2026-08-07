@@ -1,6 +1,8 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useTodos, useCreateTodo, useToggleTodo, useDeleteTodo, useUpdateTodo } from "@/features/todos/use-todos";
 import { usePeople, useProjectPeople } from "@/features/people/use-people";
+import { useProjects } from "@/features/projects/use-projects";
+import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -76,10 +78,56 @@ function AssigneeSelect({
   );
 }
 
-export function TodoList({ projectId }: { projectId?: string }) {
+/** Avatar(s) de la ou des personnes assignées à une tâche : un avatar pour une personne précise,
+ * une petite pile d'avatars (limitée) pour "tous les voyageurs". */
+function AssigneeAvatars({ todo, allPeople, assignablePeople }: { todo: Todo; allPeople: Person[]; assignablePeople: Person[] }) {
+  if (todo.assigned_to_all) {
+    const list = assignablePeople.length > 0 ? assignablePeople : allPeople;
+    if (list.length === 0) return <Users className="h-3 w-3" />;
+    const shown = list.slice(0, 3);
+    return (
+      <span className="flex items-center gap-0.5">
+        {shown.map((p, i) => (
+          <PersonAvatarBadge
+            key={p.id}
+            name={p.name}
+            avatarEmoji={p.avatar_emoji}
+            avatarConfig={p.avatar_config}
+            personId={p.id}
+            index={i}
+            className="h-4 w-4 text-[8px]"
+          />
+        ))}
+        {list.length > shown.length && (
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[8px] font-medium">
+            +{list.length - shown.length}
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (todo.assigned_person_id) {
+    const p = allPeople.find((pp) => pp.id === todo.assigned_person_id);
+    if (!p) return null;
+    return (
+      <PersonAvatarBadge
+        name={p.name}
+        avatarEmoji={p.avatar_emoji}
+        avatarConfig={p.avatar_config}
+        personId={p.id}
+        index={0}
+        className="h-4 w-4 text-[8px]"
+      />
+    );
+  }
+  return null;
+}
+
+export function TodoList({ projectId, isVoyageContext = false }: { projectId?: string; isVoyageContext?: boolean }) {
   const { data: todos, isLoading } = useTodos(projectId);
   const { data: allPeople } = usePeople();
   const { data: linkedPeople } = useProjectPeople(projectId);
+  const { data: allProjects } = useProjects();
   const createTodo = useCreateTodo();
   const toggleTodo = useToggleTodo();
   const deleteTodo = useDeleteTodo();
@@ -92,6 +140,7 @@ export function TodoList({ projectId }: { projectId?: string }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
 
   // Limité aux voyageurs du projet quand on connaît le projet (todo-list intégrée à un
   // voyage/projet) ; sinon tout le répertoire (page transverse Tâches, tous projets confondus).
@@ -100,9 +149,14 @@ export function TodoList({ projectId }: { projectId?: string }) {
     [projectId, linkedPeople, allPeople]
   );
 
+  // Vue transverse uniquement : liste des projets actifs, pour filtrer sans le côté "catégorie
+  // visa/vaccin/permis..." qui n'a de sens que dans le contexte d'un voyage précis.
+  const activeProjects = useMemo(() => (allProjects ?? []).filter((p) => p.status === "active"), [allProjects]);
+
   const filtered = useMemo(() => {
     return (todos ?? []).filter((t) => {
-      if (categoryFilter !== "all" && (t.category ?? "autre") !== categoryFilter) return false;
+      if (isVoyageContext && categoryFilter !== "all" && (t.category ?? "autre") !== categoryFilter) return false;
+      if (!projectId && projectFilter !== "all" && t.project_id !== projectFilter) return false;
       if (assigneeFilter === UNASSIGNED && (t.assigned_person_id || t.assigned_to_all)) return false;
       if (assigneeFilter === ALL_TRAVELERS && !t.assigned_to_all) return false;
       if (assigneeFilter !== "all" && assigneeFilter !== UNASSIGNED && assigneeFilter !== ALL_TRAVELERS && t.assigned_person_id !== assigneeFilter)
@@ -112,7 +166,7 @@ export function TodoList({ projectId }: { projectId?: string }) {
       if (dueFilter === "none" && t.due_date) return false;
       return true;
     });
-  }, [todos, categoryFilter, assigneeFilter, dueFilter]);
+  }, [todos, categoryFilter, assigneeFilter, dueFilter, projectFilter, projectId, isVoyageContext]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -146,19 +200,37 @@ export function TodoList({ projectId }: { projectId?: string }) {
       </form>
 
       <div className="flex flex-wrap gap-2">
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[9.5rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes catégories</SelectItem>
-            {CATEGORY_OPTIONS.map((c) => (
-              <SelectItem key={c.value} value={c.value}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isVoyageContext && (
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[9.5rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes catégories</SelectItem>
+              {CATEGORY_OPTIONS.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {!projectId && (
+          <Select value={projectFilter} onValueChange={setProjectFilter}>
+            <SelectTrigger className="w-[11rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous projets actifs</SelectItem>
+              {activeProjects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.icon ? `${p.icon} ` : ""}
+                  {p.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
           <SelectTrigger className="w-[9.5rem]">
             <SelectValue />
@@ -213,7 +285,7 @@ export function TodoList({ projectId }: { projectId?: string }) {
                   )}
                   {assigneeLabel(todo, allPeople ?? []) && (
                     <Badge variant="outline" className="gap-1 text-[10px]">
-                      <Users className="h-3 w-3" />
+                      <AssigneeAvatars todo={todo} allPeople={allPeople ?? []} assignablePeople={assignablePeople} />
                       {assigneeLabel(todo, allPeople ?? [])}
                     </Badge>
                   )}

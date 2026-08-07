@@ -440,23 +440,6 @@ export function useVoyageCategoryBudgetSummary(voyageId: string | undefined) {
 }
 
 /** Dépenses réelles/prévisionnelles rattachées à chaque personne associée au projet du voyage. */
-/** Nombre total de dépenses "à valider" (needs_review) tous voyages confondus — pour l'indicateur
- * de la page d'accueil, sans avoir à ouvrir chaque voyage un par un. La RLS de voyage_expenses
- * restreint déjà le résultat aux voyages accessibles à l'utilisateur. */
-export function useGlobalPendingExpensesCount() {
-  return useQuery({
-    queryKey: ["voyage-expenses-pending-count"],
-    queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from("voyage_expenses")
-        .select("id", { count: "exact", head: true })
-        .eq("needs_review", true);
-      if (error) throw error;
-      return count ?? 0;
-    },
-  });
-}
-
 export function useVoyagePersonExpenseSummary(voyageId: string | undefined) {
   return useQuery({
     queryKey: ["voyage-person-expense-summary", voyageId],
