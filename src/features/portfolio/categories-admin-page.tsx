@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Plus } from "lucide-react";
 import type { Category } from "@/types/database";
 
@@ -39,6 +40,11 @@ export function CategoriesAdminPage() {
                   onChange={(e) => updateCategory.mutate({ id: category.id, color: e.target.value })}
                   className="h-8 w-8 cursor-pointer rounded border-0"
                   title="Couleur d'accent"
+                />
+                <EmojiPickerButton
+                  value={category.icon}
+                  onChange={(icon) => updateCategory.mutate({ id: category.id, icon })}
+                  className="h-8 w-8"
                 />
                 <div>
                   <CategoryNameInput category={category} updateCategory={updateCategory} />
@@ -103,6 +109,7 @@ function NewCategoryDialog({ nextPosition }: { nextPosition: number }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#64748b");
+  const [icon, setIcon] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const createCategory = useCreateCategory();
 
@@ -110,10 +117,11 @@ function NewCategoryDialog({ nextPosition }: { nextPosition: number }) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await createCategory.mutateAsync({ name, color, position: nextPosition });
+      await createCategory.mutateAsync({ name, color, icon, position: nextPosition });
       setOpen(false);
       setName("");
       setColor("#64748b");
+      setIcon(null);
     } finally {
       setSubmitting(false);
     }
@@ -135,15 +143,21 @@ function NewCategoryDialog({ nextPosition }: { nextPosition: number }) {
             <Label htmlFor="cat-name">Nom</Label>
             <Input id="cat-name" required value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="cat-color">Couleur d'accent</Label>
-            <input
-              id="cat-color"
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-10 w-16 cursor-pointer rounded border-0"
-            />
+          <div className="flex gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="cat-color">Couleur d'accent</Label>
+              <input
+                id="cat-color"
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-10 w-16 cursor-pointer rounded border-0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Icône</Label>
+              <EmojiPickerButton value={icon} onChange={setIcon} className="h-10 w-10 text-xl" />
+            </div>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitting}>

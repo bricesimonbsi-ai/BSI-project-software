@@ -46,6 +46,7 @@ export type Category = {
   id: string;
   name: string;
   color: string;
+  icon: string | null;
   status: CategoryStatus;
   position: number;
   module_key: string | null;
@@ -56,6 +57,7 @@ export type Project = {
   id: string;
   category_id: string;
   title: string;
+  icon: string | null;
   description: string | null;
   start_date: string | null;
   end_date: string | null;

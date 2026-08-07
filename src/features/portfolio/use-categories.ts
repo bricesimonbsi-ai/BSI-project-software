@@ -21,7 +21,7 @@ export function useCategories() {
 export function useCreateCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; color: string; position: number }) => {
+    mutationFn: async (input: { name: string; color: string; icon?: string | null; position: number }) => {
       const { error } = await supabase.from("categories").insert(input);
       if (error) throw error;
     },

@@ -49,6 +49,7 @@ export function useCreateProject() {
     mutationFn: async (input: {
       category_id: string;
       title: string;
+      icon?: string | null;
       description?: string;
       start_date?: string | null;
       end_date?: string | null;

@@ -62,7 +62,10 @@ export function PortfolioHome() {
           <CardContent className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-accent">{featuredProject.status === "ongoing" ? "En cours" : "Prochainement"}</p>
-              <h2 className="text-2xl font-bold">{featuredProject.project.title}</h2>
+              <h2 className="text-2xl font-bold">
+                {featuredProject.project.icon && <span className="mr-2">{featuredProject.project.icon}</span>}
+                {featuredProject.project.title}
+              </h2>
               <p className="text-sm text-muted-foreground">
                 {featuredProject.status === "ongoing"
                   ? `${formatDate(featuredProject.project.start_date)} → ${formatDate(featuredProject.project.end_date)}`
@@ -94,7 +97,10 @@ export function PortfolioHome() {
               <Link key={category.id} to={`/categories/${category.id}`}>
                 <Card className="h-full transition-shadow hover:shadow-md" style={{ borderTopColor: category.color, borderTopWidth: 3 }}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-base">{category.name}</CardTitle>
+                    <CardTitle className="flex items-center gap-1.5 text-base">
+                      {category.icon && <span>{category.icon}</span>}
+                      {category.name}
+                    </CardTitle>
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
                   </CardHeader>
                   <CardContent>

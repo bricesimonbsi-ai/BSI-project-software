@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateProject } from "@/features/projects/use-projects";
+import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { Category } from "@/types/database";
@@ -14,6 +15,7 @@ import { Plus } from "lucide-react";
 export function NewProjectDialog({ category }: { category: Category }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [icon, setIcon] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -30,6 +32,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
       const project = await createProject.mutateAsync({
         category_id: category.id,
         title,
+        icon,
         description: description || undefined,
         start_date: startDate || null,
         end_date: endDate || null,
@@ -47,6 +50,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
 
       setOpen(false);
       setTitle("");
+      setIcon(null);
       setDescription("");
       setStartDate("");
       setEndDate("");
@@ -73,7 +77,10 @@ export function NewProjectDialog({ category }: { category: Category }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="title">Titre</Label>
-            <Input id="title" required value={title} onChange={(e) => setTitle(e.target.value)} />
+            <div className="flex gap-2">
+              <EmojiPickerButton value={icon} onChange={setIcon} />
+              <Input id="title" required value={title} onChange={(e) => setTitle(e.target.value)} className="flex-1" />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>

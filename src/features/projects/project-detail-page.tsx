@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { TodoList } from "@/features/todos/todo-list";
 import { DocumentsPanel } from "@/features/projects/documents-panel";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
+import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { toast } from "@/hooks/use-toast";
 
 export function ProjectDetailPage() {
@@ -67,7 +68,13 @@ export function ProjectDetailPage() {
     <div className="max-w-3xl space-y-6">
       <div>
         <p className="text-sm text-muted-foreground">{project.categories?.name}</p>
-        <h1 className="text-2xl font-bold">{project.title}</h1>
+        <div className="flex items-center gap-2">
+          <EmojiPickerButton
+            value={project.icon}
+            onChange={(icon) => updateProject.mutate({ id: project.id, icon })}
+          />
+          <h1 className="text-2xl font-bold">{project.title}</h1>
+        </div>
       </div>
 
       <Tabs defaultValue="details">

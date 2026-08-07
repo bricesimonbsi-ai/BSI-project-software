@@ -21,6 +21,7 @@ import { ProjectPeoplePicker } from "@/features/people/project-people-picker";
 import { BudgetInsights } from "@/features/voyages/budget-insights";
 import { EquipmentTab } from "@/features/voyages/equipment-tab";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
+import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
@@ -109,7 +110,10 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">Voyages</p>
-          <ProjectTitleInput projectId={projectId} title={project.title} />
+          <div className="flex items-center gap-2">
+            <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: projectId, icon })} />
+            <ProjectTitleInput projectId={projectId} title={project.title} />
+          </div>
           <p className="text-sm text-muted-foreground">
             {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {travelerCount} voyageur{travelerCount > 1 ? "s" : ""}
           </p>

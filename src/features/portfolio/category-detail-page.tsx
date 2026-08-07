@@ -36,7 +36,10 @@ export function CategoryDetailPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: category.color }} />
-          <h1 className="text-2xl font-bold">{category.name}</h1>
+          <h1 className="text-2xl font-bold">
+            {category.icon && <span className="mr-2">{category.icon}</span>}
+            {category.name}
+          </h1>
         </div>
         <NewProjectDialog category={category} />
       </div>
@@ -49,7 +52,10 @@ export function CategoryDetailPage() {
             <Card className="h-full transition-shadow hover:shadow-md">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{project.title}</CardTitle>
+                  <CardTitle className="flex items-center gap-1.5 text-base">
+                    {project.icon && <span>{project.icon}</span>}
+                    {project.title}
+                  </CardTitle>
                   <Badge variant="secondary">{statusLabel[project.status]}</Badge>
                 </div>
               </CardHeader>
