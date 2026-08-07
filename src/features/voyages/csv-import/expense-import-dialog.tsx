@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useState, useMemo, type ChangeEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes } from "@/features/voyages/use-sous-etapes";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
+import { useVoyageAllExpenses } from "@/features/voyages/use-expenses";
 import { buildFlatRows } from "@/features/voyages/itinerary/itinerary-model";
 import { parseDelimitedText, parseAmount, parseDateFlexible } from "@/features/voyages/csv-import/csv-parse";
 import {
@@ -20,7 +21,7 @@ import {
 import { useImportExpenses, type ImportExpenseInput } from "@/features/voyages/csv-import/use-expense-import";
 import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { Upload } from "lucide-react";
+import { Upload, TriangleAlert } from "lucide-react";
 import type { ExpenseCategory, VoyageSousEtape } from "@/types/database";
 
 const CARD_CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
@@ -41,6 +42,20 @@ function guessHeaderRowIndex(grid: string[][]): number {
     if (row.length >= 3 && row.some((c) => HEADER_KEYWORDS.some((k) => c.toLowerCase().includes(k)))) return i;
   }
   return 0;
+}
+
+/** Signature "même montant, même ville, même date" (voir la demande de détection de doublon) —
+ * volontairement SANS la catégorie : deux réimports d'un même relevé (périodes qui se chevauchent
+ * d'un mois sur l'autre) produisent des dépenses identiques sur ces 3 critères, peu importe leur
+ * catégorie. Pour un retrait, la signature se calcule sur CHAQUE part ventilée (ce qui est
+ * réellement enregistré en base), pas sur le montant brut du retrait qui, lui, n'est jamais stocké. */
+function signature(date: string | null, amount: number, sousEtapeId: string): string {
+  return `${date ?? "?"}|${amount.toFixed(2)}|${sousEtapeId}`;
+}
+
+function rowSignatures(r: ParsedRow, cashRatios: CashSplitRatios): string[] {
+  if (r.isWithdrawal) return splitCashWithdrawal(r.amount, cashRatios).map((item) => signature(r.date, item.amount, r.sousEtapeId));
+  return [signature(r.date, r.amount, r.sousEtapeId)];
 }
 
 type Step = "file" | "header" | "mapping" | "preview";
@@ -78,8 +93,22 @@ export function ExpenseImportDialog({
   const { data: voyage } = useVoyage(projectId);
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
+  const { data: existingExpenses } = useVoyageAllExpenses(voyageId);
   const updateVoyage = useUpdateVoyage(projectId);
   const importExpenses = useImportExpenses(voyageId, referenceCurrency);
+
+  // Dépenses réelles déjà en base (n'importe quelle source : saisie manuelle ou import
+  // précédent) — sert à repérer un probable doublon (même montant/ville/date) si l'utilisateur
+  // réimporte un relevé dont la période chevauche un import déjà fait.
+  const existingSignatures = useMemo(
+    () =>
+      new Set(
+        (existingExpenses ?? [])
+          .filter((e) => !e.planned)
+          .map((e) => signature(e.expense_date, e.amount * e.manual_rate_to_reference, e.sous_etape_id ?? NONE))
+      ),
+    [existingExpenses]
+  );
 
   const citiesByEtape = new Map<string, VoyageSousEtape[]>();
   for (const se of allSousEtapes ?? []) {
@@ -187,6 +216,17 @@ export function ExpenseImportDialog({
       toast({ title: "Aucune dépense reconnue avec ce mapping", variant: "destructive" });
       return;
     }
+
+    // Décoché par défaut si ça ressemble à un doublon (déjà en base, ou répété dans ce même
+    // fichier) — l'utilisateur reste libre de recocher s'il sait que c'est légitime (voir le
+    // badge d'avertissement dans l'aperçu, qui reste affiché même après recochage).
+    const batchCounts = new Map<string, number>();
+    for (const r of parsed) for (const s of rowSignatures(r, cashRatios)) batchCounts.set(s, (batchCounts.get(s) ?? 0) + 1);
+    for (const r of parsed) {
+      const looksDuplicate = rowSignatures(r, cashRatios).some((s) => existingSignatures.has(s) || (batchCounts.get(s) ?? 0) > 1);
+      if (looksDuplicate) r.include = false;
+    }
+
     setRows(parsed);
     setStep("preview");
   }
@@ -207,6 +247,10 @@ export function ExpenseImportDialog({
     for (const r of included) {
       const sousEtapeId = r.sousEtapeId === NONE ? null : r.sousEtapeId;
       if (r.isWithdrawal) {
+        // Chaque part garde le libellé d'origine du retrait + une mention explicite de sa part
+        // et du montant total retiré, pour rester compréhensible une fois affichée seule dans
+        // "Gérer mes dépenses" (3 lignes distinctes, pas un seul bloc groupé) — sans ça, 3 lignes
+        // identiques avec des montants différents semblent 3 dépenses sans rapport entre elles.
         for (const item of splitCashWithdrawal(r.amount, cashRatios)) {
           if (item.amount <= 0) continue;
           inputs.push({
@@ -215,7 +259,7 @@ export function ExpenseImportDialog({
             sub_category: item.subCategory ?? null,
             amount: item.amount,
             expense_date: r.date,
-            description: r.description,
+            description: `${r.description} — part ${item.label} (retrait de ${formatCurrency(r.amount, referenceCurrency)})`,
             source: "retrait",
           });
         }
@@ -238,8 +282,21 @@ export function ExpenseImportDialog({
     });
   }
 
+  const mappingSampleRows = rawGrid.slice(headerRowIndex + 1, headerRowIndex + 4);
   const hasWithdrawalRows = rows.some((r) => r.isWithdrawal);
   const includedCount = rows.filter((r) => r.include).length;
+
+  // Recalculé à chaque modification (ville/montant peuvent changer dans l'aperçu) : purement
+  // indicatif, contrairement au décochage par défaut ci-dessus qui n'a lieu qu'une fois.
+  const duplicateIds = useMemo(() => {
+    const batchCounts = new Map<string, number>();
+    for (const r of rows) for (const s of rowSignatures(r, cashRatios)) batchCounts.set(s, (batchCounts.get(s) ?? 0) + 1);
+    const ids = new Set<string>();
+    for (const r of rows) {
+      if (rowSignatures(r, cashRatios).some((s) => existingSignatures.has(s) || (batchCounts.get(s) ?? 0) > 1)) ids.add(r.id);
+    }
+    return ids;
+  }, [rows, cashRatios, existingSignatures]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -305,11 +362,11 @@ export function ExpenseImportDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs">Colonne date</Label>
-                <ColumnSelect value={dateColIdx} onChange={setDateColIdx} columns={rawGrid[headerRowIndex]} />
+                <ColumnSelect value={dateColIdx} onChange={setDateColIdx} columns={rawGrid[headerRowIndex]} sampleRows={mappingSampleRows} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Colonne libellé / description</Label>
-                <ColumnSelect value={descColIdx} onChange={setDescColIdx} columns={rawGrid[headerRowIndex]} />
+                <ColumnSelect value={descColIdx} onChange={setDescColIdx} columns={rawGrid[headerRowIndex]} sampleRows={mappingSampleRows} />
               </div>
             </div>
 
@@ -333,13 +390,16 @@ export function ExpenseImportDialog({
             {amountMode === "split" ? (
               <div className="max-w-xs space-y-1">
                 <Label className="text-xs">Colonne débit (dépenses)</Label>
-                <ColumnSelect value={debitColIdx} onChange={setDebitColIdx} columns={rawGrid[headerRowIndex]} />
-                <p className="text-xs text-muted-foreground">Les lignes sans valeur dans cette colonne (rentrées d'argent) sont ignorées.</p>
+                <ColumnSelect value={debitColIdx} onChange={setDebitColIdx} columns={rawGrid[headerRowIndex]} sampleRows={mappingSampleRows} />
+                <p className="text-xs text-muted-foreground">
+                  Les lignes sans valeur dans cette colonne (rentrées d'argent) sont ignorées. Attention à ne pas choisir la colonne "Solde"
+                  (regarde les exemples affichés).
+                </p>
               </div>
             ) : (
               <div className="max-w-xs space-y-1">
                 <Label className="text-xs">Colonne montant</Label>
-                <ColumnSelect value={amountColIdx} onChange={setAmountColIdx} columns={rawGrid[headerRowIndex]} />
+                <ColumnSelect value={amountColIdx} onChange={setAmountColIdx} columns={rawGrid[headerRowIndex]} sampleRows={mappingSampleRows} />
                 <p className="text-xs text-muted-foreground">Suppose que toutes les lignes du fichier sont des dépenses.</p>
               </div>
             )}
@@ -388,6 +448,15 @@ export function ExpenseImportDialog({
               </div>
             )}
 
+            {duplicateIds.size > 0 && (
+              <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                {duplicateIds.size} ligne{duplicateIds.size > 1 ? "s" : ""} ressemble{duplicateIds.size > 1 ? "nt" : ""} à une dépense déjà
+                existante (même montant, même ville, même date) — décochée{duplicateIds.size > 1 ? "s" : ""} par défaut, à recocher si c'est
+                volontaire.
+              </p>
+            )}
+
             <div className="max-h-[24rem] overflow-auto rounded-md border border-border">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-card">
@@ -408,6 +477,12 @@ export function ExpenseImportDialog({
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5">{r.date ?? <span className="text-destructive">non reconnue</span>}</td>
                       <td className="max-w-[14rem] truncate px-2 py-1.5" title={r.description}>
+                        {duplicateIds.has(r.id) && (
+                          <TriangleAlert
+                            className="mr-1 inline h-3.5 w-3.5 text-amber-600 dark:text-amber-400"
+                            aria-label="Doublon probable"
+                          />
+                        )}
                         {r.isWithdrawal ? "💵 " : "💳 "}
                         {r.description}
                       </td>
@@ -471,19 +546,41 @@ export function ExpenseImportDialog({
   );
 }
 
-function ColumnSelect({ value, onChange, columns }: { value: string; onChange: (v: string) => void; columns: string[] | undefined }) {
+/** `sampleRows` (quelques lignes de données brutes) permet d'afficher un aperçu des valeurs
+ * réelles de la colonne choisie — sans ça, une colonne "Solde" (à ne surtout pas confondre avec
+ * "Débit") reste indiscernable d'une colonne de montants tant qu'on n'a pas terminé tout
+ * l'import : les deux sont des nombres avec virgule/point, seul le contenu les distingue. */
+function ColumnSelect({
+  value,
+  onChange,
+  columns,
+  sampleRows,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  columns: string[] | undefined;
+  sampleRows: string[][];
+}) {
+  const idx = Number(value);
+  const samples =
+    value !== NONE && !Number.isNaN(idx)
+      ? sampleRows.map((r) => r[idx]).filter((v): v is string => v != null && v.trim() !== "").slice(0, 3)
+      : [];
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-9">
-        <SelectValue placeholder="Choisir une colonne" />
-      </SelectTrigger>
-      <SelectContent>
-        {(columns ?? []).map((label, i) => (
-          <SelectItem key={i} value={String(i)}>
-            {label || `Colonne ${i + 1}`}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="space-y-1">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-9">
+          <SelectValue placeholder="Choisir une colonne" />
+        </SelectTrigger>
+        <SelectContent>
+          {(columns ?? []).map((label, i) => (
+            <SelectItem key={i} value={String(i)}>
+              {label || `Colonne ${i + 1}`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {samples.length > 0 && <p className="text-xs text-muted-foreground">Exemples : {samples.join(" · ")}</p>}
+    </div>
   );
 }

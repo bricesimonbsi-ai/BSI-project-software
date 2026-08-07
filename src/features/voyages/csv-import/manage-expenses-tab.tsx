@@ -88,6 +88,11 @@ function PendingExpenseRow({
   const updateExpense = useUpdateExpense(invalidateKey);
   const deleteExpense = useDeleteExpense(invalidateKey);
   const assignToCity = useAssignExpenseToCity(invalidateKey);
+  // Sans ville ni catégorie, la dépense reste invisible dans le tableau détail (voir
+  // budget-overview-table.tsx) : la valider trop tôt la ferait "disparaître" sans qu'on puisse
+  // encore la retrouver ailleurs que dans cet onglet — on bloque donc tant que les deux ne sont
+  // pas renseignés.
+  const canValidate = expense.sous_etape_id != null && expense.category !== "non_categorise";
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 p-3">
@@ -128,7 +133,9 @@ function PendingExpenseRow({
           type="button"
           size="sm"
           variant="outline"
-          className="gap-1 text-emerald-700 dark:text-emerald-300"
+          className="gap-1 text-emerald-700 disabled:text-muted-foreground dark:text-emerald-300"
+          disabled={!canValidate}
+          title={canValidate ? undefined : "Affecte d'abord une ville et une catégorie pour pouvoir valider"}
           onClick={() => updateExpense.mutate({ id: expense.id, needs_review: false })}
         >
           <Check className="h-3.5 w-3.5" />
