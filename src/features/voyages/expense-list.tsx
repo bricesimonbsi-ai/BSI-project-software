@@ -5,6 +5,7 @@ import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ExpenseSourceBadge, NeedsReviewBadge } from "@/features/voyages/expense-badges";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import type { ExpenseCategory, VoyageExpense } from "@/types/database";
 import { Pencil, Trash2 } from "lucide-react";
@@ -78,6 +79,8 @@ export function ExpenseList({
               <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
             </div>
             <div className="flex items-center gap-2">
+              <ExpenseSourceBadge source={expense.source} />
+              <NeedsReviewBadge expense={expense} invalidateKey={invalidateKey} />
               <Badge
                 className={cn(
                   "border-transparent",

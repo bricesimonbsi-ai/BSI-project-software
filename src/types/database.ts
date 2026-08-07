@@ -112,6 +112,9 @@ export type Voyage = {
   lodging_count: number | null;
   travel_style: TravelStyle | null;
   budget_target_per_person: number | null;
+  /** % de répartition d'un retrait d'espèces entre les 3 catégories "sur place" à l'import CSV
+   * (voir expense-import-dialog.tsx) — mémorisé une fois par voyage, réutilisé à chaque import. */
+  cash_split_ratios: { transport_local: number; activites: number; nourriture: number };
   created_at: string;
   updated_at: string;
 };
@@ -252,6 +255,12 @@ export type VoyageExpense = {
   manual_rate_to_reference: number;
   /** Vrai tant que le montant est piloté par l'estimation automatique (voir EditableExpenseAmount). */
   is_estimated: boolean;
+  /** Origine d'une dépense importée depuis un relevé bancaire (voir expense-import-dialog.tsx) —
+   * "carte" pour une ligne carte directe, "retrait" pour une part ventilée d'un retrait
+   * d'espèces ; null pour toute dépense saisie manuellement (aucune pastille affichée). */
+  source: "carte" | "retrait" | null;
+  /** Vrai tant qu'une dépense importée n'a pas été vérifiée manuellement (pastille "à valider"). */
+  needs_review: boolean;
   description: string | null;
   expense_date: string | null;
   created_by: string;

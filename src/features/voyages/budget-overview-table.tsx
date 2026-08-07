@@ -20,6 +20,7 @@ import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/ed
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
+import { ExpenseImportDialog } from "@/features/voyages/csv-import/expense-import-dialog";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { ExpenseCategory, TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
 
@@ -182,27 +183,30 @@ export function BudgetOverviewTable({
             Chaque montant est un total : pour tous les voyageurs ({travelerCount}) et, pour le logement, pour tous les logements saisis.
           </p>
         </div>
-        <div className="inline-flex rounded-md border border-border p-0.5">
-          <button
-            type="button"
-            onClick={() => {
-              setView("planned");
-              setSelectedCell(null);
-            }}
-            className={cn("rounded px-3 py-1 text-xs font-medium", view === "planned" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
-          >
-            Prévisionnel
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setView("actual");
-              setSelectedCell(null);
-            }}
-            className={cn("rounded px-3 py-1 text-xs font-medium", view === "actual" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
-          >
-            Réel
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExpenseImportDialog voyageId={voyageId} projectId={projectId} referenceCurrency={referenceCurrency} />
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setView("planned");
+                setSelectedCell(null);
+              }}
+              className={cn("rounded px-3 py-1 text-xs font-medium", view === "planned" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+            >
+              Prévisionnel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setView("actual");
+                setSelectedCell(null);
+              }}
+              className={cn("rounded px-3 py-1 text-xs font-medium", view === "actual" ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+            >
+              Réel
+            </button>
+          </div>
         </div>
       </div>
 
@@ -605,14 +609,18 @@ function CityActualRow({
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
       {CITY_COLUMNS.map((c) => {
-        const sum = sumAmount(rows.filter((e) => matchesColumn(e, c)));
+        const matching = rows.filter((e) => matchesColumn(e, c));
+        const sum = sumAmount(matching);
+        const pending = matching.some((e) => e.needs_review);
         return (
           <td key={c.key} className="px-2 py-1.5 text-center">
             <button
               type="button"
-              className="mx-auto w-20 rounded px-1.5 py-1 text-center text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
+              className="relative mx-auto w-20 rounded px-1.5 py-1 text-center text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
               onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.category, subCategory: c.subCategory ?? null, label: `${se.city} · ${c.label}` })}
+              title={pending ? "Contient une dépense importée à valider" : undefined}
             >
+              {pending && <span className="absolute -top-0.5 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />}
               {formatCurrency(sum, referenceCurrency)}
             </button>
           </td>

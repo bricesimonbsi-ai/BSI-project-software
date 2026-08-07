@@ -206,6 +206,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     .filter((r) => r.actual > 0)
     .map((r) => ({ key: r.key, label: r.label, amount: r.actual, color: CATEGORY_HUE_HEX[r.key] }));
 
+  const pendingReviewCount = (allExpenses ?? []).filter((e) => e.needs_review).length;
   const globalPct = consumedPct(totalActual, totalPlanned);
   // Les montants saisis sont des totaux partagés, jamais rattachés à un voyageur en particulier
   // (voir plus haut pourquoi "Dépenses par personne" a été retiré) : le réel "par personne" est
@@ -216,6 +217,12 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
 
   return (
     <div className="space-y-5">
+      {pendingReviewCount > 0 && (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+          {pendingReviewCount} dépense{pendingReviewCount > 1 ? "s" : ""} importée{pendingReviewCount > 1 ? "s" : ""} à valider (voir le détail des
+          dépenses ci-dessous, vue « Réel »)
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="space-y-3 p-4">

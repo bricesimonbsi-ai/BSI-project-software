@@ -291,6 +291,11 @@ type ExpenseInput = {
   /** Vrai tant que le montant est piloté par l'estimation automatique (voir EditableExpenseAmount) :
    * il continue alors à se resynchroniser avec l'estimation ; faux dès qu'il est ajusté à la main. */
   is_estimated?: boolean;
+  /** Origine d'une dépense importée (voir expense-import-dialog.tsx) ; jamais définie pour une
+   * saisie manuelle. */
+  source?: "carte" | "retrait" | null;
+  /** Pastille "à valider" (voir expense-import-dialog.tsx) ; passer `false` pour valider. */
+  needs_review?: boolean;
 };
 
 /** Une dépense peut être affichée à travers plusieurs requêtes différentes selon l'endroit
