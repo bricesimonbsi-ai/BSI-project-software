@@ -82,7 +82,13 @@ export function ProjectPeoplePicker({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap gap-3">
         {(linked ?? []).map((l, i) => (
           <div key={l.id} className="group flex items-center gap-2 rounded-md border border-border py-1.5 pl-1.5 pr-2">
-            <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} />
+            <PersonAvatarBadge
+              name={l.people.name}
+              avatarEmoji={l.people.avatar_emoji}
+              avatarConfig={l.people.avatar_config}
+              personId={l.people.id}
+              index={i}
+            />
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm">{l.people.name}</span>

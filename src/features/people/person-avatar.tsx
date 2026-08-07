@@ -1,4 +1,7 @@
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { generateAvatarDataUri } from "@/features/people/avatar-generator";
+import type { PersonAvatarConfig } from "@/types/database";
 
 /** Palette cyclique, une couleur par personne selon sa position (pas de choix manuel à faire). */
 const AVATAR_COLOR_CLASSES = [
@@ -13,19 +16,37 @@ const AVATAR_COLOR_CLASSES = [
 /** Émojis suggérés pour un avatar de personne, sans forcer une saisie. */
 export const PERSON_EMOJI_SUGGESTIONS = ["🧑", "👩", "👨", "🧒", "👵", "👴", "🧑‍🦱", "👩‍🦰", "🧔", "👶"];
 
-/** Avatar rond : émoji choisi, ou à défaut l'initiale du nom sur un fond coloré cyclique. */
+/** Avatar rond : avatar personnalisé (DiceBear) si configuré, sinon émoji choisi, sinon
+ * l'initiale du nom sur un fond coloré cyclique. */
 export function PersonAvatarBadge({
   name,
   avatarEmoji,
+  avatarConfig,
+  personId,
   index,
   className,
 }: {
   name: string;
   avatarEmoji?: string | null;
+  avatarConfig?: PersonAvatarConfig | null;
+  personId?: string;
   index: number;
   className?: string;
 }) {
   const colorClass = AVATAR_COLOR_CLASSES[index % AVATAR_COLOR_CLASSES.length];
+  const dataUri = useMemo(() => {
+    if (!avatarConfig) return null;
+    return generateAvatarDataUri(personId ?? name, avatarConfig);
+  }, [avatarConfig, personId, name]);
+
+  if (dataUri) {
+    return (
+      <span className={cn("flex h-7 w-7 flex-shrink-0 overflow-hidden rounded-full bg-muted", className)} title={name}>
+        <img src={dataUri} alt={name} className="h-full w-full" />
+      </span>
+    );
+  }
+
   return (
     <span
       className={cn("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold", colorClass, className)}

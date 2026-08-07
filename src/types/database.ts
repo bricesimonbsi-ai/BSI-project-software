@@ -136,6 +136,17 @@ export type VoyageTraveler = {
   updated_at: string;
 };
 
+/** Configuration d'un avatar généré (DiceBear, style avataaars) : couleurs/coiffure/accessoire
+ * choisis par l'utilisateur, le reste (yeux, bouche, vêtements...) reste dérivé du seed (id de
+ * la personne) pour rester visuellement stable d'un rendu à l'autre. Couleurs en hexadécimal
+ * sans le "#". `accessories: null` = aucun accessoire. */
+export type PersonAvatarConfig = {
+  skinColor: string;
+  hairColor: string;
+  top: string;
+  accessories: string | null;
+};
+
 /** Personne référencée globalement (nom + avatar), paramétrable pour tout le portefeuille,
  * associable à n'importe quel projet via `ProjectPerson`. */
 export type Person = {
@@ -143,6 +154,7 @@ export type Person = {
   created_by: string;
   name: string;
   avatar_emoji: string | null;
+  avatar_config: PersonAvatarConfig | null;
   order_index: number;
   created_at: string;
   updated_at: string;

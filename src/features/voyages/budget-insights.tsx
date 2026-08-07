@@ -305,7 +305,14 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
                     <div className="flex flex-wrap gap-3">
                       {linkedPeople.map((l, i) => (
                         <div key={l.person_id} className="flex items-center gap-3 rounded-md border border-border/70 px-3 py-2">
-                          <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-8 w-8 text-sm" />
+                          <PersonAvatarBadge
+                            name={l.people.name}
+                            avatarEmoji={l.people.avatar_emoji}
+                            avatarConfig={l.people.avatar_config}
+                            personId={l.people.id}
+                            index={i}
+                            className="h-8 w-8 text-sm"
+                          />
                           <div>
                             <p className="text-sm font-semibold leading-tight">{l.people.name}</p>
                             <p className="text-xs leading-tight text-muted-foreground">

@@ -39,6 +39,21 @@ export function useCreatePerson() {
   });
 }
 
+export function useUpdatePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: Partial<Pick<Person, "name" | "avatar_emoji" | "avatar_config">> & { id: string }) => {
+      const { error } = await supabase.from("people").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["people"] });
+      queryClient.invalidateQueries({ queryKey: ["project-people"] });
+    },
+    onError: onMutationError,
+  });
+}
+
 export function useDeletePerson() {
   const queryClient = useQueryClient();
   return useMutation({

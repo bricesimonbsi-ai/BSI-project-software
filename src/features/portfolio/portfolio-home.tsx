@@ -6,8 +6,8 @@ import { useProjects } from "@/features/projects/use-projects";
 import { useTodos } from "@/features/todos/use-todos";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { CalendarClock, Wallet, ListChecks, ArrowRight } from "lucide-react";
+import { formatDate } from "@/lib/utils";
+import { CalendarClock, ListChecks, ArrowRight } from "lucide-react";
 
 export function PortfolioHome() {
   const { data: categories, isLoading: loadingCategories } = useCategories();
@@ -31,7 +31,6 @@ export function PortfolioHome() {
   }, [projects]);
 
   const metrics = useMemo(() => {
-    const budgetEngaged = (projects ?? []).reduce((sum, p) => sum + (p.budget_actual ?? p.budget_planned ?? 0), 0);
     const daysPlanned = (projects ?? [])
       .filter((p) => p.status === "active" || p.status === "upcoming")
       .reduce((sum, p) => {
@@ -39,7 +38,7 @@ export function PortfolioHome() {
         return sum + Math.max(0, differenceInDays(parseISO(p.end_date), parseISO(p.start_date)));
       }, 0);
     const openTasks = (todos ?? []).filter((t) => !t.done).length;
-    return { budgetEngaged, daysPlanned, openTasks };
+    return { daysPlanned, openTasks };
   }, [projects, todos]);
 
   const projectsByCategory = useMemo(() => {
@@ -79,8 +78,7 @@ export function PortfolioHome() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard icon={Wallet} label="Budget engagé" value={formatCurrency(metrics.budgetEngaged, "EUR")} />
+      <div className="grid gap-4 sm:grid-cols-2">
         <MetricCard icon={CalendarClock} label="Jours planifiés" value={`${metrics.daysPlanned} j`} />
         <MetricCard icon={ListChecks} label="Tâches ouvertes" value={String(metrics.openTasks)} />
       </div>
@@ -118,7 +116,7 @@ export function PortfolioHome() {
   );
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: typeof Wallet; label: string; value: string }) {
+function MetricCard({ icon: Icon, label, value }: { icon: typeof CalendarClock; label: string; value: string }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-5">
