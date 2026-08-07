@@ -109,7 +109,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">Voyages</p>
-          <h1 className="text-2xl font-bold">{project.title}</h1>
+          <ProjectTitleInput projectId={projectId} title={project.title} />
           <p className="text-sm text-muted-foreground">
             {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {travelerCount} voyageur{travelerCount > 1 ? "s" : ""}
           </p>
@@ -246,5 +246,33 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/** Titre modifiable en ligne (pas d'onglet "Détails" séparé pour ce module voyage, contrairement
+ * au modèle de projet générique) : édite au clic, enregistre à la perte de focus ou sur Entrée. */
+function ProjectTitleInput({ projectId, title }: { projectId: string; title: string }) {
+  const updateProject = useUpdateProject();
+  const [value, setValue] = useState(title);
+
+  useEffect(() => setValue(title), [title]);
+
+  function commit() {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === title) {
+      setValue(title);
+      return;
+    }
+    updateProject.mutate({ id: projectId, title: trimmed });
+  }
+
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+      className="h-auto border-transparent bg-transparent px-1.5 py-0 text-2xl font-bold hover:border-border focus-visible:border-border"
+    />
   );
 }
