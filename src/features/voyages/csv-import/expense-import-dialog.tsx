@@ -34,28 +34,50 @@ const CARD_CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
 
 const NONE = "__none__";
 
-const HEADER_KEYWORDS = ["date", "montant", "débit", "debit", "crédit", "credit", "libellé", "libelle", "description", "solde"];
+/** Minuscules et sans accents, pour comparer des en-têtes de colonnes quel que soit l'encodage
+ * ou l'orthographe exacte ("Débit"/"debit"/"DÉBIT (-)" doivent tous matcher "debit"). */
+function normalizeHeader(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+const HEADER_KEYWORDS = ["date", "montant", "debit", "credit", "libelle", "description", "solde"];
 
 function guessHeaderRowIndex(grid: string[][]): number {
   for (let i = 0; i < Math.min(grid.length, 20); i++) {
     const row = grid[i];
-    if (row.length >= 3 && row.some((c) => HEADER_KEYWORDS.some((k) => c.toLowerCase().includes(k)))) return i;
+    if (row.length >= 3 && row.some((c) => HEADER_KEYWORDS.some((k) => normalizeHeader(c).includes(k)))) return i;
   }
   return 0;
 }
 
-/** Signature "même montant, même ville, même date" (voir la demande de détection de doublon) —
- * volontairement SANS la catégorie : deux réimports d'un même relevé (périodes qui se chevauchent
- * d'un mois sur l'autre) produisent des dépenses identiques sur ces 3 critères, peu importe leur
- * catégorie. Pour un retrait, la signature se calcule sur CHAQUE part ventilée (ce qui est
- * réellement enregistré en base), pas sur le montant brut du retrait qui, lui, n'est jamais stocké. */
-function signature(date: string | null, amount: number, sousEtapeId: string): string {
-  return `${date ?? "?"}|${amount.toFixed(2)}|${sousEtapeId}`;
+/** Première colonne dont l'en-tête contient un des mots-clés (et aucun des mots-clés à exclure) —
+ * "solde" est systématiquement exclu des colonnes montant/débit/crédit pour ne jamais confondre
+ * un solde cumulé avec le montant d'une transaction (cause du bug de montants signalé : une
+ * colonne "Solde" avait été choisie à la place de "Débit"). */
+function guessColumnIndex(headers: string[], includeAny: string[], excludeAny: string[] = ["solde"]): number | null {
+  for (let i = 0; i < headers.length; i++) {
+    const h = normalizeHeader(headers[i]);
+    if (excludeAny.some((k) => h.includes(k))) continue;
+    if (includeAny.some((k) => h.includes(k))) return i;
+  }
+  return null;
+}
+
+/** Signature de doublon "même date, même montant" (voir la demande de détection) — volontairement
+ * sans la ville ni la catégorie, pour rattraper une dépense réimportée même si sa ville a été
+ * réaffectée différemment entre les deux imports. Pour un retrait, la signature se calcule sur
+ * CHAQUE part ventilée (ce qui est réellement enregistré en base), jamais sur le montant brut du
+ * retrait, qui lui n'est jamais stocké. */
+function signature(date: string | null, amount: number): string {
+  return `${date ?? "?"}|${amount.toFixed(2)}`;
 }
 
 function rowSignatures(r: ParsedRow, cashRatios: CashSplitRatios): string[] {
-  if (r.isWithdrawal) return splitCashWithdrawal(r.amount, cashRatios).map((item) => signature(r.date, item.amount, r.sousEtapeId));
-  return [signature(r.date, r.amount, r.sousEtapeId)];
+  if (r.isWithdrawal) return splitCashWithdrawal(r.amount, cashRatios).map((item) => signature(r.date, item.amount));
+  return [signature(r.date, r.amount)];
 }
 
 type Step = "file" | "header" | "mapping" | "preview";
@@ -98,14 +120,12 @@ export function ExpenseImportDialog({
   const importExpenses = useImportExpenses(voyageId, referenceCurrency);
 
   // Dépenses réelles déjà en base (n'importe quelle source : saisie manuelle ou import
-  // précédent) — sert à repérer un probable doublon (même montant/ville/date) si l'utilisateur
+  // précédent) — sert à repérer un probable doublon (même date/montant) si l'utilisateur
   // réimporte un relevé dont la période chevauche un import déjà fait.
   const existingSignatures = useMemo(
     () =>
       new Set(
-        (existingExpenses ?? [])
-          .filter((e) => !e.planned)
-          .map((e) => signature(e.expense_date, e.amount * e.manual_rate_to_reference, e.sous_etape_id ?? NONE))
+        (existingExpenses ?? []).filter((e) => !e.planned).map((e) => signature(e.expense_date, e.amount * e.manual_rate_to_reference))
       ),
     [existingExpenses]
   );
@@ -170,11 +190,31 @@ export function ExpenseImportDialog({
     reader.readAsText(file, "utf-8");
   }
 
+  // Pré-remplit le mapping à partir du texte des en-têtes (ex. "Débit (-)" -> colonne débit),
+  // "solde" étant systématiquement exclu des candidats montant/débit/crédit — l'utilisateur reste
+  // libre de corriger via les listes déroulantes, mais part d'un mapping déjà correct dans le cas
+  // courant plutôt que de devoir deviner lui-même (source du bug Solde/Débit signalé).
   function goToMapping() {
-    setDateColIdx(NONE);
-    setDescColIdx(NONE);
-    setAmountColIdx(NONE);
-    setDebitColIdx(NONE);
+    const headers = rawGrid[headerRowIndex] ?? [];
+    const dateIdx = guessColumnIndex(headers, ["operation"]) ?? guessColumnIndex(headers, ["date"]);
+    const descIdx = guessColumnIndex(headers, ["libelle", "description", "objet", "detail"]);
+    const debitIdx = guessColumnIndex(headers, ["debit"]);
+    const montantIdx = guessColumnIndex(headers, ["montant"]);
+
+    setDateColIdx(dateIdx != null ? String(dateIdx) : NONE);
+    setDescColIdx(descIdx != null ? String(descIdx) : NONE);
+    if (debitIdx != null) {
+      setAmountMode("split");
+      setDebitColIdx(String(debitIdx));
+      setAmountColIdx(NONE);
+    } else if (montantIdx != null) {
+      setAmountMode("single");
+      setAmountColIdx(String(montantIdx));
+      setDebitColIdx(NONE);
+    } else {
+      setDebitColIdx(NONE);
+      setAmountColIdx(NONE);
+    }
     setStep("mapping");
   }
 
@@ -285,6 +325,8 @@ export function ExpenseImportDialog({
   const mappingSampleRows = rawGrid.slice(headerRowIndex + 1, headerRowIndex + 4);
   const hasWithdrawalRows = rows.some((r) => r.isWithdrawal);
   const includedCount = rows.filter((r) => r.include).length;
+  const allIncluded = rows.length > 0 && includedCount === rows.length;
+  const someIncluded = includedCount > 0;
 
   // Recalculé à chaque modification (ville/montant peuvent changer dans l'aperçu) : purement
   // indicatif, contrairement au décochage par défaut ci-dessus qui n'a lieu qu'une fois.
@@ -452,8 +494,7 @@ export function ExpenseImportDialog({
               <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
                 {duplicateIds.size} ligne{duplicateIds.size > 1 ? "s" : ""} ressemble{duplicateIds.size > 1 ? "nt" : ""} à une dépense déjà
-                existante (même montant, même ville, même date) — décochée{duplicateIds.size > 1 ? "s" : ""} par défaut, à recocher si c'est
-                volontaire.
+                existante (même date, même montant) — décochée{duplicateIds.size > 1 ? "s" : ""} par défaut, à recocher si c'est volontaire.
               </p>
             )}
 
@@ -461,7 +502,13 @@ export function ExpenseImportDialog({
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-card">
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="px-2 py-1.5"></th>
+                    <th className="px-2 py-1.5">
+                      <Checkbox
+                        checked={allIncluded ? true : someIncluded ? "indeterminate" : false}
+                        onCheckedChange={(c) => setRows((prev) => prev.map((r) => ({ ...r, include: c !== false })))}
+                        title={allIncluded ? "Tout désélectionner" : "Tout sélectionner"}
+                      />
+                    </th>
                     <th className="px-2 py-1.5">Date</th>
                     <th className="px-2 py-1.5">Description</th>
                     <th className="px-2 py-1.5 text-right">Montant</th>

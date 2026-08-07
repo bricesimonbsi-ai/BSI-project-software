@@ -250,54 +250,52 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
               les gérer
             </button>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
-        <Card>
-          <CardContent className="space-y-3 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-muted-foreground">Budget prévisionnel consommé</p>
-              <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
-            </div>
-            {linkedPeople && linkedPeople.length > 0 && (
-              <div className="space-y-2 border-t border-border pt-3">
-                <p className="text-sm text-muted-foreground">% du budget cible propre à chaque voyageur, déjà consommé</p>
-                <div className="flex flex-wrap items-center gap-4">
-                  {linkedPeople.map((l, i) => (
-                    <div key={l.person_id} className="flex items-center gap-2">
-                      <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-8 w-8 text-sm" />
-                      <span className="text-base font-medium">{l.people.name}</span>
-                      {l.budget_target != null ? (
-                        <ConsumedPctBadge
-                          pct={consumedPct(actualPerTraveler, l.budget_target)}
-                          className="px-2 py-0.5 text-base font-bold"
-                          title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
-                        />
-                      ) : (
-                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
-                          cible manquante
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+          <Card>
+            <CardContent className="grid gap-4 p-4 sm:grid-cols-[auto,1fr] sm:items-center">
+              <div className="flex flex-col justify-center gap-1 sm:border-r sm:border-border sm:pr-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
+                <p className="whitespace-nowrap text-lg font-bold">
+                  {formatCurrency(totalPlanned, voyage.reference_currency)}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
+                </p>
+                <p className="whitespace-nowrap text-lg font-bold">
+                  {formatCurrency(totalActual, voyage.reference_currency)}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">réel</span>
+                </p>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total du voyage</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalPlanned, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">prévu</span>
-            </p>
-            <p className="text-lg font-bold">
-              {formatCurrency(totalActual, voyage.reference_currency)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">réel</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+              <div className="flex flex-col justify-center gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-muted-foreground">Budget prévisionnel consommé</p>
+                  <ConsumedPctBadge pct={globalPct} className="px-3 py-1 text-2xl font-bold sm:text-3xl" />
+                </div>
+                {linkedPeople && linkedPeople.length > 0 && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <p className="text-sm text-muted-foreground">% du budget cible propre à chaque voyageur, déjà consommé</p>
+                    <div className="flex flex-wrap items-center gap-4">
+                      {linkedPeople.map((l, i) => (
+                        <div key={l.person_id} className="flex items-center gap-2">
+                          <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-8 w-8 text-sm" />
+                          <span className="text-base font-medium">{l.people.name}</span>
+                          {l.budget_target != null ? (
+                            <ConsumedPctBadge
+                              pct={consumedPct(actualPerTraveler, l.budget_target)}
+                              className="px-2 py-0.5 text-base font-bold"
+                              title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
+                            />
+                          ) : (
+                            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
+                              cible manquante
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
