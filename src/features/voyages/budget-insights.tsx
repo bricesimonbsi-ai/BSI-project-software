@@ -25,11 +25,15 @@ import {
 } from "@/features/voyages/category-comparison-chart";
 import { CategoryBreakdownRing } from "@/features/voyages/budget-ring";
 import { BudgetOverviewTable } from "@/features/voyages/budget-overview-table";
+import { ManageExpensesTab } from "@/features/voyages/csv-import/manage-expenses-tab";
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
 import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { useCityLockedCostsMap, isLegacyLockedPlannedRow } from "@/features/voyages/use-city-locked-costs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { TravelStyle, Voyage } from "@/types/database";
+
+type BudgetTab = "synthese" | "gerer";
 
 const SUB_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   [...TRANSPORT_SUB_CATEGORIES, ...ADMIN_SANTE_SUB_CATEGORIES].map((s) => [s.value, s.label])
@@ -70,6 +74,7 @@ function mergeAmountItems(
  */
 export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectId: string }) {
   const voyageId = voyage.id;
+  const [budgetTab, setBudgetTab] = useState<BudgetTab>("synthese");
   const [chartView, setChartView] = useState<"bar" | "ring">("bar");
   const { data: linkedPeople } = useProjectPeople(projectId);
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
@@ -217,13 +222,35 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
 
   return (
     <div className="space-y-5">
-      {pendingReviewCount > 0 && (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
-          {pendingReviewCount} dépense{pendingReviewCount > 1 ? "s" : ""} importée{pendingReviewCount > 1 ? "s" : ""} à valider (voir le détail des
-          dépenses ci-dessous, vue « Réel »)
-        </p>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <Tabs value={budgetTab} onValueChange={(v) => setBudgetTab(v as BudgetTab)}>
+        <TabsList>
+          <TabsTrigger value="synthese">Synthèse</TabsTrigger>
+          <TabsTrigger value="gerer">
+            Gérer mes dépenses
+            {pendingReviewCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-300">
+                {pendingReviewCount}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {budgetTab === "gerer" && <ManageExpensesTab voyageId={voyageId} projectId={projectId} referenceCurrency={voyage.reference_currency} />}
+
+      {budgetTab === "synthese" && (
+        <div className="space-y-5">
+          {pendingReviewCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setBudgetTab("gerer")}
+              className="w-full rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-sm font-medium text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+            >
+              {pendingReviewCount} dépense{pendingReviewCount > 1 ? "s" : ""} importée{pendingReviewCount > 1 ? "s" : ""} à valider — cliquer pour
+              les gérer
+            </button>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -302,14 +329,16 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
         )}
       </div>
 
-      <BudgetOverviewTable
-        voyageId={voyageId}
-        projectId={projectId}
-        referenceCurrency={voyage.reference_currency}
-        travelStyle={style}
-        travelerCount={travelerCount}
-        lodgingCount={lodgingCount}
-      />
+          <BudgetOverviewTable
+            voyageId={voyageId}
+            projectId={projectId}
+            referenceCurrency={voyage.reference_currency}
+            travelStyle={style}
+            travelerCount={travelerCount}
+            lodgingCount={lodgingCount}
+          />
+        </div>
+      )}
     </div>
   );
 }

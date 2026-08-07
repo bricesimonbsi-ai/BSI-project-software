@@ -18,6 +18,10 @@ export type ExpenseCategory =
   | "activites"
   | "equipement"
   | "administratif_sante"
+  // Dépense importée (voir expense-import-dialog.tsx) sans catégorie choisie à l'import, en
+  // attente d'être affectée depuis l'onglet "Gérer mes dépenses" — jamais proposée à la saisie
+  // manuelle normale (voir EXPENSE_CATEGORIES dans use-expenses.ts).
+  | "non_categorise"
   // Anciennes valeurs, conservées uniquement pour les dépenses déjà saisies avant l'unification
   | "transport_international"
   | "transport_local"

@@ -67,6 +67,7 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   activites: "Activités",
   equipement: "Équipement",
   administratif_sante: "Administratif & santé",
+  non_categorise: "Non catégorisée",
   transport_international: "Transport international",
   transport_local: "Transport local",
   assurance: "Assurance",

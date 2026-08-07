@@ -15,20 +15,20 @@ import {
   isWithdrawal,
   guessCity,
   splitCashWithdrawal,
-  type GuessedCategory,
   type CashSplitRatios,
 } from "@/features/voyages/csv-import/import-matching";
 import { useImportExpenses, type ImportExpenseInput } from "@/features/voyages/csv-import/use-expense-import";
 import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { Upload } from "lucide-react";
-import type { VoyageSousEtape } from "@/types/database";
+import type { ExpenseCategory, VoyageSousEtape } from "@/types/database";
 
-const CARD_CATEGORY_OPTIONS: { value: GuessedCategory; label: string }[] = [
+const CARD_CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
   { value: "logement", label: "Logement" },
   { value: "transport", label: "Transport" },
   { value: "nourriture", label: "Nourriture" },
   { value: "activites", label: "Activités" },
+  { value: "non_categorise", label: "Non catégorisée (à faire plus tard)" },
 ];
 
 const NONE = "__none__";
@@ -51,7 +51,9 @@ type ParsedRow = {
   description: string;
   amount: number;
   isWithdrawal: boolean;
-  category: GuessedCategory | "";
+  /** Toujours renseignée (jamais bloquante à l'import) : "non_categorise" quand aucun mot-clé du
+   * libellé n'a permis de deviner — corrigeable ensuite depuis l'onglet "Gérer mes dépenses". */
+  category: ExpenseCategory;
   sousEtapeId: string;
   include: boolean;
 };
@@ -167,8 +169,8 @@ export function ExpenseImportDialog({
       const date = parseDateFlexible(raw[dateCol] ?? "", referenceYear);
       const description = (raw[descCol] ?? "").split("\n")[0].trim();
       const withdrawal = isWithdrawal(description);
-      const category = withdrawal ? "" : (guessCategory(description) ?? "");
-      const sousEtape = date ? guessCity(flat, date, category || null) : null;
+      const guessed = withdrawal ? null : guessCategory(description);
+      const sousEtape = date ? guessCity(flat, date, guessed) : null;
 
       parsed.push({
         id: `${parsed.length}-${date ?? "x"}-${amount}`,
@@ -176,7 +178,7 @@ export function ExpenseImportDialog({
         description: description || "(sans libellé)",
         amount: Math.abs(amount),
         isWithdrawal: withdrawal,
-        category,
+        category: withdrawal ? "non_categorise" : (guessed ?? "non_categorise"),
         sousEtapeId: sousEtape?.id ?? NONE,
         include: true,
       });
@@ -201,11 +203,6 @@ export function ExpenseImportDialog({
 
   function handleConfirm() {
     const included = rows.filter((r) => r.include);
-    const missingCategory = included.some((r) => !r.isWithdrawal && !r.category);
-    if (missingCategory) {
-      toast({ title: "Choisis une catégorie pour chaque dépense carte incluse", variant: "destructive" });
-      return;
-    }
     const inputs: ImportExpenseInput[] = [];
     for (const r of included) {
       const sousEtapeId = r.sousEtapeId === NONE ? null : r.sousEtapeId;
@@ -225,7 +222,7 @@ export function ExpenseImportDialog({
       } else {
         inputs.push({
           sous_etape_id: sousEtapeId,
-          category: r.category as ImportExpenseInput["category"],
+          category: r.category,
           amount: r.amount,
           expense_date: r.date,
           description: r.description,
@@ -417,11 +414,13 @@ export function ExpenseImportDialog({
                       <td className="whitespace-nowrap px-2 py-1.5 text-right font-medium">{formatCurrency(r.amount, referenceCurrency)}</td>
                       <td className="px-2 py-1.5">
                         {r.isWithdrawal ? (
-                          <span className="text-muted-foreground">Ventilé auto (15/40/45)</span>
+                          <span className="text-muted-foreground">
+                            Ventilé auto ({cashRatios.transport_local}/{cashRatios.activites}/{cashRatios.nourriture})
+                          </span>
                         ) : (
-                          <Select value={r.category} onValueChange={(v) => updateRow(r.id, { category: v as GuessedCategory })}>
+                          <Select value={r.category} onValueChange={(v) => updateRow(r.id, { category: v as ExpenseCategory })}>
                             <SelectTrigger className="h-8 w-36 text-xs">
-                              <SelectValue placeholder="À choisir" />
+                              <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {CARD_CATEGORY_OPTIONS.map((o) => (
