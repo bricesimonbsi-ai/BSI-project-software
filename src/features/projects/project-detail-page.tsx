@@ -12,6 +12,8 @@ import { TodoList } from "@/features/todos/todo-list";
 import { DocumentsPanel } from "@/features/projects/documents-panel";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
+import { Breadcrumb } from "@/features/navigation/breadcrumb";
+import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { toast } from "@/hooks/use-toast";
 
 export function ProjectDetailPage() {
@@ -66,8 +68,17 @@ export function ProjectDetailPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <p className="text-sm text-muted-foreground">{project.categories?.name}</p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumb
+            items={[
+              { label: "Accueil", to: "/" },
+              { label: project.categories?.name ?? "Catégorie", to: `/categories/${project.category_id}`, icon: project.categories?.icon },
+              { label: project.title, icon: project.icon },
+            ]}
+          />
+          <ProjectSwitcher currentProjectId={project.id} currentCategoryId={project.category_id} />
+        </div>
         <div className="flex items-center gap-2">
           <EmojiPickerButton
             value={project.icon}

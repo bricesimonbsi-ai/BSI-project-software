@@ -4,10 +4,10 @@ import { differenceInCalendarDays, differenceInDays, isFuture, isPast, parseISO 
 import { useCategories } from "@/features/portfolio/use-categories";
 import { useProjects } from "@/features/projects/use-projects";
 import { useTodos } from "@/features/todos/use-todos";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import { CalendarClock, ListChecks, ArrowRight } from "lucide-react";
+import { CalendarClock, ListChecks, ArrowRight, ChevronRight, Shapes } from "lucide-react";
 
 export function PortfolioHome() {
   const { data: categories, isLoading: loadingCategories } = useCategories();
@@ -88,28 +88,35 @@ export function PortfolioHome() {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
           {activeCategories.map((category) => {
             const catProjects = projectsByCategory.get(category.id) ?? [];
-            const hasActive = catProjects.some((p) => p.status === "active");
-            const hasUpcoming = catProjects.some((p) => p.status === "upcoming");
+            const activeCount = catProjects.filter((p) => p.status === "active").length;
+            const upcomingCount = catProjects.filter((p) => p.status === "upcoming").length;
             return (
               <Link key={category.id} to={`/categories/${category.id}`}>
-                <Card className="h-full transition-shadow hover:shadow-md" style={{ borderTopColor: category.color, borderTopWidth: 3 }}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="flex items-center gap-1.5 text-base">
-                      {category.icon && <span>{category.icon}</span>}
-                      {category.name}
-                    </CardTitle>
-                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      {catProjects.length} projet{catProjects.length !== 1 ? "s" : ""}
-                    </p>
-                    <div className="mt-2 flex gap-1">
-                      {hasActive && <Badge variant="secondary">Actif</Badge>}
-                      {hasUpcoming && <Badge variant="outline">À venir</Badge>}
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-center gap-4 p-4">
+                    <span
+                      className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl"
+                      style={{ backgroundColor: `${category.color}26` }}
+                    >
+                      {category.icon ?? <Shapes className="h-5 w-5" style={{ color: category.color }} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{category.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {catProjects.length} projet{catProjects.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {activeCount > 0 && (
+                        <Badge variant="secondary">
+                          {activeCount} actif{activeCount > 1 ? "s" : ""}
+                        </Badge>
+                      )}
+                      {upcomingCount > 0 && <Badge variant="outline">{upcomingCount} à venir</Badge>}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardContent>
                 </Card>

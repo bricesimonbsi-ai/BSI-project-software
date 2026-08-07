@@ -6,6 +6,7 @@ import { useThemeStore } from "@/features/theme/theme-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewProjectDialog } from "@/features/projects/new-project-dialog";
+import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = {
@@ -32,7 +33,8 @@ export function CategoryDetailPage() {
   if (!category) return <p className="text-muted-foreground">Chargement...</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <Breadcrumb items={[{ label: "Accueil", to: "/" }, { label: category.name, icon: category.icon }]} />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: category.color }} />

@@ -9,7 +9,7 @@ function onMutationError(err: unknown) {
 }
 
 export type ProjectWithCategory = Project & {
-  categories: { name: string; color: string; module_key: string | null } | null;
+  categories: { name: string; color: string; icon: string | null; module_key: string | null } | null;
 };
 
 export function useProjects() {
@@ -18,7 +18,7 @@ export function useProjects() {
     queryFn: async (): Promise<ProjectWithCategory[]> => {
       const { data, error } = await supabase
         .from("projects")
-        .select("*, categories(name, color, module_key)")
+        .select("*, categories(name, color, icon, module_key)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as ProjectWithCategory[];
@@ -33,7 +33,7 @@ export function useProject(projectId: string | undefined) {
     queryFn: async (): Promise<ProjectWithCategory> => {
       const { data, error } = await supabase
         .from("projects")
-        .select("*, categories(name, color, module_key)")
+        .select("*, categories(name, color, icon, module_key)")
         .eq("id", projectId as string)
         .single();
       if (error) throw error;

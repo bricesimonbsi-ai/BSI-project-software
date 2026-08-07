@@ -22,6 +22,8 @@ import { BudgetInsights } from "@/features/voyages/budget-insights";
 import { EquipmentTab } from "@/features/voyages/equipment-tab";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
+import { Breadcrumb } from "@/features/navigation/breadcrumb";
+import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
@@ -107,20 +109,31 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
 
   return (
     <div className="max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">Voyages</p>
-          <div className="flex items-center gap-2">
-            <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: projectId, icon })} />
-            <ProjectTitleInput projectId={projectId} title={project.title} />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {travelerCount} voyageur{travelerCount > 1 ? "s" : ""}
-          </p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumb
+            items={[
+              { label: "Accueil", to: "/" },
+              { label: project.categories?.name ?? "Voyages", to: `/categories/${project.category_id}`, icon: project.categories?.icon },
+              { label: project.title, icon: project.icon },
+            ]}
+          />
+          <ProjectSwitcher currentProjectId={projectId} currentCategoryId={project.category_id} />
         </div>
-        <Button variant="outline" size="sm" onClick={handleDeleteVoyage} disabled={deleting}>
-          <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce voyage"}
-        </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: projectId, icon })} />
+              <ProjectTitleInput projectId={projectId} title={project.title} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {formatDate(voyage.start_date)} → {formatDate(voyage.end_date)} · {travelerCount} voyageur{travelerCount > 1 ? "s" : ""}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleDeleteVoyage} disabled={deleting}>
+            <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce voyage"}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="itinerary">
