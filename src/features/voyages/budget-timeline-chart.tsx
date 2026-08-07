@@ -80,7 +80,12 @@ export function BudgetTimelineChart({
   function handleMove(e: MouseEvent<SVGSVGElement>) {
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const relX = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    // Position de la souris en unités du viewBox, PUIS ramenée à une fraction de la zone de
+    // tracé (entre PAD_LEFT et VIEW_W-PAD_RIGHT) — pas de la largeur totale du SVG, qui inclut
+    // les marges des axes : les ignorer causait un décalage croissant vers les bords (jusqu'à
+    // PAD_LEFT ≈ 9% de la largeur near le bord gauche), le repère de survol dérivant de la souris.
+    const svgX = ((e.clientX - rect.left) / rect.width) * VIEW_W;
+    const relX = Math.min(1, Math.max(0, (svgX - PAD_LEFT) / PLOT_W));
     setHoverIndex(Math.round(relX * lastIndex));
   }
 
@@ -88,12 +93,14 @@ export function BudgetTimelineChart({
 
   // Dates intermédiaires en abscisse, proportionnelles à la durée du voyage (chaque point = un
   // jour calendaire, donc un espacement égal en index = un espacement égal en jours). "Aujourd'hui"
-  // a priorité : une graduation régulière trop proche de lui perd son étiquette (mais garde son
-  // trait) pour ne jamais superposer deux textes.
+  // est TOUJOURS affiché (jamais masqué, même près d'un bord) : une graduation régulière trop
+  // proche perd son étiquette à sa place (mais garde son trait), et l'ancrage du texte
+  // "Aujourd'hui" s'adapte près des bords pour ne jamais sortir du cadre.
   const tickFractions = [0, 0.25, 0.5, 0.75, 1];
   const tickIndices = Array.from(new Set(tickFractions.map((f) => Math.round(f * lastIndex))));
   const todayLabelX = todayIndex !== -1 ? x(todayIndex) : null;
-  const showTodayLabel = todayLabelX != null && todayLabelX > PAD_LEFT + LABEL_CLEARANCE && todayLabelX < VIEW_W - PAD_RIGHT - LABEL_CLEARANCE;
+  const todayLabelAnchor: "start" | "middle" | "end" =
+    todayLabelX == null ? "middle" : todayLabelX < PAD_LEFT + LABEL_CLEARANCE ? "start" : todayLabelX > VIEW_W - PAD_RIGHT - LABEL_CLEARANCE ? "end" : "middle";
 
   return (
     <div className="space-y-2">
@@ -124,7 +131,7 @@ export function BudgetTimelineChart({
           ))}
 
           {todayIndex !== -1 && (
-            <line x1={x(todayIndex)} x2={x(todayIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} stroke="hsl(var(--accent))" strokeWidth={1} strokeDasharray="2 2" opacity={0.5} />
+            <line x1={x(todayIndex)} x2={x(todayIndex)} y1={PAD_TOP} y2={PAD_TOP + PLOT_H} className="stroke-violet-500" strokeWidth={1.5} strokeDasharray="4 3" />
           )}
 
           <path d={actualAreaPath} fill="hsl(var(--accent) / 0.12)" stroke="none" />
@@ -156,8 +163,8 @@ export function BudgetTimelineChart({
               </g>
             );
           })}
-          {showTodayLabel && (
-            <text x={todayLabelX} y={VIEW_H - 6} textAnchor="middle" className="fill-accent text-[9px] font-semibold">
+          {todayLabelX != null && (
+            <text x={todayLabelX} y={VIEW_H - 6} textAnchor={todayLabelAnchor} className="fill-violet-500 text-[9px] font-semibold">
               Aujourd'hui
             </text>
           )}
@@ -172,6 +179,10 @@ export function BudgetTimelineChart({
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-0.5 w-4 rounded-full bg-accent" />
           Réel
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-0.5 rounded-full bg-violet-500" />
+          Aujourd'hui
         </span>
       </div>
 

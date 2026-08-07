@@ -301,24 +301,39 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
                 </div>
                 {linkedPeople && linkedPeople.length > 0 && (
                   <div className="space-y-2 border-t border-border pt-3">
-                    <p className="text-sm text-muted-foreground">Total et % du budget cible propre à chaque voyageur, déjà consommé</p>
-                    <div className="flex flex-wrap items-center gap-4">
+                    <p className="text-sm text-muted-foreground">Par voyageur</p>
+                    <div className="flex flex-wrap gap-3">
                       {linkedPeople.map((l, i) => (
-                        <div key={l.person_id} className="flex items-center gap-2">
+                        <div key={l.person_id} className="flex items-center gap-3 rounded-md border border-border/70 px-3 py-2">
                           <PersonAvatarBadge name={l.people.name} avatarEmoji={l.people.avatar_emoji} index={i} className="h-8 w-8 text-sm" />
-                          <span className="text-base font-medium">{l.people.name}</span>
-                          <span className="text-sm font-semibold text-muted-foreground">{formatCurrency(actualPerTraveler, voyage.reference_currency)}</span>
-                          {l.budget_target != null ? (
-                            <ConsumedPctBadge
-                              pct={consumedPct(actualPerTraveler, l.budget_target)}
-                              className="px-2 py-0.5 text-base font-bold"
-                              title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
-                            />
-                          ) : (
-                            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-medium text-destructive" title="Budget cible non renseigné (voir onglet Aperçu)">
-                              cible manquante
-                            </span>
-                          )}
+                          <div>
+                            <p className="text-sm font-semibold leading-tight">{l.people.name}</p>
+                            <p className="text-xs leading-tight text-muted-foreground">
+                              <span className="font-semibold text-foreground">{formatCurrency(actualPerTraveler, voyage.reference_currency)}</span> dépensés à
+                              ce jour
+                            </p>
+                          </div>
+                          <div className="ml-2 border-l border-border pl-3 text-center">
+                            {l.budget_target != null ? (
+                              <>
+                                <ConsumedPctBadge
+                                  pct={consumedPct(actualPerTraveler, l.budget_target)}
+                                  className="px-2 py-0.5 text-base font-bold"
+                                  title={`${formatCurrency(actualPerTraveler, voyage.reference_currency)} / cible ${formatCurrency(l.budget_target, voyage.reference_currency)}`}
+                                />
+                                <p className="mt-0.5 whitespace-nowrap text-[0.65rem] text-muted-foreground">
+                                  du budget cible ({formatCurrency(l.budget_target, voyage.reference_currency)})
+                                </p>
+                              </>
+                            ) : (
+                              <span
+                                className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-medium text-destructive"
+                                title="Budget cible non renseigné (voir onglet Aperçu)"
+                              >
+                                cible manquante
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
