@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useCategories, useCreateCategory, useUpdateCategory } from "@/features/portfolio/use-categories";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import type { Category } from "@/types/database";
 
 export function CategoriesAdminPage() {
   const { profile } = useAuth();
@@ -40,7 +41,7 @@ export function CategoriesAdminPage() {
                   title="Couleur d'accent"
                 />
                 <div>
-                  <p className="font-medium">{category.name}</p>
+                  <CategoryNameInput category={category} updateCategory={updateCategory} />
                   {category.module_key && <p className="text-xs text-muted-foreground">Module dédié : {category.module_key}</p>}
                 </div>
               </div>
@@ -66,6 +67,35 @@ export function CategoriesAdminPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Renommage en ligne (édite au clic, enregistre à la perte de focus ou sur Entrée) — même
+ * principe que les autres champs modifiables au fil de l'eau dans l'application (pas de bouton
+ * "Enregistrer" séparé pour un simple texte). Le nom est unique en base (contrainte SQL) : une
+ * erreur de doublon remonte via le toast générique déjà branché sur useUpdateCategory. */
+function CategoryNameInput({ category, updateCategory }: { category: Category; updateCategory: ReturnType<typeof useUpdateCategory> }) {
+  const [value, setValue] = useState(category.name);
+
+  useEffect(() => setValue(category.name), [category.name]);
+
+  function commit() {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === category.name) {
+      setValue(category.name);
+      return;
+    }
+    updateCategory.mutate({ id: category.id, name: trimmed });
+  }
+
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+      className="h-8 w-48 border-transparent bg-transparent px-1.5 font-medium hover:border-border focus-visible:border-border"
+    />
   );
 }
 
