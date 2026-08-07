@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEtapes } from "@/features/voyages/use-etapes";
 import { useVoyageSousEtapes, useUpdateSousEtape } from "@/features/voyages/use-sous-etapes";
 import {
   useVoyageAllExpenses,
+  useAssignExpenseToCity,
+  useDeleteExpense,
   TRANSVERSE_CATEGORIES,
   ADMIN_SANTE_DISPLAYED_SUB_CATEGORIES,
+  CATEGORY_LABELS,
   computeAdminSantePlannedTotal,
   groupedCategory,
 } from "@/features/voyages/use-expenses";
@@ -21,8 +26,10 @@ import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
 import { ExpenseList } from "@/features/voyages/expense-list";
 import { ExpenseImportDialog } from "@/features/voyages/csv-import/expense-import-dialog";
-import { cn, formatCurrency } from "@/lib/utils";
+import { ExpenseSourceBadge } from "@/features/voyages/expense-badges";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { ExpenseCategory, TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
+import { Trash2 } from "lucide-react";
 
 function sumAmount(rows: VoyageAllExpense[]): number {
   return rows.reduce((sum, e) => sum + e.amount * e.manual_rate_to_reference, 0);
@@ -129,6 +136,7 @@ export function BudgetOverviewTable({
   // ItineraryView) pour le compteur de nuits ci-dessous : ajuster les nuits d'une ville
   // recalcule les dates de toutes les suivantes, ici aussi.
   const flat = useMemo(() => buildFlatRows(etapes ?? [], citiesByEtape), [etapes, citiesByEtape]);
+  const cityOptions = flat.map((r) => ({ id: r.sousEtape.id, label: `${r.etape.country_region} · ${r.sousEtape.city}` }));
   const updateSousEtape = useUpdateSousEtape(voyageId);
 
   const { byCity: lockedByCity } = useCityLockedCostsMap({
@@ -150,6 +158,13 @@ export function BudgetOverviewTable({
   // Source unique (voir use-expenses.ts) : partagée avec budget-insights.tsx pour que le tableau
   // et le graphique/résumé du budget affichent toujours exactement le même chiffre.
   const adminPlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId);
+  // Une dépense importée depuis un CSV (voir expense-import-dialog.tsx) peut rester sans ville
+  // si aucune suggestion n'était fiable ("Non affectée" choisie explicitement) : elle compte déjà
+  // dans les totaux (transverse au voyage), mais n'apparaît dans AUCUNE ligne ville — sans cette
+  // section, elle serait invisible et impossible à retrouver pour la valider/l'affecter.
+  const unassignedActualRows = expenses.filter(
+    (e) => !e.planned && e.sous_etape_id === null && groupedCategory(e.category) !== "administratif_sante"
+  );
 
   // Ligne de total en bas du tableau "Détail des dépenses" : nuits + les 5 colonnes ville
   // (transport vers la suivante, transport sur place, logement, nourriture, activités) sommées
@@ -390,7 +405,70 @@ export function BudgetOverviewTable({
           )}
         </div>
       </div>
+
+      {view === "actual" && unassignedActualRows.length > 0 && (
+        <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+            Dépenses non affectées à une ville ({unassignedActualRows.length})
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Importées depuis un relevé bancaire sans suggestion de ville fiable — choisis une ville pour qu'elles apparaissent dans le tableau
+            ci-dessus.
+          </p>
+          <ul className="divide-y divide-border rounded-md border border-border">
+            {unassignedActualRows.map((e) => (
+              <UnassignedExpenseRow key={e.id} expense={e} cityOptions={cityOptions} referenceCurrency={referenceCurrency} voyageId={voyageId} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
+  );
+}
+
+function UnassignedExpenseRow({
+  expense,
+  cityOptions,
+  referenceCurrency,
+  voyageId,
+}: {
+  expense: VoyageAllExpense;
+  cityOptions: { id: string; label: string }[];
+  referenceCurrency: string;
+  voyageId: string;
+}) {
+  const invalidateKey = ["voyage-all-expenses", voyageId];
+  const assignToCity = useAssignExpenseToCity(invalidateKey);
+  const deleteExpense = useDeleteExpense(invalidateKey);
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 p-3">
+      <div>
+        <p className="text-sm font-medium">
+          <ExpenseSourceBadge source={expense.source} /> {CATEGORY_LABELS[expense.category] ?? expense.category}
+          {expense.description ? ` — ${expense.description}` : ""}
+        </p>
+        <p className="text-xs text-muted-foreground">{expense.expense_date ? formatDate(expense.expense_date) : "Sans date"}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold">{formatCurrency(expense.amount * expense.manual_rate_to_reference, referenceCurrency)}</span>
+        <Select onValueChange={(v) => assignToCity.mutate({ id: expense.id, sousEtapeId: v })}>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue placeholder="Affecter à une ville" />
+          </SelectTrigger>
+          <SelectContent>
+            {cityOptions.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="ghost" size="icon" onClick={() => deleteExpense.mutate(expense.id)}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </li>
   );
 }
 

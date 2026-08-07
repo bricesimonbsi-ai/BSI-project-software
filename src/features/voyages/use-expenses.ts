@@ -364,6 +364,21 @@ export function useUpdateExpense(invalidateKey: unknown[]) {
   });
 }
 
+/** Rattache une dépense "non affectée à une ville" (voir expense-import-dialog.tsx : un import
+ * CSV peut laisser une dépense sans ville si aucune suggestion n'était fiable) à une ville —
+ * seul moyen de sortir de cet état, `useUpdateExpense` ne touchant jamais au rattachement. */
+export function useAssignExpenseToCity(invalidateKey: unknown[]) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, sousEtapeId }: { id: string; sousEtapeId: string }) => {
+      const { error } = await supabase.from("voyage_expenses").update({ sous_etape_id: sousEtapeId, voyage_id: null }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateBudgetQueries(queryClient, invalidateKey),
+    onError: onExpenseMutationError,
+  });
+}
+
 export function useDeleteExpense(invalidateKey: unknown[]) {
   const queryClient = useQueryClient();
   return useMutation({
