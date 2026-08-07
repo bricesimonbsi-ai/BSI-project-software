@@ -159,7 +159,7 @@ export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lo
 }
 
 /** Parse une date "YYYY-MM-DD" comme un jour calendaire UTC pur, sans effet de fuseau horaire local. */
-function parseCalendarDateUTC(dateStr: string): Date {
+export function parseCalendarDateUTC(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
 }
@@ -183,7 +183,7 @@ export function getPlannedMonthIndices(arrivalDate: string | null, durationDays:
 }
 
 /** Additionne des jours calendaires à une date "YYYY-MM-DD", en arithmétique UTC pure (aucun effet de fuseau horaire). */
-function addDays(dateStr: string, days: number): string {
+export function addDays(dateStr: string, days: number): string {
   const d = parseCalendarDateUTC(dateStr);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);

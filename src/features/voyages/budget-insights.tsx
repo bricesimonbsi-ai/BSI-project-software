@@ -29,9 +29,12 @@ import { ManageExpensesTab } from "@/features/voyages/csv-import/manage-expenses
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
 import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { useCityLockedCostsMap, isLegacyLockedPlannedRow } from "@/features/voyages/use-city-locked-costs";
+import { buildFlatRows } from "@/features/voyages/itinerary/itinerary-model";
+import { buildBudgetTimeline, buildActualAmountByDate, todayISO } from "@/features/voyages/budget-timeline";
+import { BudgetTimelineChart } from "@/features/voyages/budget-timeline-chart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency } from "@/lib/utils";
-import type { TravelStyle, Voyage } from "@/types/database";
+import type { TravelStyle, Voyage, VoyageSousEtape } from "@/types/database";
 
 type BudgetTab = "synthese" | "gerer";
 
@@ -87,13 +90,24 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
   const style: TravelStyle = voyage.travel_style ?? "standard";
   const lodgingCount = voyage.lodging_count ?? travelerCount;
 
-  const { total: lockedTotal } = useCityLockedCostsMap({
+  const { byCity: lockedByCity, total: lockedTotal } = useCityLockedCostsMap({
     etapes,
     sousEtapes: allSousEtapes,
     travelStyle: style,
     travelerCount,
     lodgingCount,
   });
+
+  const citiesByEtape = useMemo(() => {
+    const map = new Map<string, VoyageSousEtape[]>();
+    for (const se of allSousEtapes ?? []) {
+      const list = map.get(se.etape_id) ?? [];
+      list.push(se);
+      map.set(se.etape_id, list);
+    }
+    return map;
+  }, [allSousEtapes]);
+  const flat = useMemo(() => buildFlatRows(etapes ?? [], citiesByEtape), [etapes, citiesByEtape]);
 
   // L'équipement et les coûts verrouillés (logement/nourriture/transport sur place) ne sont
   // plus des lignes de dépense à resynchroniser : leur coût prévisionnel est calculé en direct
@@ -120,6 +134,38 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     equipmentPlannedTotal +
     lockedPlannedTotal;
   const totalActual = expenses.filter((e) => !e.planned).reduce((s, e) => s + e.amount * e.manual_rate_to_reference, 0);
+
+  // Chronologie prévisionnel/réel cumulés : réutilise cityColumnAmount/CITY_COLUMNS (source
+  // unique déjà utilisée par le tableau détail des dépenses) pour ne jamais afficher un rythme
+  // journalier différent des montants par ville affichés ailleurs.
+  const expensesBySousEtape = useMemo(() => {
+    const map = new Map<string, typeof expenses>();
+    for (const e of expenses) {
+      if (!e.planned || !e.sous_etape_id) continue;
+      const list = map.get(e.sous_etape_id) ?? [];
+      list.push(e);
+      map.set(e.sous_etape_id, list);
+    }
+    return map;
+  }, [expenses]);
+  const timelinePoints = useMemo(() => {
+    if (flat.length === 0) return [];
+    const start = flat[0].sousEtape.start_date;
+    const end = flat[flat.length - 1].sousEtape.end_date;
+    if (!start || !end) return [];
+    const actualAmountByDate = buildActualAmountByDate(
+      expenses.filter((e) => !e.planned),
+      start,
+      end
+    );
+    return buildBudgetTimeline({
+      flat,
+      expensesBySousEtape,
+      lockedByCity,
+      upfrontPlanned: equipmentPlannedTotal + adminSantePlannedTotalWithVisa,
+      actualAmountByDate,
+    });
+  }, [flat, expenses, expensesBySousEtape, lockedByCity, equipmentPlannedTotal, adminSantePlannedTotalWithVisa]);
 
   const { categoryRows, transportRows, adminSanteRows } = useMemo(() => {
     const byCategory = new Map<string, { planned: number; actual: number }>();
@@ -296,6 +342,15 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
               </div>
             </CardContent>
           </Card>
+
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rythme de consommation dans le temps</h3>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Prévu vs réel cumulés au fil de l'itinéraire — à distinguer du % ci-dessus (qui compare le réel au budget total final, pas au
+              rythme attendu à ce stade du voyage).
+            </p>
+            <BudgetTimelineChart points={timelinePoints} todayDate={todayISO()} currency={voyage.reference_currency} />
+          </div>
 
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

@@ -23,7 +23,7 @@ import { ExpenseList } from "@/features/voyages/expense-list";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { ExpenseCategory, TravelStyle, VoyageAllExpense, VoyageEtape, VoyageSousEtape } from "@/types/database";
 
-function sumAmount(rows: VoyageAllExpense[]): number {
+export function sumAmount(rows: VoyageAllExpense[]): number {
   return rows.reduce((sum, e) => sum + e.amount * e.manual_rate_to_reference, 0);
 }
 
@@ -33,7 +33,7 @@ function sumAmount(rows: VoyageAllExpense[]): number {
  * confondre les deux dans la même case. Une colonne "locked" (avec `lockedField`) est calculée
  * à 100% côté client depuis `useCityLockedCostsMap`, jamais depuis une ligne `voyage_expenses` —
  * voir `cityColumnAmount` plus bas. */
-type CityColumn = {
+export type CityColumn = {
   key: string;
   label: string;
   category: ExpenseCategory;
@@ -43,7 +43,7 @@ type CityColumn = {
   lockedField?: keyof CityLockedCosts;
 };
 
-function matchesColumn(e: { category: ExpenseCategory; sub_category: string | null }, col: CityColumn): boolean {
+export function matchesColumn(e: { category: ExpenseCategory; sub_category: string | null }, col: CityColumn): boolean {
   if (groupedCategory(e.category) !== col.category) return false;
   if (col.subCategory != null) return (e.sub_category ?? "") === col.subCategory;
   if (col.excludeSubCategories) return !col.excludeSubCategories.includes(e.sub_category ?? "");
@@ -56,13 +56,13 @@ function matchesColumn(e: { category: ExpenseCategory; sub_category: string | nu
  * c'est exactement ce qui est affiché dans la case éditable, donc les totaux (pays, général) ne
  * peuvent jamais diverger de ce qui est visible à l'écran, même si d'anciennes lignes en double
  * traînent encore en base. */
-function cityColumnAmount(col: CityColumn, cityRows: VoyageAllExpense[], locked: CityLockedCosts | undefined): number {
+export function cityColumnAmount(col: CityColumn, cityRows: VoyageAllExpense[], locked: CityLockedCosts | undefined): number {
   if (col.locked && col.lockedField) return locked?.[col.lockedField] ?? 0;
   const row = cityRows.find((e) => matchesColumn(e, col));
   return row ? row.amount * row.manual_rate_to_reference : 0;
 }
 
-const CITY_COLUMNS: CityColumn[] = [
+export const CITY_COLUMNS: CityColumn[] = [
   { key: "transport", label: "Transport vers l'étape suivante", category: "transport", excludeSubCategories: ["sur_place"] },
   { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true, lockedField: "localTransport" },
   { key: "logement", label: "Logement", category: "logement", locked: true, lockedField: "lodging" },
