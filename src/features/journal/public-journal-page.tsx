@@ -3,9 +3,11 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
 import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
+import { JournalImmersiveView, type ImmersivePost } from "@/features/voyages/journal/journal-immersive-view";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { MapPin } from "lucide-react";
+import { MapPin, PlayCircle } from "lucide-react";
 import type { PublicJournalEntry, PublicJournalMeta } from "@/types/database";
 
 /**
@@ -20,6 +22,7 @@ export function PublicJournalPage() {
   const [entries, setEntries] = useState<PublicJournalEntry[]>([]);
   const [lightbox, setLightbox] = useState<string[] | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [immersiveOpen, setImmersiveOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -43,6 +46,22 @@ export function PublicJournalPage() {
     return `${formatDate(meta.start_date)} → ${formatDate(meta.end_date)}`;
   }, [meta]);
 
+  const immersivePosts: ImmersivePost[] = useMemo(
+    () =>
+      entries.map((e) => ({
+        id: e.post_id,
+        caption: e.caption,
+        entry_date: e.entry_date,
+        author_name: e.author_name,
+        city: e.city,
+        country_region: e.country_region,
+        latitude: e.latitude,
+        longitude: e.longitude,
+        photo_urls: e.photo_paths.map((p) => journalPhotoUrl(p)),
+      })),
+    [entries]
+  );
+
   if (meta === undefined) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Chargement...</div>;
   }
@@ -64,6 +83,12 @@ export function PublicJournalPage() {
           <h1 className="text-3xl font-bold">{meta.title}</h1>
           {dateRange && <p className="text-sm text-muted-foreground">{dateRange}</p>}
         </div>
+
+        {entries.length > 0 && (
+          <Button variant="outline" className="w-full" onClick={() => setImmersiveOpen(true)}>
+            <PlayCircle className="mr-2 h-4 w-4" /> Vue immersive
+          </Button>
+        )}
 
         {entries.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Aucun souvenir publié pour l'instant.</p>
@@ -111,6 +136,8 @@ export function PublicJournalPage() {
           {lightbox && <img src={lightbox[lightboxIndex]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />}
         </DialogContent>
       </Dialog>
+
+      <JournalImmersiveView posts={immersivePosts} open={immersiveOpen} onOpenChange={setImmersiveOpen} />
     </div>
   );
 }

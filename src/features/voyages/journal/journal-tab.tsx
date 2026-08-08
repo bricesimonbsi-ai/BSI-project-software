@@ -1,20 +1,39 @@
-import { useState } from "react";
-import { useSetJournalShareToken } from "@/features/voyages/journal/use-journal";
+import { useMemo, useState } from "react";
+import { useJournalPosts, useSetJournalShareToken, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { JournalPostComposer } from "@/features/voyages/journal/journal-post-composer";
 import { JournalTimeline } from "@/features/voyages/journal/journal-timeline";
+import { JournalImmersiveView, type ImmersivePost } from "@/features/voyages/journal/journal-immersive-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { APP_URL } from "@/lib/app-url";
-import { Share2, Check } from "lucide-react";
+import { Share2, Check, PlayCircle } from "lucide-react";
 import type { Voyage } from "@/types/database";
 
 /** Onglet "Journal" du voyage : composeur de souvenirs (photos + texte), fil chronologique, et
  * gestion du lien de partage public (aucune authentification requise pour les visiteurs). */
 export function JournalTab({ voyage }: { voyage: Voyage }) {
   const setShareToken = useSetJournalShareToken(voyage.id);
+  const { data: posts } = useJournalPosts(voyage.id);
   const [copied, setCopied] = useState(false);
+  const [immersiveOpen, setImmersiveOpen] = useState(false);
 
   const shareUrl = voyage.journal_share_token ? `${APP_URL}/journal/${voyage.journal_share_token}` : null;
+
+  const immersivePosts: ImmersivePost[] = useMemo(
+    () =>
+      (posts ?? []).map((p) => ({
+        id: p.id,
+        caption: p.caption,
+        entry_date: p.entry_date,
+        author_name: p.author_name,
+        city: p.voyage_sous_etapes?.city ?? null,
+        country_region: p.voyage_sous_etapes?.voyage_etapes?.country_region ?? null,
+        latitude: p.voyage_sous_etapes?.latitude ?? null,
+        longitude: p.voyage_sous_etapes?.longitude ?? null,
+        photo_urls: p.voyage_journal_photos.map((ph) => journalPhotoUrl(ph.storage_path)),
+      })),
+    [posts]
+  );
 
   async function handleCopy() {
     if (!shareUrl) return;
@@ -57,8 +76,16 @@ export function JournalTab({ voyage }: { voyage: Voyage }) {
         </CardContent>
       </Card>
 
+      {immersivePosts.length > 0 && (
+        <Button variant="outline" className="w-full" onClick={() => setImmersiveOpen(true)}>
+          <PlayCircle className="mr-2 h-4 w-4" /> Vue immersive
+        </Button>
+      )}
+
       <JournalPostComposer voyageId={voyage.id} />
       <JournalTimeline voyageId={voyage.id} />
+
+      <JournalImmersiveView posts={immersivePosts} open={immersiveOpen} onOpenChange={setImmersiveOpen} />
     </div>
   );
 }
