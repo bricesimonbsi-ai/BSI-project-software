@@ -3,6 +3,7 @@ import { ProtectedRoute } from "@/app/layout/protected-route";
 import { AppShell } from "@/app/layout/app-shell";
 import { LoginPage } from "@/features/auth/login-page";
 import { SignupPage } from "@/features/auth/signup-page";
+import { AcceptInvitePage } from "@/features/auth/accept-invite-page";
 import { PortfolioHome } from "@/features/portfolio/portfolio-home";
 import { CategoryDetailPage } from "@/features/portfolio/category-detail-page";
 import { CategoriesAdminPage } from "@/features/portfolio/categories-admin-page";
@@ -24,6 +25,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route
         path="/"
         element={

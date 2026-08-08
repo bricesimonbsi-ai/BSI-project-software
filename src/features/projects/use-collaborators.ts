@@ -25,15 +25,42 @@ export function useAddCollaborator(projectId: string) {
   return useMutation({
     mutationFn: async (input: { email: string; permission: Permission }) => {
       if (!session) throw new Error("Non authentifié");
+      const email = input.email.toLowerCase().trim();
       const { error } = await supabase.from("project_collaborators").insert({
         project_id: projectId,
-        email: input.email.toLowerCase().trim(),
+        email,
         permission: input.permission,
         invited_by: session.user.id,
       });
       if (error) throw error;
+
+      // L'email d'invitation est un plus, pas une condition de succès : l'accès (ligne ci-dessus)
+      // est déjà accordé même si l'envoi échoue — on avertit juste l'utilisateur dans ce cas au
+      // lieu de faire passer toute l'opération pour ratée.
+      try {
+        const { data, error: inviteError } = await supabase.functions.invoke("invite-collaborator", {
+          body: { project_id: projectId, email, redirect_to: `${window.location.origin}/accept-invite` },
+        });
+        if (inviteError) throw inviteError;
+        return { emailSent: true, alreadyRegistered: !!(data as { alreadyRegistered?: boolean } | null)?.alreadyRegistered };
+      } catch (err) {
+        return { emailSent: false, emailError: (err as Error).message };
+      }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collaborators", projectId] }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["collaborators", projectId] });
+      if (!result.emailSent) {
+        toast({
+          title: "Collaborateur ajouté",
+          description: "L'accès est créé mais l'email d'invitation n'a pas pu être envoyé — préviens la personne toi-même.",
+          variant: "destructive",
+        });
+      } else if (result.alreadyRegistered) {
+        toast({ title: "Collaborateur ajouté", description: "Cette personne a déjà un compte : elle voit le projet dès sa prochaine connexion." });
+      } else {
+        toast({ title: "Invitation envoyée", description: "Un email vient d'être envoyé pour créer l'accès." });
+      }
+    },
     onError: onMutationError,
   });
 }
