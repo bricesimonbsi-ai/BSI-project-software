@@ -59,15 +59,61 @@ Deno.serve(async (req) => {
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, { redirectTo: redirect_to });
 
     if (inviteError) {
-      // Un compte existe déjà avec cet email : pas d'email natif possible dans ce cas (Supabase
-      // n'envoie l'invite que pour un nouveau compte), donc on relie directement la ligne en
-      // attente au compte existant — la personne verra le projet à sa prochaine connexion.
+      // Un compte existe déjà avec cet email. Deux cas très différents :
+      // - une vraie personne déjà inscrite et confirmée : pas d'email natif possible (Supabase
+      //   n'invite que les nouveaux comptes), on relie juste la ligne en attente, elle verra le
+      //   projet à sa prochaine connexion normale ;
+      // - un compte "fantôme" créé par une invitation précédente jamais finalisée (lien cassé,
+      //   expiré, deuxième clic...) : personne n'a jamais pu se connecter avec, il faut le
+      //   supprimer et réinviter proprement pour obtenir un lien tout neuf, sinon la personne
+      //   reste bloquée indéfiniment sans jamais recevoir d'email valide.
       // Détection au message uniquement : le code HTTP 422 seul est trop générique (une URL de
       // redirection non autorisée renvoie aussi un 422) et masquerait la vraie cause de l'échec.
       const alreadyRegistered = /already been registered|already exists|already registered/i.test(inviteError.message ?? "");
       if (alreadyRegistered) {
         const { data: existingProfile } = await admin.from("profiles").select("id").eq("email", normalizedEmail).maybeSingle();
+
         if (existingProfile) {
+          const { data: existingUser } = await admin.auth.admin.getUserById(existingProfile.id);
+          const neverConfirmed = !existingUser?.user?.email_confirmed_at && !existingUser?.user?.last_sign_in_at;
+
+          if (neverConfirmed) {
+            // La suppression du compte entraîne en cascade la suppression des lignes
+            // project_collaborators qui le référencent (contrainte "on delete cascade" sur
+            // profiles) — on les sauvegarde donc avant, pour les recréer juste après en attente
+            // du nouveau compte (le trigger handle_new_user les relira automatiquement).
+            const { data: pendingRows } = await admin
+              .from("project_collaborators")
+              .select("project_id, permission, invited_by")
+              .eq("user_id", existingProfile.id);
+
+            await admin.auth.admin.deleteUser(existingProfile.id);
+
+            if (pendingRows && pendingRows.length > 0) {
+              await admin.from("project_collaborators").insert(
+                pendingRows.map((r) => ({
+                  project_id: r.project_id,
+                  email: normalizedEmail,
+                  permission: r.permission,
+                  invited_by: r.invited_by,
+                  user_id: null,
+                }))
+              );
+            }
+
+            const { error: retryError } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, { redirectTo: redirect_to });
+            if (retryError) {
+              return new Response(JSON.stringify({ error: retryError.message }), {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            return new Response(JSON.stringify({ ok: true }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
           await admin
             .from("project_collaborators")
             .update({ user_id: existingProfile.id })
