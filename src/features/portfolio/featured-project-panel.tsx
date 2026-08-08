@@ -62,7 +62,7 @@ function FeaturedVoyageStats({ projectId }: { projectId: string }) {
     <div className="space-y-3">
       {linkedPeople && linkedPeople.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {linkedPeople.map((l, i) => (
+          {linkedPeople.filter((l) => l.people).map((l, i) => (
             <div key={l.id} className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 py-1 pl-1 pr-2.5">
               <PersonAvatarBadge
                 name={l.people.name}

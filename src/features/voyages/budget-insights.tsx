@@ -303,7 +303,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
                   <div className="space-y-2 border-t border-border pt-3">
                     <p className="text-sm text-muted-foreground">Par voyageur</p>
                     <div className="flex flex-wrap gap-3">
-                      {linkedPeople.map((l, i) => (
+                      {linkedPeople.filter((l) => l.people).map((l, i) => (
                         <div key={l.person_id} className="flex items-center gap-3 rounded-md border border-border/70 px-3 py-2">
                           <PersonAvatarBadge
                             name={l.people.name}

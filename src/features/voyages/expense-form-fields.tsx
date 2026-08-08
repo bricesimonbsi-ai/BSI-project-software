@@ -199,7 +199,7 @@ export function ExpenseFormFields({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Dépense commune</SelectItem>
-              {linkedPeople.map((l) => (
+              {linkedPeople.filter((l) => l.people).map((l) => (
                 <SelectItem key={l.person_id} value={l.person_id}>
                   {l.people.name}
                 </SelectItem>

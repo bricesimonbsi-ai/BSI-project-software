@@ -37,7 +37,7 @@ export function ExpenseList({
 }) {
   const deleteExpense = useDeleteExpense(invalidateKey);
   const { data: linkedPeople } = useProjectPeople(projectId);
-  const personName = (id: string | null) => (id ? linkedPeople?.find((l) => l.person_id === id)?.people.name : undefined);
+  const personName = (id: string | null) => (id ? linkedPeople?.find((l) => l.person_id === id)?.people?.name : undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dialogEditing, setDialogEditing] = useState<VoyageExpense | null>(null);
 
