@@ -47,7 +47,22 @@ export function useAddCollaborator(projectId: string) {
         const { data, error: inviteError } = await supabase.functions.invoke("invite-collaborator", {
           body: { project_id: projectId, email, redirect_to: `${APP_URL}/accept-invite` },
         });
-        if (inviteError) throw inviteError;
+        if (inviteError) {
+          // Le message par défaut de l'erreur ("Edge Function returned a non-2xx status code")
+          // n'est pas exploitable : le vrai message renvoyé par la fonction est dans le corps de
+          // la réponse HTTP (context), pas dans .message.
+          let detail = inviteError.message;
+          const context = (inviteError as { context?: Response }).context;
+          if (context && typeof context.json === "function") {
+            try {
+              const body = await context.json();
+              if (body?.error) detail = body.error;
+            } catch {
+              // corps non exploitable : on garde le message générique
+            }
+          }
+          throw new Error(detail);
+        }
         return { emailSent: true, alreadyRegistered: !!(data as { alreadyRegistered?: boolean } | null)?.alreadyRegistered };
       } catch (err) {
         return { emailSent: false, emailError: (err as Error).message };
@@ -57,8 +72,10 @@ export function useAddCollaborator(projectId: string) {
       queryClient.invalidateQueries({ queryKey: ["collaborators", projectId] });
       if (!result.emailSent) {
         toast({
-          title: "Collaborateur ajouté",
-          description: "L'accès est créé mais l'email d'invitation n'a pas pu être envoyé — préviens la personne toi-même.",
+          title: "Collaborateur ajouté, mais l'email a échoué",
+          description: result.emailError
+            ? `${result.emailError} — préviens la personne toi-même en attendant.`
+            : "L'email d'invitation n'a pas pu être envoyé — préviens la personne toi-même.",
           variant: "destructive",
         });
       } else if (result.alreadyRegistered) {

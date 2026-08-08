@@ -62,7 +62,9 @@ Deno.serve(async (req) => {
       // Un compte existe déjà avec cet email : pas d'email natif possible dans ce cas (Supabase
       // n'envoie l'invite que pour un nouveau compte), donc on relie directement la ligne en
       // attente au compte existant — la personne verra le projet à sa prochaine connexion.
-      const alreadyRegistered = inviteError.status === 422 || /already been registered|already exists/i.test(inviteError.message ?? "");
+      // Détection au message uniquement : le code HTTP 422 seul est trop générique (une URL de
+      // redirection non autorisée renvoie aussi un 422) et masquerait la vraie cause de l'échec.
+      const alreadyRegistered = /already been registered|already exists|already registered/i.test(inviteError.message ?? "");
       if (alreadyRegistered) {
         const { data: existingProfile } = await admin.from("profiles").select("id").eq("email", normalizedEmail).maybeSingle();
         if (existingProfile) {
