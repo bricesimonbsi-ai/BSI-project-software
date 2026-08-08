@@ -30,7 +30,11 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary/40 p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-secondary/40 p-4">
+      <div className="flex items-center gap-2 text-xl font-bold">
+        <img src="/icons/icon-192.png" alt="" className="h-9 w-9 rounded-lg" />
+        Projeko
+      </div>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Connexion</CardTitle>

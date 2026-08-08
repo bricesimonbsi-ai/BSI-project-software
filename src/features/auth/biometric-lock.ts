@@ -57,7 +57,7 @@ export function isBiometricLockEnabled(userId: string): boolean {
 export async function enableBiometricLock(userId: string, email: string, displayName: string): Promise<void> {
   const credential = (await navigator.credentials.create({
     publicKey: {
-      rp: { name: "Portefeuille de projets" },
+      rp: { name: "Projeko" },
       user: { id: randomBytes(16), name: email, displayName: displayName || email },
       challenge: randomBytes(32),
       pubKeyCredParams: [

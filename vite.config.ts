@@ -8,18 +8,18 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon-192.png", "icons/icon-512.png"],
+      includeAssets: ["icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "favicon.svg", "favicon.png"],
       manifest: {
-        name: "Portefeuille de projets",
-        short_name: "Portefeuille",
-        description: "Portefeuille de projets perso — Voyages, Immobilier, et plus",
-        theme_color: "#0f172a",
+        name: "Projeko",
+        short_name: "Projeko",
+        description: "Projeko — portefeuille de projets perso (Voyages, Immobilier, et plus)",
+        theme_color: "#0369a1",
         background_color: "#0f172a",
         display: "standalone",
         start_url: "/",
         icons: [
-          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
         ],
       },
       workbox: {

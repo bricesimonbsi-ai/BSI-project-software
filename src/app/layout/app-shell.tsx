@@ -40,8 +40,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between">
-          <NavLink to="/" className="font-semibold text-foreground">
-            Portefeuille de projets
+          <NavLink to="/" className="flex items-center gap-2 font-semibold text-foreground">
+            <img src="/icons/icon-192.png" alt="" className="h-6 w-6 rounded-md" />
+            Projeko
           </NavLink>
           <nav className="hidden gap-1 md:flex">
             {navItems.map((item) => (
