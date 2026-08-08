@@ -121,8 +121,54 @@ export type Voyage = {
   /** % de répartition d'un retrait d'espèces entre les 3 catégories "sur place" à l'import CSV
    * (voir expense-import-dialog.tsx) — mémorisé une fois par voyage, réutilisé à chaque import. */
   cash_split_ratios: { transport_local: number; activites: number; nourriture: number };
+  /** Présence = partage public du journal actif (lien /journal/{token}, aucune authentification
+   * requise pour le visiteur) ; null = partage désactivé. */
+  journal_share_token: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Une publication du journal de voyage (façon Polarsteps) : photos + texte libre, rattachée en
+ * option à une ville de l'itinéraire. */
+export type VoyageJournalPost = {
+  id: string;
+  voyage_id: string;
+  author_id: string | null;
+  author_name: string;
+  sous_etape_id: string | null;
+  caption: string | null;
+  entry_date: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VoyageJournalPhoto = {
+  id: string;
+  post_id: string;
+  storage_path: string;
+  position: number;
+  created_at: string;
+};
+
+/** Ligne renvoyée par la fonction publique get_public_journal (page de partage sans authentification). */
+export type PublicJournalEntry = {
+  post_id: string;
+  caption: string | null;
+  entry_date: string;
+  created_at: string;
+  author_name: string;
+  city: string | null;
+  country_region: string | null;
+  photo_paths: string[];
+};
+
+/** Ligne renvoyée par get_public_journal_meta. */
+export type PublicJournalMeta = {
+  voyage_id: string;
+  title: string;
+  icon: string | null;
+  start_date: string | null;
+  end_date: string | null;
 };
 
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
@@ -390,6 +436,8 @@ export type Database = {
       documents: Table<DocumentRow>;
       notifications: Table<NotificationRow>;
       notification_preferences: Table<NotificationPreferences>;
+      voyage_journal_posts: Table<VoyageJournalPost>;
+      voyage_journal_photos: Table<VoyageJournalPhoto>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };
@@ -399,7 +447,16 @@ export type Database = {
       voyage_person_expense_summary: { Row: VoyagePersonExpenseSummary; Relationships: [] };
       voyage_all_expenses: { Row: VoyageAllExpense; Relationships: [] };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      get_public_journal: {
+        Args: { p_share_token: string };
+        Returns: PublicJournalEntry[];
+      };
+      get_public_journal_meta: {
+        Args: { p_share_token: string };
+        Returns: PublicJournalMeta[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

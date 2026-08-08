@@ -2,17 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
+import { APP_URL } from "@/lib/app-url";
 import type { Permission, ProjectCollaborator } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
 }
-
-// Domaine fixe volontairement codé en dur plutôt que window.location.origin : les invitations
-// peuvent être envoyées depuis un déploiement de prévisualisation Vercel éphémère (URL qui
-// n'existera plus quelques jours après), le lien de l'email doit toujours pointer vers le
-// domaine de production stable pour rester valide.
-const APP_URL = "https://www.projeko.fr";
 
 export function useCollaborators(projectId: string) {
   return useQuery({

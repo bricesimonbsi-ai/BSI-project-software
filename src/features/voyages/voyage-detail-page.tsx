@@ -20,6 +20,7 @@ import { useItineraryDateRange } from "@/features/voyages/use-itinerary-date-ran
 import { ProjectPeoplePicker } from "@/features/people/project-people-picker";
 import { BudgetInsights } from "@/features/voyages/budget-insights";
 import { EquipmentTab } from "@/features/voyages/equipment-tab";
+import { JournalTab } from "@/features/voyages/journal/journal-tab";
 import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
@@ -144,6 +145,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         <TabsList>
           <TabsTrigger value="overview">Aperçu</TabsTrigger>
           <TabsTrigger value="itinerary">Itinéraire</TabsTrigger>
+          <TabsTrigger value="journal">Journal</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>
           <TabsTrigger value="equipment">Équipement</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -244,6 +246,10 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
             travelerCount={travelerCount}
             lodgingCount={voyage.lodging_count ?? travelerCount}
           />
+        </TabsContent>
+
+        <TabsContent value="journal" className="space-y-4">
+          <JournalTab voyage={voyage} />
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-4">
