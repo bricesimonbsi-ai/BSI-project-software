@@ -1,11 +1,14 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useThemeStore, type ThemeMode, type CategoryLayout } from "@/features/theme/theme-store";
 import { THEME_PRESETS } from "@/features/theme/theme-presets";
+import { isBiometricAvailable, isBiometricLockEnabled, enableBiometricLock, disableBiometricLock } from "@/features/auth/biometric-lock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle, Fingerprint } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
@@ -101,6 +104,8 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <BiometricLockSetting />
+
       <Card>
         <CardHeader>
           <CardTitle>Personnes</CardTitle>
@@ -133,5 +138,61 @@ export function SettingsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/** Verrou LOCAL par biométrie (Face ID/Touch ID/empreinte) : protège l'accès à une session déjà
+ * ouverte sur cet appareil, en plus de la connexion Supabase habituelle — ne s'affiche que si un
+ * authentificateur de la plateforme est disponible (téléphone/ordinateur récent, HTTPS). */
+function BiometricLockSetting() {
+  const { session, profile } = useAuth();
+  const [available, setAvailable] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    isBiometricAvailable().then(setAvailable);
+  }, []);
+
+  useEffect(() => {
+    if (session) setEnabled(isBiometricLockEnabled(session.user.id));
+  }, [session]);
+
+  if (!available || !session) return null;
+
+  async function handleToggle(next: boolean) {
+    if (!session) return;
+    setBusy(true);
+    try {
+      if (next) {
+        await enableBiometricLock(session.user.id, session.user.email ?? "", profile?.display_name ?? "");
+        setEnabled(true);
+        toast({ title: "Verrouillage biométrique activé" });
+      } else {
+        disableBiometricLock(session.user.id);
+        setEnabled(false);
+      }
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Verrouillage biométrique</CardTitle>
+        <CardDescription>
+          Demande Face ID / Touch ID / empreinte à chaque ouverture de l'application, en plus de ta connexion habituelle.
+          Purement local à cet appareil — ne remplace pas ta connexion.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant={enabled ? "outline" : "default"} onClick={() => handleToggle(!enabled)} disabled={busy}>
+          <Fingerprint className="mr-2 h-4 w-4" /> {enabled ? "Désactiver" : "Activer"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
