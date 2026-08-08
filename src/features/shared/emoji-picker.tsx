@@ -62,7 +62,7 @@ function EmojiPickerDialog({
           </div>
         ) : (
           <Tabs defaultValue={EMOJI_CATEGORIES[0].id}>
-            <TabsList className="flex-wrap">
+            <TabsList>
               {EMOJI_CATEGORIES.map((c) => (
                 <TabsTrigger key={c.id} value={c.id} className="text-xs">
                   {c.label}

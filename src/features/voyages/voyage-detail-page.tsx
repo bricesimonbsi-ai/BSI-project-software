@@ -137,7 +137,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
       </div>
 
       <Tabs defaultValue="itinerary">
-        <TabsList className="flex-wrap">
+        <TabsList>
           <TabsTrigger value="overview">Aperçu</TabsTrigger>
           <TabsTrigger value="itinerary">Itinéraire</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>

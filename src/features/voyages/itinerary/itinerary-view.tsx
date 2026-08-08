@@ -181,8 +181,8 @@ export function ItineraryView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-          <TabsList className="flex-wrap">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="min-w-0">
+          <TabsList>
             <TabsTrigger value="climat">Tableau climatique</TabsTrigger>
             <TabsTrigger value="dates">Mode dates</TabsTrigger>
             <TabsTrigger value="carte">Carte</TabsTrigger>
