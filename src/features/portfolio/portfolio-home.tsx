@@ -80,7 +80,7 @@ export function PortfolioHome() {
           <div className="flex gap-3 overflow-x-auto pb-1">
             {upcomingProjects.map((p) => (
               <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
-                <Card className="w-56 transition-shadow hover:shadow-md">
+                <Card className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25">
                   <CardContent className="space-y-1 p-4">
                     <p className="flex items-center gap-1.5 truncate font-semibold">
                       {p.icon && <span>{p.icon}</span>}
@@ -124,7 +124,7 @@ function CategoryListLayout({ stats }: { stats: CategoryStat[] }) {
     <div className="space-y-2">
       {stats.map((stat) => (
         <Link key={stat.category.id} to={`/categories/${stat.category.id}`}>
-          <Card className="transition-shadow hover:shadow-md">
+          <Card className="transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25">
             <CardContent className="flex items-center gap-4 p-4">
               <CategoryIcon stat={stat} className="h-12 w-12 text-2xl" />
               <div className="min-w-0 flex-1">
@@ -155,7 +155,7 @@ function CategoryGridLayout({ stats }: { stats: CategoryStat[] }) {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {stats.map((stat) => (
         <Link key={stat.category.id} to={`/categories/${stat.category.id}`}>
-          <Card className="h-full transition-shadow hover:shadow-md">
+          <Card className="h-full transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25">
             <CardContent className="flex flex-col items-center gap-2 p-5 text-center">
               <CategoryIcon stat={stat} className="h-16 w-16 rounded-2xl text-3xl" />
               <p className="font-semibold">{stat.category.name}</p>

@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewProjectDialog } from "@/features/projects/new-project-dialog";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
+import { PageHeroCard } from "@/features/shared/page-hero-card";
+import { IconGlow } from "@/features/shared/icon-glow";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = {
@@ -34,24 +36,28 @@ export function CategoryDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumb items={[{ label: "Accueil", to: "/" }, { label: category.name, icon: category.icon }]} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="h-4 w-4 rounded-full" style={{ backgroundColor: category.color }} />
-          <h1 className="text-2xl font-bold">
-            {category.icon && <span className="mr-2">{category.icon}</span>}
-            {category.name}
-          </h1>
+      <PageHeroCard>
+        <Breadcrumb items={[{ label: "Accueil", to: "/" }, { label: category.name, icon: category.icon }]} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <IconGlow>
+              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: category.color }} />
+            </IconGlow>
+            <h1 className="text-2xl font-bold">
+              {category.icon && <span className="mr-2">{category.icon}</span>}
+              {category.name}
+            </h1>
+          </div>
+          <NewProjectDialog category={category} />
         </div>
-        <NewProjectDialog category={category} />
-      </div>
+      </PageHeroCard>
 
       {isLoading && <p className="text-muted-foreground">Chargement des projets...</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {categoryProjects.map((project) => (
           <Link key={project.id} to={`/projects/${project.id}`}>
-            <Card className="h-full transition-shadow hover:shadow-md">
+            <Card className="h-full transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-1.5 text-base">

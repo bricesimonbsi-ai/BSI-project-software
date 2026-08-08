@@ -14,6 +14,8 @@ import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { ProjectSwitcher } from "@/features/navigation/project-switcher";
+import { PageHeroCard } from "@/features/shared/page-hero-card";
+import { IconGlow } from "@/features/shared/icon-glow";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 
@@ -89,7 +91,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div className="space-y-2">
+      <PageHeroCard>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Breadcrumb
             items={[
@@ -102,17 +104,19 @@ export function ProjectDetailPage() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <EmojiPickerButton
-              value={project.icon}
-              onChange={(icon) => updateProject.mutate({ id: project.id, icon })}
-            />
+            <IconGlow>
+              <EmojiPickerButton
+                value={project.icon}
+                onChange={(icon) => updateProject.mutate({ id: project.id, icon })}
+              />
+            </IconGlow>
             <h1 className="text-2xl font-bold">{project.title}</h1>
           </div>
           <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting}>
             <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce projet"}
           </Button>
         </div>
-      </div>
+      </PageHeroCard>
 
       <Tabs defaultValue="details">
         <TabsList>

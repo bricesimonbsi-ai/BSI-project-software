@@ -24,6 +24,8 @@ import { TRAVEL_STYLE_OPTIONS } from "@/features/voyages/budget-estimate";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { ProjectSwitcher } from "@/features/navigation/project-switcher";
+import { PageHeroCard } from "@/features/shared/page-hero-card";
+import { IconGlow } from "@/features/shared/icon-glow";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
@@ -109,7 +111,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
 
   return (
     <div className="max-w-6xl space-y-6">
-      <div className="space-y-2">
+      <PageHeroCard>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Breadcrumb
             items={[
@@ -123,7 +125,9 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: projectId, icon })} />
+              <IconGlow>
+                <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: projectId, icon })} />
+              </IconGlow>
               <ProjectTitleInput projectId={projectId} title={project.title} />
             </div>
             <p className="text-sm text-muted-foreground">
@@ -134,7 +138,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
             <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer ce voyage"}
           </Button>
         </div>
-      </div>
+      </PageHeroCard>
 
       <Tabs defaultValue="itinerary">
         <TabsList>

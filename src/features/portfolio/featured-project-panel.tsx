@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
+import { IconGlow } from "@/features/shared/icon-glow";
 import type { ProjectWithCategory } from "@/features/projects/use-projects";
 
 /** Encart "projet en avant" de la page d'accueil : au-delà du statut/dates, affiche les
@@ -23,8 +24,12 @@ export function FeaturedProjectPanel({ project, status }: { project: ProjectWith
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-accent">{status === "ongoing" ? "En cours" : "Prochainement"}</p>
-            <h2 className="text-2xl font-bold">
-              {project.icon && <span className="mr-2">{project.icon}</span>}
+            <h2 className="flex items-center gap-2 text-2xl font-bold">
+              {project.icon && (
+                <IconGlow>
+                  <span>{project.icon}</span>
+                </IconGlow>
+              )}
               {project.title}
             </h2>
             <p className="text-sm text-muted-foreground">
