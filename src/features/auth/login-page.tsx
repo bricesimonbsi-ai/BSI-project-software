@@ -30,8 +30,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-secondary/40 p-4">
-      <div className="flex items-center gap-2 text-xl font-bold">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-secondary/40 p-4 dark:bg-background dark:bg-[radial-gradient(circle_at_50%_32%,_hsl(250_45%_20%),_transparent_60%)]">
+      <div className="relative flex items-center gap-2 text-xl font-bold">
+        <div className="absolute -inset-4 -z-10 rounded-full bg-accent/30 blur-2xl dark:bg-accent/40" aria-hidden="true" />
         <img src="/icons/icon-192.png" alt="" className="h-9 w-9 rounded-lg" />
         Projeko
       </div>

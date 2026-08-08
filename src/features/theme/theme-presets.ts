@@ -98,9 +98,9 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: "nuit",
     label: "Nuit",
-    swatch: "#4f46e5",
-    light: { primary: "243 75% 59%", accent: "250 80% 62%", ring: "243 75% 59%" },
-    dark: { primary: "243 75% 68%", accent: "243 75% 68%", ring: "243 75% 68%" },
+    swatch: "#8a78e8",
+    light: { primary: "250 71% 58%", accent: "255 75% 62%", ring: "250 71% 58%" },
+    dark: { primary: "250 80% 72%", accent: "250 80% 72%", ring: "250 80% 72%" },
     radius: "1rem",
     motifEmojis: ["🌙", "⭐", "✨", "🌌"],
   },

@@ -21,8 +21,8 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      mode: "system",
-      themePreset: "ocean",
+      mode: "dark",
+      themePreset: "nuit",
       categoryLayout: "list",
       accentColor: null,
       setMode: (mode) => set({ mode }),

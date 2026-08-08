@@ -13,8 +13,8 @@ export default defineConfig({
         name: "Projeko",
         short_name: "Projeko",
         description: "Projeko — portefeuille de projets perso (Voyages, Immobilier, et plus)",
-        theme_color: "#0369a1",
-        background_color: "#0f172a",
+        theme_color: "#8a78e8",
+        background_color: "#191530",
         display: "standalone",
         start_url: "/",
         icons: [
