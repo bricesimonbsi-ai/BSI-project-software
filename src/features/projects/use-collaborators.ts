@@ -8,6 +8,12 @@ function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
 }
 
+// Domaine fixe volontairement codé en dur plutôt que window.location.origin : les invitations
+// peuvent être envoyées depuis un déploiement de prévisualisation Vercel éphémère (URL qui
+// n'existera plus quelques jours après), le lien de l'email doit toujours pointer vers le
+// domaine de production stable pour rester valide.
+const APP_URL = "https://www.projeko.fr";
+
 export function useCollaborators(projectId: string) {
   return useQuery({
     queryKey: ["collaborators", projectId],
@@ -39,7 +45,7 @@ export function useAddCollaborator(projectId: string) {
       // lieu de faire passer toute l'opération pour ratée.
       try {
         const { data, error: inviteError } = await supabase.functions.invoke("invite-collaborator", {
-          body: { project_id: projectId, email, redirect_to: `${window.location.origin}/accept-invite` },
+          body: { project_id: projectId, email, redirect_to: `${APP_URL}/accept-invite` },
         });
         if (inviteError) throw inviteError;
         return { emailSent: true, alreadyRegistered: !!(data as { alreadyRegistered?: boolean } | null)?.alreadyRegistered };
