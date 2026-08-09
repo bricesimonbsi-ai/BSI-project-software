@@ -10,17 +10,7 @@ function onMutationError(err: unknown) {
 
 const BUCKET = "voyage-journal";
 
-export type JournalPostLocation = {
-  city: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  voyage_etapes: { country_region: string } | null;
-};
-
-export type JournalPostWithPhotos = VoyageJournalPost & {
-  voyage_journal_photos: VoyageJournalPhoto[];
-  voyage_sous_etapes: JournalPostLocation | null;
-};
+export type JournalPostWithPhotos = VoyageJournalPost & { voyage_journal_photos: VoyageJournalPhoto[] };
 
 export function journalPhotoUrl(path: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -33,7 +23,7 @@ export function useJournalPosts(voyageId: string | undefined) {
     queryFn: async (): Promise<JournalPostWithPhotos[]> => {
       const { data, error } = await supabase
         .from("voyage_journal_posts")
-        .select("*, voyage_journal_photos(*), voyage_sous_etapes(city, latitude, longitude, voyage_etapes(country_region))")
+        .select("*, voyage_journal_photos(*)")
         .eq("voyage_id", voyageId as string)
         .order("entry_date", { ascending: false })
         .order("created_at", { ascending: false });

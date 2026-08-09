@@ -2,12 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
 import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
-import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
-import { JournalImmersiveView, type ImmersivePost } from "@/features/voyages/journal/journal-immersive-view";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { JournalStoryFeed, type StoryFeedEntry } from "@/features/voyages/journal/journal-story-feed";
 import { formatDate } from "@/lib/utils";
-import { MapPin, PlayCircle } from "lucide-react";
 import type { PublicJournalEntry, PublicJournalMeta } from "@/types/database";
 
 /**
@@ -20,9 +16,6 @@ export function PublicJournalPage() {
   const { token } = useParams<{ token: string }>();
   const [meta, setMeta] = useState<PublicJournalMeta | null | undefined>(undefined);
   const [entries, setEntries] = useState<PublicJournalEntry[]>([]);
-  const [lightbox, setLightbox] = useState<string[] | null>(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [immersiveOpen, setImmersiveOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -46,7 +39,7 @@ export function PublicJournalPage() {
     return `${formatDate(meta.start_date)} → ${formatDate(meta.end_date)}`;
   }, [meta]);
 
-  const immersivePosts: ImmersivePost[] = useMemo(
+  const storyEntries: StoryFeedEntry[] = useMemo(
     () =>
       entries.map((e) => ({
         id: e.post_id,
@@ -55,8 +48,6 @@ export function PublicJournalPage() {
         author_name: e.author_name,
         city: e.city,
         country_region: e.country_region,
-        latitude: e.latitude,
-        longitude: e.longitude,
         photo_urls: e.photo_paths.map((p) => journalPhotoUrl(p)),
       })),
     [entries]
@@ -84,60 +75,14 @@ export function PublicJournalPage() {
           {dateRange && <p className="text-sm text-muted-foreground">{dateRange}</p>}
         </div>
 
-        {entries.length > 0 && (
-          <Button variant="outline" className="w-full" onClick={() => setImmersiveOpen(true)}>
-            <PlayCircle className="mr-2 h-4 w-4" /> Vue immersive
-          </Button>
-        )}
-
-        {entries.length === 0 ? (
+        {storyEntries.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Aucun souvenir publié pour l'instant.</p>
         ) : (
-          <div className="space-y-6">
-            {entries.map((entry) => {
-              const urls = entry.photo_paths.map((p) => journalPhotoUrl(p));
-              return (
-                <div key={entry.post_id} className="overflow-hidden rounded-xl border border-border bg-card">
-                  {urls.length > 0 && (
-                    <PhotoCollage
-                      urls={urls}
-                      onPhotoClick={(i) => {
-                        setLightbox(urls);
-                        setLightboxIndex(i);
-                      }}
-                    />
-                  )}
-                  <div className="space-y-2 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">{entry.author_name}</span>
-                      <span className="flex items-center gap-2">
-                        {entry.city && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {entry.city}
-                          </span>
-                        )}
-                        {formatDate(entry.entry_date)}
-                      </span>
-                    </div>
-                    {entry.caption && <p className="whitespace-pre-wrap text-sm">{entry.caption}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} />
         )}
 
         <p className="pt-4 text-center text-xs text-muted-foreground">Publié avec Projeko</p>
       </div>
-
-      <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
-        <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
-          {lightbox && <img src={lightbox[lightboxIndex]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />}
-        </DialogContent>
-      </Dialog>
-
-      <JournalImmersiveView posts={immersivePosts} open={immersiveOpen} onOpenChange={setImmersiveOpen} />
     </div>
   );
 }

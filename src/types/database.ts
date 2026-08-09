@@ -159,8 +159,6 @@ export type PublicJournalEntry = {
   author_name: string;
   city: string | null;
   country_region: string | null;
-  latitude: number | null;
-  longitude: number | null;
   photo_paths: string[];
 };
 

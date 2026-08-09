@@ -84,8 +84,6 @@ returns table (
   author_name text,
   city text,
   country_region text,
-  latitude numeric,
-  longitude numeric,
   photo_paths text[]
 )
 language sql
@@ -101,8 +99,6 @@ as $$
     p.author_name,
     se.city,
     e.country_region,
-    se.latitude,
-    se.longitude,
     coalesce(
       (select array_agg(ph.storage_path order by ph.position) from public.voyage_journal_photos ph where ph.post_id = p.id),
       '{}'::text[]
