@@ -171,6 +171,19 @@ export type PublicJournalMeta = {
   end_date: string | null;
 };
 
+/** Un article d'une liste de courses (projet de la catégorie "Courses"). */
+export type ShoppingListItem = {
+  id: string;
+  project_id: string;
+  name: string;
+  quantity: string | null;
+  icon: string | null;
+  checked: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
  * `ProjectPerson`. Le type et la table restent en base (migration additive) mais ne sont plus
  * utilisés par l'application. */
@@ -438,6 +451,7 @@ export type Database = {
       notification_preferences: Table<NotificationPreferences>;
       voyage_journal_posts: Table<VoyageJournalPost>;
       voyage_journal_photos: Table<VoyageJournalPhoto>;
+      shopping_list_items: Table<ShoppingListItem>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

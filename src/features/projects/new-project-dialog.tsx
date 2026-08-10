@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateProject } from "@/features/projects/use-projects";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { useCreateProject, useProjects } from "@/features/projects/use-projects";
+import { copyShoppingListItems } from "@/features/shopping/use-shopping-list";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -20,10 +22,15 @@ export function NewProjectDialog({ category }: { category: Category }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [budgetPlanned, setBudgetPlanned] = useState("");
+  const [copyFromId, setCopyFromId] = useState<string>("none");
   const [submitting, setSubmitting] = useState(false);
   const createProject = useCreateProject();
+  const { data: projects } = useProjects();
   const navigate = useNavigate();
   const isVoyage = category.module_key === "voyages";
+  const isCourses = category.module_key === "courses";
+
+  const existingLists = (projects ?? []).filter((p) => p.category_id === category.id);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -34,9 +41,9 @@ export function NewProjectDialog({ category }: { category: Category }) {
         title,
         icon,
         description: description || undefined,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        budget_planned: budgetPlanned ? Number(budgetPlanned) : null,
+        start_date: isCourses ? null : startDate || null,
+        end_date: isCourses ? null : endDate || null,
+        budget_planned: isCourses ? null : budgetPlanned ? Number(budgetPlanned) : null,
       });
 
       if (isVoyage) {
@@ -48,6 +55,10 @@ export function NewProjectDialog({ category }: { category: Category }) {
         if (error) throw error;
       }
 
+      if (isCourses && copyFromId !== "none") {
+        await copyShoppingListItems(copyFromId, project.id);
+      }
+
       setOpen(false);
       setTitle("");
       setIcon(null);
@@ -55,6 +66,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
       setStartDate("");
       setEndDate("");
       setBudgetPlanned("");
+      setCopyFromId("none");
       navigate(`/projects/${project.id}`);
     } catch (err) {
       toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -86,17 +98,38 @@ export function NewProjectDialog({ category }: { category: Category }) {
             <Label htmlFor="description">Description</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          {isCourses && existingLists.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="start_date">Date de début</Label>
-              <Input id="start_date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Label>Repartir d'une liste existante (optionnel)</Label>
+              <Select value={copyFromId} onValueChange={setCopyFromId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Liste vide</SelectItem>
+                  {existingLists.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.icon ? `${p.icon} ` : ""}
+                      {p.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="end_date">Date de fin</Label>
-              <Input id="end_date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          )}
+          {!isCourses && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Date de début</Label>
+                <Input id="start_date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_date">Date de fin</Label>
+                <Input id="end_date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
             </div>
-          </div>
-          {!isVoyage && (
+          )}
+          {!isVoyage && !isCourses && (
             <div className="space-y-2">
               <Label htmlFor="budget_planned">Budget prévisionnel</Label>
               <Input
