@@ -192,7 +192,7 @@ export function EtapeDialog({
               </p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Latitude</Label>
               <Input type="number" step="0.000001" placeholder="ex. 48.8566" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
@@ -202,7 +202,7 @@ export function EtapeDialog({
               <Input type="number" step="0.000001" placeholder="ex. 2.3522" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex items-center gap-2">
               <Checkbox checked={visaNeeded} onCheckedChange={(c) => setVisaNeeded(!!c)} id="visa" />
               <Label htmlFor="visa">Visa nécessaire</Label>
@@ -229,7 +229,7 @@ export function EtapeDialog({
               />
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Vaccins recommandés</Label>
               <Input value={vaccines} onChange={(e) => setVaccines(e.target.value)} />
@@ -251,7 +251,7 @@ export function EtapeDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Label>Climat recommandé par mois (clique pour changer : favorable / moyen / déconseillé)</Label>
               <Button type="button" size="sm" variant="outline" onClick={() => handleSuggestClimate()} disabled={suggestingClimate}>
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -264,7 +264,7 @@ export function EtapeDialog({
               (Open-Meteo, gratuit, sans clé) — une estimation à ajuster si besoin, pas une prévision.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Infos sécurité</Label>
               <Textarea value={securityNotes} onChange={(e) => setSecurityNotes(e.target.value)} />

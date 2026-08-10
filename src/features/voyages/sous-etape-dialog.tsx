@@ -303,7 +303,7 @@ export function SousEtapeDialog({
           <DialogTitle>{existing ? "Modifier la sous-étape" : "Nouvelle sous-étape (ville)"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Ville</Label>
               <CityPicker
@@ -324,7 +324,7 @@ export function SousEtapeDialog({
                 }}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Latitude</Label>
                 <Input type="number" step="0.000001" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
@@ -336,7 +336,7 @@ export function SousEtapeDialog({
             </div>
           </div>
           {isFirstOverall ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Arrivée</Label>
                 <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -361,7 +361,7 @@ export function SousEtapeDialog({
             coordonnées GPS choisies via le champ Ville ci-dessus.
           </p>
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <Checkbox checked={useCityClimate} onCheckedChange={(c) => setUseCityClimate(!!c)} id="cityClimate" />
                 <Label htmlFor="cityClimate">Climat propre à cette ville (sinon celui du pays)</Label>
@@ -381,7 +381,7 @@ export function SousEtapeDialog({
               </>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Logement (texte libre ou lien)</Label>
               <Textarea value={lodging} onChange={(e) => setLodging(e.target.value)} />
@@ -417,7 +417,7 @@ export function SousEtapeDialog({
                 Activités restent librement modifiables.
               </p>
               <ul className="divide-y divide-border rounded-md border border-border">
-                <li className="flex items-center justify-between gap-3 p-3">
+                <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-medium">Transport (vers la suivante)</p>
                     <p className="text-xs text-muted-foreground">Montant total du trajet pour tous les voyageurs, librement modifiable</p>
@@ -438,7 +438,7 @@ export function SousEtapeDialog({
                     />
                   </div>
                 </li>
-                <li className="flex items-center justify-between gap-3 p-3">
+                <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Transport sur place</p>
@@ -461,7 +461,7 @@ export function SousEtapeDialog({
                     </div>
                   </div>
                 </li>
-                <li className="flex items-center justify-between gap-3 p-3">
+                <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Logement</p>
@@ -481,7 +481,7 @@ export function SousEtapeDialog({
                     </div>
                   </div>
                 </li>
-                <li className="flex items-center justify-between gap-3 p-3">
+                <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex-1 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Nourriture</p>
@@ -503,7 +503,7 @@ export function SousEtapeDialog({
                     </div>
                   </div>
                 </li>
-                <li className="flex items-center justify-between gap-3 p-3">
+                <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-medium">Activités</p>
                     <p className="text-xs text-muted-foreground">Montant total pour tous les voyageurs, librement modifiable</p>

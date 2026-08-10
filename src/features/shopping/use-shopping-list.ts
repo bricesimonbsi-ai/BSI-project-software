@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { suggestFoodIcon } from "@/features/shopping/food-icons";
+import { suggestFoodIcon, suggestFoodCategory } from "@/features/shopping/food-icons";
 import type { ShoppingListItem } from "@/types/database";
 
 function onMutationError(err: unknown) {
@@ -41,6 +41,7 @@ export function useAddShoppingItem(projectId: string) {
         name: input.name,
         quantity: input.quantity,
         icon: input.icon ?? suggestFoodIcon(input.name),
+        category: suggestFoodCategory(input.name),
         position: nextPosition,
       });
       if (error) throw error;
@@ -65,7 +66,16 @@ export function useToggleShoppingItem(projectId: string) {
 export function useUpdateShoppingItem(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; quantity?: string | null; icon?: string | null }) => {
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: string;
+      name?: string;
+      quantity?: string | null;
+      icon?: string | null;
+      category?: string | null;
+    }) => {
       const { error } = await supabase.from("shopping_list_items").update(updates).eq("id", id);
       if (error) throw error;
     },
@@ -91,7 +101,7 @@ export function useDeleteShoppingItem(projectId: string) {
 export async function copyShoppingListItems(sourceProjectId: string, targetProjectId: string) {
   const { data: sourceItems, error } = await supabase
     .from("shopping_list_items")
-    .select("name, quantity, icon, position")
+    .select("name, quantity, icon, category, position")
     .eq("project_id", sourceProjectId)
     .order("position", { ascending: true });
   if (error) throw error;
@@ -103,6 +113,7 @@ export async function copyShoppingListItems(sourceProjectId: string, targetProje
       name: item.name,
       quantity: item.quantity,
       icon: item.icon,
+      category: item.category,
       position: item.position,
       checked: false,
     }))

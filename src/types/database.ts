@@ -178,6 +178,7 @@ export type ShoppingListItem = {
   name: string;
   quantity: string | null;
   icon: string | null;
+  category: string | null;
   checked: boolean;
   position: number;
   created_at: string;

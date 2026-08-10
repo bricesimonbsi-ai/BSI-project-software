@@ -3,6 +3,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -100,7 +101,10 @@ export function ItineraryView({
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const reorderEtapes = useReorderEtapes(voyageId);
   const updateAnySousEtape = useUpdateSousEtape(voyageId);
-  const countrySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const countrySensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
 
   const sousEtapesByEtape = useMemo(() => {
     const map = new Map<string, VoyageSousEtape[]>();
@@ -330,7 +334,10 @@ function CountryBlock({
   const reorderCities = useReorderSousEtapes(group.etape.id);
   const updateSousEtapeForReorder = useUpdateSousEtape(group.etape.id);
   const deleteEtape = useDeleteEtape(group.etape.voyage_id);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
   const {
     attributes: countryAttributes,
     listeners: countryListeners,
@@ -398,18 +405,20 @@ function CountryBlock({
           isCountryDragging && "opacity-50"
         )}
       >
-        <td className="relative w-14 whitespace-nowrap px-3 py-3 text-center">
-          <button
-            {...countryAttributes}
-            {...countryListeners}
-            className="absolute -left-4 top-1/2 -translate-y-1/2 cursor-grab text-muted-foreground opacity-0 group-hover/country:opacity-60"
-            title="Glisser pour réordonner le pays"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </button>
-          <Badge variant="secondary" className="whitespace-nowrap text-xs">
-            {group.stepRangeLabel}
-          </Badge>
+        <td className="w-16 whitespace-nowrap px-1 py-3 text-center">
+          <div className="flex items-center justify-center gap-1">
+            <button
+              {...countryAttributes}
+              {...countryListeners}
+              className="touch-none cursor-grab text-muted-foreground opacity-60 sm:opacity-0 sm:group-hover/country:opacity-60"
+              title="Glisser pour réordonner le pays"
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </button>
+            <Badge variant="secondary" className="whitespace-nowrap text-xs">
+              {group.stepRangeLabel}
+            </Badge>
+          </div>
         </td>
         <td className="px-3 py-3">
           <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -633,7 +642,12 @@ function CityRow({
           +
         </button>
         <span className="text-xs font-medium text-muted-foreground">{row.globalIndex}</span>
-        <button {...attributes} {...listeners} className="ml-1 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-60" title="Glisser pour réordonner">
+        <button
+          {...attributes}
+          {...listeners}
+          className="ml-1 touch-none cursor-grab text-muted-foreground opacity-60 sm:opacity-0 sm:group-hover:opacity-60"
+          title="Glisser pour réordonner"
+        >
           <GripVertical className="mx-auto h-3.5 w-3.5" />
         </button>
       </td>

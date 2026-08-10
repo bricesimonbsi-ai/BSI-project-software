@@ -9,7 +9,7 @@ import {
   useUpdateShoppingItem,
   useDeleteShoppingItem,
 } from "@/features/shopping/use-shopping-list";
-import { suggestFoodIcon } from "@/features/shopping/food-icons";
+import { suggestFoodIcon, FOOD_CATEGORIES } from "@/features/shopping/food-icons";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -122,6 +122,11 @@ function ShoppingListItems({ projectId }: { projectId: string }) {
   const pending = (items ?? []).filter((i) => !i.checked);
   const bought = (items ?? []).filter((i) => i.checked);
 
+  const pendingByCategory = FOOD_CATEGORIES.map((category) => ({
+    category,
+    items: pending.filter((i) => (i.category ?? "Autre") === category),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -150,15 +155,20 @@ function ShoppingListItems({ projectId }: { projectId: string }) {
       {(items ?? []).length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Liste vide — ajoute ton premier article.</p>
       ) : (
-        <div className="space-y-1">
-          {pending.map((item) => (
-            <ShoppingItemRow
-              key={item.id}
-              item={item}
-              onToggle={(checked) => toggleItem.mutate({ id: item.id, checked })}
-              onQuantityChange={(quantity) => updateItem.mutate({ id: item.id, quantity: quantity || null })}
-              onDelete={() => deleteItem.mutate(item.id)}
-            />
+        <div className="space-y-4">
+          {pendingByCategory.map((group) => (
+            <div key={group.category} className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">{group.category}</p>
+              {group.items.map((item) => (
+                <ShoppingItemRow
+                  key={item.id}
+                  item={item}
+                  onToggle={(checked) => toggleItem.mutate({ id: item.id, checked })}
+                  onQuantityChange={(quantity) => updateItem.mutate({ id: item.id, quantity: quantity || null })}
+                  onDelete={() => deleteItem.mutate(item.id)}
+                />
+              ))}
+            </div>
           ))}
 
           {bought.length > 0 && (
