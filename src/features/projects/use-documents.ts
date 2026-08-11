@@ -49,6 +49,18 @@ export function useUploadDocument(projectId: string, voyageEtapeId?: string) {
   });
 }
 
+export function useRenameDocument(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", projectId] }),
+    onError: onMutationError,
+  });
+}
+
 export function useDeleteDocument(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

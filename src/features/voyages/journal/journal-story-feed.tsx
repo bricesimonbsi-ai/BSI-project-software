@@ -5,7 +5,7 @@ import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, cn } from "@/lib/utils";
-import { Camera } from "lucide-react";
+import { Camera, Plane, TrainFront, Footprints } from "lucide-react";
 
 /** Forme normalisée d'un souvenir pour cette vue, commune au journal privé et à la page publique. */
 export type StoryFeedEntry = {
@@ -35,7 +35,7 @@ export function JournalStoryFeed({ entries, startDate }: { entries: StoryFeedEnt
         const dayNumber = startDate ? differenceInCalendarDays(parseISO(entry.entry_date), parseISO(startDate)) + 1 : null;
         return (
           <div key={entry.id}>
-            {i > 0 && <JournalConnector index={i} />}
+            {i > 0 && <JournalConnector index={i} prevEntry={entries[i - 1]} entry={entry} />}
             <StoryCard entry={entry} index={i} dayNumber={dayNumber} onOpen={() => setExpanded(entry)} />
           </div>
         );
@@ -162,20 +162,30 @@ function StoryCard({
 
 const FILAMENT_COLORS = ["text-sky-400/40", "text-rose-400/40", "text-amber-400/40", "text-violet-400/40"];
 
+/** Icône façon "mode de transport" entre deux souvenirs consécutifs, purement suggestive : avion
+ * si le pays change, train si seule la ville change, pas si c'est le même endroit. */
+function travelIcon(prevEntry: StoryFeedEntry, entry: StoryFeedEntry) {
+  if (prevEntry.country_region && entry.country_region && prevEntry.country_region !== entry.country_region) return Plane;
+  if (prevEntry.city && entry.city && prevEntry.city !== entry.city) return TrainFront;
+  return Footprints;
+}
+
 /** Filaments décoratifs entre deux souvenirs consécutifs : plusieurs fils de couleurs
  * différentes, animés (défilement + léger balancement), qui donnent une continuité visuelle et
- * une impression de légèreté — purement décoratif (aria-hidden). */
-function JournalConnector({ index }: { index: number }) {
+ * une impression de légèreté, plus une petite icône de transport au centre — purement décoratif
+ * (aria-hidden). */
+function JournalConnector({ index, prevEntry, entry }: { index: number; prevEntry: StoryFeedEntry; entry: StoryFeedEntry }) {
   const strands = [0, 1, 2];
+  const Icon = travelIcon(prevEntry, entry);
   return (
-    <div className="flex h-20 items-center justify-center sm:h-24" aria-hidden="true">
-      <div className="journal-filament-sway relative h-full w-16" style={{ animationDelay: `${index * 0.6}s` }}>
+    <div className="relative flex h-32 items-center justify-center sm:h-40" aria-hidden="true">
+      <div className="journal-filament-sway relative h-full w-20" style={{ animationDelay: `${index * 0.6}s` }}>
         {strands.map((s) => (
           <svg
             key={s}
             width="100%"
             height="100%"
-            viewBox="0 0 24 80"
+            viewBox="0 0 32 140"
             preserveAspectRatio="none"
             className={cn("absolute inset-0", FILAMENT_COLORS[(index + s) % FILAMENT_COLORS.length])}
             fill="none"
@@ -183,10 +193,10 @@ function JournalConnector({ index }: { index: number }) {
             <path
               d={
                 s === 0
-                  ? "M12 0 C 22 16, 2 26, 12 40 C 22 54, 2 64, 12 80"
+                  ? "M16 0 C 30 24, 2 44, 16 68 C 30 92, 2 112, 16 140"
                   : s === 1
-                    ? "M6 0 C 18 18, -2 30, 10 44 C 20 56, 0 66, 8 80"
-                    : "M18 0 C 6 14, 26 28, 14 42 C 4 56, 24 66, 16 80"
+                    ? "M8 0 C 26 26, -4 48, 14 70 C 28 94, 0 114, 10 140"
+                    : "M24 0 C 6 22, 34 46, 18 68 C 4 94, 32 112, 22 140"
               }
               className="journal-filament"
               stroke="currentColor"
@@ -197,6 +207,9 @@ function JournalConnector({ index }: { index: number }) {
             />
           </svg>
         ))}
+      </div>
+      <div className="absolute flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card/90 text-muted-foreground shadow-sm">
+        <Icon className="h-4 w-4" />
       </div>
     </div>
   );

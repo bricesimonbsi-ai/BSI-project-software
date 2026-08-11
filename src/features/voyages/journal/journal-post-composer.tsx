@@ -43,7 +43,7 @@ export function JournalPostComposer({
   const [removedPhotos, setRemovedPhotos] = useState<VoyageJournalPhoto[]>([]);
   const [caption, setCaption] = useState("");
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [etapeId, setEtapeId] = useState(NO_COUNTRY);
+  const [country, setCountry] = useState(NO_COUNTRY);
   const [sousEtapeId, setSousEtapeId] = useState(NO_CITY);
 
   const isEditing = !!editingPost;
@@ -61,14 +61,15 @@ export function JournalPostComposer({
     setPreviews([]);
     if (editingPost.sous_etape_id) {
       const se = (sousEtapes ?? []).find((s) => s.id === editingPost.sous_etape_id);
+      const etape = (etapes ?? []).find((e) => e.id === se?.etape_id);
       setSousEtapeId(editingPost.sous_etape_id);
-      setEtapeId(se?.etape_id ?? NO_COUNTRY);
+      setCountry(etape?.country_region ?? NO_COUNTRY);
     } else {
-      setEtapeId(NO_COUNTRY);
+      setCountry(NO_COUNTRY);
       setSousEtapeId(NO_CITY);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingPost, sousEtapes]);
+  }, [editingPost, sousEtapes, etapes]);
 
   function handleFilesSelected(newFiles: FileList | null) {
     if (!newFiles) return;
@@ -96,7 +97,7 @@ export function JournalPostComposer({
     setRemovedPhotos([]);
     setCaption("");
     setEntryDate(new Date().toISOString().slice(0, 10));
-    setEtapeId(NO_COUNTRY);
+    setCountry(NO_COUNTRY);
     setSousEtapeId(NO_CITY);
   }
 
@@ -128,7 +129,10 @@ export function JournalPostComposer({
 
   const submitting = createPost.isPending || updatePost.isPending;
   const canPublish = (files.length > 0 || existingPhotos.length > 0 || caption.trim().length > 0) && !submitting;
-  const citiesForCountry = (sousEtapes ?? []).filter((se) => se.etape_id === etapeId);
+
+  const etapeById = new Map((etapes ?? []).map((e) => [e.id, e]));
+  const countryOptions = [...new Set((etapes ?? []).map((e) => e.country_region))];
+  const citiesForCountry = (sousEtapes ?? []).filter((se) => etapeById.get(se.etape_id)?.country_region === country);
 
   return (
     <Card>
@@ -186,9 +190,9 @@ export function JournalPostComposer({
           </Button>
 
           <Select
-            value={etapeId}
+            value={country}
             onValueChange={(v) => {
-              setEtapeId(v);
+              setCountry(v);
               setSousEtapeId(NO_CITY);
             }}
           >
@@ -197,15 +201,15 @@ export function JournalPostComposer({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_COUNTRY}>Aucun pays</SelectItem>
-              {(etapes ?? []).map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.country_region}
+              {countryOptions.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select value={sousEtapeId} onValueChange={setSousEtapeId} disabled={etapeId === NO_COUNTRY}>
+          <Select value={sousEtapeId} onValueChange={setSousEtapeId} disabled={country === NO_COUNTRY}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="Ville" />
             </SelectTrigger>
