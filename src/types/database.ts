@@ -171,6 +171,13 @@ export type PublicJournalMeta = {
   end_date: string | null;
 };
 
+/** Ligne renvoyée par get_public_journal_travelers. */
+export type PublicJournalTraveler = {
+  name: string;
+  avatar_emoji: string | null;
+  avatar_config: PersonAvatarConfig | null;
+};
+
 /** Un article d'une liste de courses (projet de la catégorie "Courses"). */
 export type ShoppingListItem = {
   id: string;
@@ -200,6 +207,7 @@ export type MediaItem = {
   external_rating: number | null;
   platform: string | null;
   watched: boolean;
+  watched_at: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -491,6 +499,10 @@ export type Database = {
       get_public_journal_meta: {
         Args: { p_share_token: string };
         Returns: PublicJournalMeta[];
+      };
+      get_public_journal_travelers: {
+        Args: { p_share_token: string };
+        Returns: PublicJournalTraveler[];
       };
     };
     Enums: Record<string, never>;

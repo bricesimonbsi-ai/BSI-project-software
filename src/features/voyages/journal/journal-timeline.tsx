@@ -8,9 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/utils";
-import { Trash2, MapPin } from "lucide-react";
+import { Trash2, MapPin, Pencil } from "lucide-react";
 
-export function JournalTimeline({ voyageId }: { voyageId: string }) {
+export function JournalTimeline({ voyageId, onEdit }: { voyageId: string; onEdit: (post: JournalPostWithPhotos) => void }) {
   const { data: posts, isLoading } = useJournalPosts(voyageId);
   const { data: etapes } = useEtapes(voyageId);
   const { data: sousEtapes } = useVoyageSousEtapes(voyageId);
@@ -42,6 +42,7 @@ export function JournalTimeline({ voyageId }: { voyageId: string }) {
           post={post}
           location={post.sous_etape_id ? locationBySousEtape.get(post.sous_etape_id) : undefined}
           onDelete={() => deletePost.mutate(post)}
+          onEdit={() => onEdit(post)}
           onOpenPhoto={(urls, index) => {
             setLightbox(urls);
             setLightboxIndex(index);
@@ -62,11 +63,13 @@ function JournalPostCard({
   post,
   location,
   onDelete,
+  onEdit,
   onOpenPhoto,
 }: {
   post: JournalPostWithPhotos;
   location?: { city: string; country: string };
   onDelete: () => void;
+  onEdit: () => void;
   onOpenPhoto: (urls: string[], index: number) => void;
 }) {
   const urls = post.voyage_journal_photos.map((p) => journalPhotoUrl(p.storage_path));
@@ -83,14 +86,19 @@ function JournalPostCard({
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
                   <CountryFlag name={location.country} className="text-sm" />
-                  {location.city}
+                  {location.city}, {location.country}
                 </span>
               )}
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onDelete} title="Supprimer ce souvenir">
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={onEdit} title="Modifier ce souvenir">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onDelete} title="Supprimer ce souvenir">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {urls.length > 0 && <PhotoCollage urls={urls} onPhotoClick={(i) => onOpenPhoto(urls, i)} />}

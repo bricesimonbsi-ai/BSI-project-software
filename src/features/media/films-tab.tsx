@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { searchMovies, tmdbPosterUrl, isTmdbConfigured, type TmdbMovieResult } from "@/features/media/tmdb";
 import { useMediaItems, useAddMovie, useToggleWatched, useUpdateMediaItem, useDeleteMediaItem } from "@/features/media/use-media-list";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Star, Trash2, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MediaItem } from "@/types/database";
@@ -63,6 +64,15 @@ export function FilmsTab({ projectId }: { projectId: string }) {
   const notWatched = (items ?? []).filter((i) => !i.watched);
   const watched = (items ?? []).filter((i) => i.watched);
 
+  const watchedByYear = useMemo(() => {
+    const map = new Map<string, MediaItem[]>();
+    for (const item of watched) {
+      const year = (item.watched_at ?? item.created_at).slice(0, 4);
+      map.set(year, [...(map.get(year) ?? []), item]);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [watched]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -112,24 +122,17 @@ export function FilmsTab({ projectId }: { projectId: string }) {
       {(items ?? []).length === 0 && !isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Aucun film pour l'instant — recherche-en un ci-dessus.</p>
       ) : (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            {notWatched.map((item) => (
-              <FilmRow
-                key={item.id}
-                item={item}
-                onToggle={(watched) => toggleWatched.mutate({ id: item.id, watched })}
-                onPlatformChange={(platform) => updateItem.mutate({ id: item.id, platform: platform || null })}
-                onDelete={() => deleteItem.mutate(item.id)}
-                onOpen={() => setExpanded(item)}
-              />
-            ))}
-          </div>
+        <Tabs defaultValue="a-voir">
+          <TabsList>
+            <TabsTrigger value="a-voir">À voir ({notWatched.length})</TabsTrigger>
+            <TabsTrigger value="vus">Vus ({watched.length})</TabsTrigger>
+          </TabsList>
 
-          {watched.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Déjà vus ({watched.length})</p>
-              {watched.map((item) => (
+          <TabsContent value="a-voir" className="space-y-2 pt-3">
+            {notWatched.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente — recherche un film à ajouter.</p>
+            ) : (
+              notWatched.map((item) => (
                 <FilmRow
                   key={item.id}
                   item={item}
@@ -138,10 +141,34 @@ export function FilmsTab({ projectId }: { projectId: string }) {
                   onDelete={() => deleteItem.mutate(item.id)}
                   onOpen={() => setExpanded(item)}
                 />
-              ))}
-            </div>
-          )}
-        </div>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="vus" className="space-y-5 pt-3">
+            {watchedByYear.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Aucun film vu pour l'instant.</p>
+            ) : (
+              watchedByYear.map(([year, yearItems]) => (
+                <div key={year} className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    {year} ({yearItems.length})
+                  </p>
+                  {yearItems.map((item) => (
+                    <FilmRow
+                      key={item.id}
+                      item={item}
+                      onToggle={(watched) => toggleWatched.mutate({ id: item.id, watched })}
+                      onPlatformChange={(platform) => updateItem.mutate({ id: item.id, platform: platform || null })}
+                      onDelete={() => deleteItem.mutate(item.id)}
+                      onOpen={() => setExpanded(item)}
+                    />
+                  ))}
+                </div>
+              ))
+            )}
+          </TabsContent>
+        </Tabs>
       )}
 
       <p className="text-center text-[0.65rem] text-muted-foreground">

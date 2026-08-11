@@ -60,7 +60,10 @@ export function useToggleWatched(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, watched }: { id: string; watched: boolean }) => {
-      const { error } = await supabase.from("media_items").update({ watched }).eq("id", id);
+      const { error } = await supabase
+        .from("media_items")
+        .update({ watched, watched_at: watched ? new Date().toISOString() : null })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["media-items", projectId] }),

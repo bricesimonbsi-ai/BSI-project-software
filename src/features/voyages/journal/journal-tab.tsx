@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSetJournalShareToken } from "@/features/voyages/journal/use-journal";
+import { useSetJournalShareToken, type JournalPostWithPhotos } from "@/features/voyages/journal/use-journal";
 import { JournalPostComposer } from "@/features/voyages/journal/journal-post-composer";
 import { JournalTimeline } from "@/features/voyages/journal/journal-timeline";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import type { Voyage } from "@/types/database";
 export function JournalTab({ voyage }: { voyage: Voyage }) {
   const setShareToken = useSetJournalShareToken(voyage.id);
   const [copied, setCopied] = useState(false);
+  const [editingPost, setEditingPost] = useState<JournalPostWithPhotos | null>(null);
 
   const shareUrl = voyage.journal_share_token ? `${APP_URL}/journal/${voyage.journal_share_token}` : null;
 
@@ -57,8 +58,8 @@ export function JournalTab({ voyage }: { voyage: Voyage }) {
         </CardContent>
       </Card>
 
-      <JournalPostComposer voyageId={voyage.id} />
-      <JournalTimeline voyageId={voyage.id} />
+      <JournalPostComposer voyageId={voyage.id} editingPost={editingPost} onDone={() => setEditingPost(null)} />
+      <JournalTimeline voyageId={voyage.id} onEdit={setEditingPost} />
     </div>
   );
 }

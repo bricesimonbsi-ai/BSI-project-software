@@ -30,10 +30,15 @@ export function JournalStoryFeed({ entries, startDate }: { entries: StoryFeedEnt
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
 
   return (
-    <div className="space-y-3">
+    <div>
       {entries.map((entry, i) => {
         const dayNumber = startDate ? differenceInCalendarDays(parseISO(entry.entry_date), parseISO(startDate)) + 1 : null;
-        return <StoryCard key={entry.id} entry={entry} index={i} dayNumber={dayNumber} onOpen={() => setExpanded(entry)} />;
+        return (
+          <div key={entry.id}>
+            {i > 0 && <JournalConnector />}
+            <StoryCard entry={entry} index={i} dayNumber={dayNumber} onOpen={() => setExpanded(entry)} />
+          </div>
+        );
       })}
 
       <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
@@ -150,8 +155,25 @@ function StoryCard({
           )}
         </div>
         <p className="text-xs text-muted-foreground">{formatDate(entry.entry_date)}</p>
-        {entry.caption && <p className="truncate text-xs text-muted-foreground">{entry.caption}</p>}
       </div>
     </button>
+  );
+}
+
+/** Filament décoratif entre deux souvenirs consécutifs — donne une continuité visuelle façon
+ * liane/fil qui relie les publications, purement décoratif (aria-hidden). */
+function JournalConnector() {
+  return (
+    <div className="flex h-16 items-center pl-[2.6rem] sm:h-20 sm:pl-[3rem]" aria-hidden="true">
+      <svg width="24" height="100%" viewBox="0 0 24 64" preserveAspectRatio="none" className="text-accent/25" fill="none">
+        <path
+          d="M12 0 C 22 12, 2 20, 12 32 C 22 44, 2 52, 12 64"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="1 8"
+        />
+      </svg>
+    </div>
   );
 }

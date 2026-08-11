@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
 import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { JournalStoryFeed, type StoryFeedEntry } from "@/features/voyages/journal/journal-story-feed";
+import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { formatDate } from "@/lib/utils";
-import type { PublicJournalEntry, PublicJournalMeta } from "@/types/database";
+import type { PublicJournalEntry, PublicJournalMeta, PublicJournalTraveler } from "@/types/database";
 
 /**
  * Page publique du journal de voyage : accessible sans authentification via un lien de partage
@@ -16,18 +17,21 @@ export function PublicJournalPage() {
   const { token } = useParams<{ token: string }>();
   const [meta, setMeta] = useState<PublicJournalMeta | null | undefined>(undefined);
   const [entries, setEntries] = useState<PublicJournalEntry[]>([]);
+  const [travelers, setTravelers] = useState<PublicJournalTraveler[]>([]);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     (async () => {
-      const [metaRes, entriesRes] = await Promise.all([
+      const [metaRes, entriesRes, travelersRes] = await Promise.all([
         supabase.rpc("get_public_journal_meta", { p_share_token: token }).maybeSingle(),
         supabase.rpc("get_public_journal", { p_share_token: token }),
+        supabase.rpc("get_public_journal_travelers", { p_share_token: token }),
       ]);
       if (cancelled) return;
       setMeta((metaRes.data as PublicJournalMeta | null) ?? null);
       setEntries((entriesRes.data as PublicJournalEntry[] | null) ?? []);
+      setTravelers((travelersRes.data as PublicJournalTraveler[] | null) ?? []);
     })();
     return () => {
       cancelled = true;
@@ -73,6 +77,22 @@ export function PublicJournalPage() {
           <div className="text-4xl">{meta.icon ?? "🌍"}</div>
           <h1 className="text-3xl font-bold">{meta.title}</h1>
           {dateRange && <p className="text-sm text-muted-foreground">{dateRange}</p>}
+          {travelers.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {travelers.map((t, i) => (
+                <div key={t.name + i} className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 py-1 pl-1 pr-2.5">
+                  <PersonAvatarBadge
+                    name={t.name}
+                    avatarEmoji={t.avatar_emoji}
+                    avatarConfig={t.avatar_config}
+                    index={i}
+                    className="h-6 w-6 text-xs"
+                  />
+                  <span className="text-xs font-medium">{t.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {storyEntries.length === 0 ? (

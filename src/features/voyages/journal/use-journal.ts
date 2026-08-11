@@ -74,6 +74,58 @@ export function useCreateJournalPost(voyageId: string) {
   });
 }
 
+export function useUpdateJournalPost(voyageId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      caption: string;
+      entryDate: string;
+      sousEtapeId: string | null;
+      newFiles: File[];
+      removedPhotos: VoyageJournalPhoto[];
+      keptPhotoCount: number;
+    }) => {
+      const { error: updateError } = await supabase
+        .from("voyage_journal_posts")
+        .update({
+          caption: input.caption || null,
+          entry_date: input.entryDate,
+          sous_etape_id: input.sousEtapeId,
+        })
+        .eq("id", input.id);
+      if (updateError) throw updateError;
+
+      if (input.removedPhotos.length > 0) {
+        const paths = input.removedPhotos.map((p) => p.storage_path);
+        await supabase.storage.from(BUCKET).remove(paths);
+        const { error: deleteError } = await supabase
+          .from("voyage_journal_photos")
+          .delete()
+          .in(
+            "id",
+            input.removedPhotos.map((p) => p.id)
+          );
+        if (deleteError) throw deleteError;
+      }
+
+      for (let i = 0; i < input.newFiles.length; i++) {
+        const file = input.newFiles[i];
+        const path = `${voyageId}/${crypto.randomUUID()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file);
+        if (uploadError) throw uploadError;
+
+        const { error: photoError } = await supabase
+          .from("voyage_journal_photos")
+          .insert({ post_id: input.id, storage_path: path, position: input.keptPhotoCount + i });
+        if (photoError) throw photoError;
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage-journal-posts", voyageId] }),
+    onError: onMutationError,
+  });
+}
+
 export function useDeleteJournalPost(voyageId: string) {
   const queryClient = useQueryClient();
   return useMutation({
