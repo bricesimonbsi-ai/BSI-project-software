@@ -5,7 +5,7 @@ import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, cn } from "@/lib/utils";
-import { Camera, Plane, TrainFront, Footprints } from "lucide-react";
+import { Camera } from "lucide-react";
 
 /** Forme normalisée d'un souvenir pour cette vue, commune au journal privé et à la page publique. */
 export type StoryFeedEntry = {
@@ -18,25 +18,75 @@ export type StoryFeedEntry = {
   photo_urls: string[];
 };
 
+const TRAVEL_MOTIFS = ["✈️", "🧭", "🗺️", "🧳", "🌍", "📸"];
+
+/** Suit, dans le navigateur du visiteur (localStorage, clé par lien de partage), quels souvenirs
+ * ont déjà été vus lors d'une visite précédente — jamais rien envoyé au serveur, purement local.
+ * Le calcul est figé au chargement : les souvenirs déjà là restent marqués "déjà vus" pendant
+ * toute la visite (pas de disparition du badge pendant qu'on regarde), et la liste est mise à
+ * jour pour la prochaine visite. */
+function useSeenTracking(storageKey: string | undefined, ids: string[]) {
+  const [seenBefore, setSeenBefore] = useState<Set<string>>(new Set());
+  const idsKey = ids.join(",");
+
+  useEffect(() => {
+    if (!storageKey || !idsKey) return;
+    let stored: string[] = [];
+    try {
+      stored = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+    } catch {
+      stored = [];
+    }
+    setSeenBefore(new Set(stored));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...new Set([...stored, ...idsKey.split(",")])]));
+    } catch {
+      // stockage indisponible (navigation privée, quota...) : tant pis, pas de suivi cette fois
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, idsKey]);
+
+  return seenBefore;
+}
+
 /**
  * Vue d'ensemble légère du journal : une carte résumée par souvenir (miniatures flottantes,
  * date, ville/pays, numéro de jour du voyage), triée du plus récent (en haut) au plus ancien (en
  * bas) — l'ordre déjà renvoyé par l'API. Cliquer une carte l'agrandit pour voir toutes les
- * photos et le commentaire complet. Aucune librairie d'animation : juste un flottement CSS sur
- * les miniatures et une apparition en fondu au scroll (IntersectionObserver), pour rester léger.
+ * photos et le commentaire complet. `storageKey` (optionnel, ex. le token de partage) active le
+ * repère "déjà vu / nouveau" pour les visiteurs anonymes de la page publique.
  */
-export function JournalStoryFeed({ entries, startDate }: { entries: StoryFeedEntry[]; startDate: string | null }) {
+export function JournalStoryFeed({
+  entries,
+  startDate,
+  storageKey,
+}: {
+  entries: StoryFeedEntry[];
+  startDate: string | null;
+  storageKey?: string;
+}) {
   const [expanded, setExpanded] = useState<StoryFeedEntry | null>(null);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const seenBefore = useSeenTracking(
+    storageKey,
+    entries.map((e) => e.id)
+  );
 
   return (
-    <div>
+    <div className="relative">
+      <JourneyMotifs count={entries.length} />
+
       {entries.map((entry, i) => {
         const dayNumber = startDate ? differenceInCalendarDays(parseISO(entry.entry_date), parseISO(startDate)) + 1 : null;
         return (
-          <div key={entry.id}>
-            {i > 0 && <JournalConnector index={i} prevEntry={entries[i - 1]} entry={entry} />}
-            <StoryCard entry={entry} index={i} dayNumber={dayNumber} onOpen={() => setExpanded(entry)} />
+          <div key={entry.id} className={i > 0 ? "mt-10 sm:mt-14" : undefined}>
+            <StoryCard
+              entry={entry}
+              index={i}
+              dayNumber={dayNumber}
+              isNew={!!storageKey && !seenBefore.has(entry.id)}
+              onOpen={() => setExpanded(entry)}
+            />
           </div>
         );
       })}
@@ -52,6 +102,7 @@ export function JournalStoryFeed({ entries, startDate }: { entries: StoryFeedEnt
                     <span className="flex items-center gap-1">
                       {expanded.country_region && <CountryFlag name={expanded.country_region} className="text-sm" />}
                       {expanded.city}
+                      {expanded.country_region && `, ${expanded.country_region}`}
                     </span>
                   )}
                   {formatDate(expanded.entry_date)}
@@ -82,11 +133,13 @@ function StoryCard({
   entry,
   index,
   dayNumber,
+  isNew,
   onOpen,
 }: {
   entry: StoryFeedEntry;
   index: number;
   dayNumber: number | null;
+  isNew: boolean;
   onOpen: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -116,10 +169,17 @@ function StoryCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        "mx-auto flex w-full max-w-xs flex-col items-center gap-3 rounded-[2rem] border border-border/40 bg-card/50 p-5 text-center backdrop-blur transition-all duration-700 ease-out hover:border-accent/50 hover:bg-card/80 hover:shadow-lg hover:shadow-accent/10",
+        "relative mx-auto flex w-full max-w-xs flex-col items-center gap-3 p-2 text-center transition-all duration-700 ease-out hover:opacity-80",
         visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
       )}
     >
+      {isNew && (
+        <span className="absolute right-6 top-0 flex h-2.5 w-2.5" title="Nouveau">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
+        </span>
+      )}
+
       <div className="flex items-center justify-center">
         {thumbs.length === 0 ? (
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -147,7 +207,12 @@ function StoryCard({
       <div className="space-y-1">
         <div className="flex flex-wrap items-center justify-center gap-2">
           <span className="text-sm font-semibold">{entry.city ?? "Souvenir"}</span>
-          {entry.country_region && <CountryFlag name={entry.country_region} className="text-base" />}
+          {entry.country_region && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CountryFlag name={entry.country_region} className="text-base" />
+              {entry.country_region}
+            </span>
+          )}
           {dayNumber != null && (
             <Badge variant="secondary" className="text-[10px]">
               Jour {dayNumber}
@@ -160,57 +225,38 @@ function StoryCard({
   );
 }
 
-const FILAMENT_COLORS = ["text-sky-400/40", "text-rose-400/40", "text-amber-400/40", "text-violet-400/40"];
+/** Motifs décoratifs façon "thème voyage" (avion, boussole, carte...) répartis en filigrane sur
+ * toute la hauteur du fil, façon ThemeMotifBackground mais localisés à cette vue — purement
+ * décoratif, discrets, pas alignés sur les souvenirs (aria-hidden). */
+function JourneyMotifs({ count }: { count: number }) {
+  const motifCount = Math.max(4, Math.ceil(count / 1.2));
+  const slots = Array.from({ length: motifCount }, (_, i) => ({
+    top: ((i + 0.5) / motifCount) * 100,
+    side: i % 2 === 0 ? "left" : "right",
+    offset: 2 + ((i * 37) % 12),
+    size: 1.4 + ((i * 13) % 10) / 10,
+    rotate: ((i * 53) % 28) - 14,
+    delay: `${(i * 0.9) % 6}s`,
+    emoji: TRAVEL_MOTIFS[i % TRAVEL_MOTIFS.length],
+  }));
 
-/** Icône façon "mode de transport" entre deux souvenirs consécutifs, purement suggestive : avion
- * si le pays change, train si seule la ville change, pas si c'est le même endroit. */
-function travelIcon(prevEntry: StoryFeedEntry, entry: StoryFeedEntry) {
-  if (prevEntry.country_region && entry.country_region && prevEntry.country_region !== entry.country_region) return Plane;
-  if (prevEntry.city && entry.city && prevEntry.city !== entry.city) return TrainFront;
-  return Footprints;
-}
-
-/** Filaments décoratifs entre deux souvenirs consécutifs : plusieurs fils de couleurs
- * différentes, animés (défilement + léger balancement), qui donnent une continuité visuelle et
- * une impression de légèreté, plus une petite icône de transport au centre — purement décoratif
- * (aria-hidden). */
-function JournalConnector({ index, prevEntry, entry }: { index: number; prevEntry: StoryFeedEntry; entry: StoryFeedEntry }) {
-  const strands = [0, 1, 2];
-  const Icon = travelIcon(prevEntry, entry);
   return (
-    <div className="relative flex h-32 items-center justify-center sm:h-40" aria-hidden="true">
-      <div className="journal-filament-sway relative h-full w-20" style={{ animationDelay: `${index * 0.6}s` }}>
-        {strands.map((s) => (
-          <svg
-            key={s}
-            width="100%"
-            height="100%"
-            viewBox="0 0 32 140"
-            preserveAspectRatio="none"
-            className={cn("absolute inset-0", FILAMENT_COLORS[(index + s) % FILAMENT_COLORS.length])}
-            fill="none"
-          >
-            <path
-              d={
-                s === 0
-                  ? "M16 0 C 30 24, 2 44, 16 68 C 30 92, 2 112, 16 140"
-                  : s === 1
-                    ? "M8 0 C 26 26, -4 48, 14 70 C 28 94, 0 114, 10 140"
-                    : "M24 0 C 6 22, 34 46, 18 68 C 4 94, 32 112, 22 140"
-              }
-              className="journal-filament"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeDasharray="1 7"
-              style={{ animationDelay: `${(index + s) * 0.25}s`, animationDuration: `${2 + s * 0.6}s` }}
-            />
-          </svg>
-        ))}
-      </div>
-      <div className="absolute flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card/90 text-muted-foreground shadow-sm">
-        <Icon className="h-4 w-4" />
-      </div>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      {slots.map((s, i) => (
+        <span
+          key={i}
+          className="theme-motif absolute select-none opacity-[0.09] dark:opacity-[0.14]"
+          style={{
+            top: `${s.top}%`,
+            [s.side]: `${s.offset}%`,
+            fontSize: `${s.size}rem`,
+            rotate: `${s.rotate}deg`,
+            animationDelay: s.delay,
+          }}
+        >
+          {s.emoji}
+        </span>
+      ))}
     </div>
   );
 }

@@ -98,7 +98,7 @@ export function PublicJournalPage() {
         {storyEntries.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Aucun souvenir publié pour l'instant.</p>
         ) : (
-          <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} />
+          <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} storageKey={token ? `journal-seen-${token}` : undefined} />
         )}
 
         <p className="pt-4 text-center text-xs text-muted-foreground">Publié avec Projeko</p>

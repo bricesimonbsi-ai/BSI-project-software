@@ -94,35 +94,3 @@
   }
 }
 
-@keyframes journal-filament-flow {
-  to {
-    stroke-dashoffset: -32;
-  }
-}
-
-.journal-filament {
-  animation: journal-filament-flow 2.4s linear infinite;
-}
-
-@keyframes journal-filament-sway {
-  0%,
-  100% {
-    translate: 0 0;
-    rotate: 0deg;
-  }
-  50% {
-    translate: 3px 0;
-    rotate: 1deg;
-  }
-}
-
-.journal-filament-sway {
-  animation: journal-filament-sway 5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .journal-filament,
-  .journal-filament-sway {
-    animation: none;
-  }
-}
