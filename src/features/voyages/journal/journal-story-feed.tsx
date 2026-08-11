@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
@@ -80,7 +80,7 @@ export function JournalStoryFeed({
       {entries.map((entry, i) => {
         const dayNumber = startDate ? differenceInCalendarDays(parseISO(entry.entry_date), parseISO(startDate)) + 1 : null;
         return (
-          <div key={entry.id} className={i > 0 ? "mt-10 sm:mt-14" : undefined}>
+          <div key={entry.id} className={i > 0 ? "mt-20 sm:mt-32" : undefined}>
             <StoryCard
               entry={entry}
               index={i}
@@ -123,9 +123,105 @@ export function JournalStoryFeed({
 
       <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
         <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
-          {lightbox && <img src={lightbox.urls[lightbox.index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />}
+          {lightbox && (
+            <StoryLightbox
+              urls={lightbox.urls}
+              index={lightbox.index}
+              onIndexChange={(index) => setLightbox((prev) => (prev ? { ...prev, index } : prev))}
+              onClose={() => setLightbox(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+const LIGHTBOX_AUTO_ADVANCE_MS = 4000;
+const SWIPE_THRESHOLD_PX = 50;
+
+/** Visionneuse façon "story" : défilement automatique après un temps limité, navigation par
+ * appui sur les côtés gauche/droite de la photo ou par glissement (swipe) tactile, avec une
+ * barre de progression par photo en haut. */
+function StoryLightbox({
+  urls,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  urls: string[];
+  index: number;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}) {
+  const touchStartX = useRef<number | null>(null);
+  const hasMultiple = urls.length > 1;
+
+  function goPrev() {
+    if (index > 0) onIndexChange(index - 1);
+  }
+
+  function goNext() {
+    if (index < urls.length - 1) onIndexChange(index + 1);
+    else onClose();
+  }
+
+  useEffect(() => {
+    if (!hasMultiple || index >= urls.length - 1) return;
+    const timer = setTimeout(() => onIndexChange(index + 1), LIGHTBOX_AUTO_ADVANCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, hasMultiple, urls.length]);
+
+  function handleTouchStart(e: TouchEvent<HTMLDivElement>) {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  }
+
+  function handleTouchEnd(e: TouchEvent<HTMLDivElement>) {
+    if (touchStartX.current == null) return;
+    const delta = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+    touchStartX.current = null;
+    if (delta > SWIPE_THRESHOLD_PX) goPrev();
+    else if (delta < -SWIPE_THRESHOLD_PX) goNext();
+  }
+
+  return (
+    <div className="relative select-none" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      {hasMultiple && (
+        <div className="absolute inset-x-2 top-2 z-10 flex gap-1">
+          {urls.map((_, i) => (
+            <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/30">
+              {i < index && <div className="h-full w-full bg-white" />}
+              {i === index && (
+                <div
+                  key={index}
+                  className="story-progress h-full bg-white"
+                  style={{ animationDuration: `${LIGHTBOX_AUTO_ADVANCE_MS}ms` }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <img src={urls[index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            aria-label="Photo précédente"
+            onClick={goPrev}
+            className="absolute inset-y-0 left-0 w-1/3 cursor-pointer"
+          />
+          <button
+            type="button"
+            aria-label="Photo suivante"
+            onClick={goNext}
+            className="absolute inset-y-0 right-0 w-1/3 cursor-pointer"
+          />
+        </>
+      )}
     </div>
   );
 }
