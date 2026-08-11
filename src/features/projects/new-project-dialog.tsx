@@ -29,6 +29,9 @@ export function NewProjectDialog({ category }: { category: Category }) {
   const navigate = useNavigate();
   const isVoyage = category.module_key === "voyages";
   const isCourses = category.module_key === "courses";
+  const isMedia = category.module_key === "media";
+  const hidesDates = isCourses || isMedia;
+  const hidesBudget = isVoyage || isCourses || isMedia;
 
   const existingLists = (projects ?? []).filter((p) => p.category_id === category.id);
 
@@ -41,9 +44,9 @@ export function NewProjectDialog({ category }: { category: Category }) {
         title,
         icon,
         description: description || undefined,
-        start_date: isCourses ? null : startDate || null,
-        end_date: isCourses ? null : endDate || null,
-        budget_planned: isCourses ? null : budgetPlanned ? Number(budgetPlanned) : null,
+        start_date: hidesDates ? null : startDate || null,
+        end_date: hidesDates ? null : endDate || null,
+        budget_planned: hidesBudget ? null : budgetPlanned ? Number(budgetPlanned) : null,
       });
 
       if (isVoyage) {
@@ -117,7 +120,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
               </Select>
             </div>
           )}
-          {!isCourses && (
+          {!hidesDates && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start_date">Date de début</Label>
@@ -129,7 +132,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
               </div>
             </div>
           )}
-          {!isVoyage && !isCourses && (
+          {!hidesBudget && (
             <div className="space-y-2">
               <Label htmlFor="budget_planned">Budget prévisionnel</Label>
               <Input

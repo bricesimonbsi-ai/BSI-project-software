@@ -185,6 +185,26 @@ export type ShoppingListItem = {
   updated_at: string;
 };
 
+export type MediaType = "film" | "serie" | "jeu";
+
+/** Un contenu suivi (film/série/jeu) dans un projet de la catégorie "Séries, Films et Jeux vidéo". */
+export type MediaItem = {
+  id: string;
+  project_id: string;
+  type: MediaType;
+  external_id: string | null;
+  title: string;
+  poster_path: string | null;
+  synopsis: string | null;
+  release_date: string | null;
+  external_rating: number | null;
+  platform: string | null;
+  watched: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
  * `ProjectPerson`. Le type et la table restent en base (migration additive) mais ne sont plus
  * utilisés par l'application. */
@@ -453,6 +473,7 @@ export type Database = {
       voyage_journal_posts: Table<VoyageJournalPost>;
       voyage_journal_photos: Table<VoyageJournalPhoto>;
       shopping_list_items: Table<ShoppingListItem>;
+      media_items: Table<MediaItem>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };
