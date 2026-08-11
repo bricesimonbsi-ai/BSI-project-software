@@ -35,7 +35,7 @@ export function JournalStoryFeed({ entries, startDate }: { entries: StoryFeedEnt
         const dayNumber = startDate ? differenceInCalendarDays(parseISO(entry.entry_date), parseISO(startDate)) + 1 : null;
         return (
           <div key={entry.id}>
-            {i > 0 && <JournalConnector />}
+            {i > 0 && <JournalConnector index={i} />}
             <StoryCard entry={entry} index={i} dayNumber={dayNumber} onOpen={() => setExpanded(entry)} />
           </div>
         );
@@ -116,14 +116,14 @@ function StoryCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        "flex w-full items-center gap-4 rounded-2xl border border-border/60 bg-card/70 p-3 text-left backdrop-blur transition-all duration-700 ease-out hover:border-accent/50 hover:bg-card hover:shadow-lg hover:shadow-accent/10",
+        "mx-auto flex w-full max-w-xs flex-col items-center gap-3 rounded-[2rem] border border-border/40 bg-card/50 p-5 text-center backdrop-blur transition-all duration-700 ease-out hover:border-accent/50 hover:bg-card/80 hover:shadow-lg hover:shadow-accent/10",
         visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
       )}
     >
-      <div className="relative h-16 w-20 flex-shrink-0 sm:h-20 sm:w-24">
+      <div className="flex items-center justify-center">
         {thumbs.length === 0 ? (
-          <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <Camera className="h-5 w-5" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Camera className="h-6 w-6" />
           </div>
         ) : (
           thumbs.map((url, i) => (
@@ -131,12 +131,12 @@ function StoryCard({
               key={url}
               src={url}
               alt=""
-              className="journal-thumb-float absolute h-14 w-14 rounded-xl border-2 border-background object-cover shadow-md sm:h-16 sm:w-16"
+              className={cn(
+                "journal-thumb-float h-20 w-20 rounded-full border-2 border-background object-cover shadow-md",
+                i > 0 && "-ml-6"
+              )}
               style={{
-                left: i * 12,
-                top: i * 5,
                 zIndex: thumbs.length - i,
-                transform: `rotate(${(i - 1) * 7}deg)`,
                 animationDelay: `${(index * 3 + i) * 0.35}s`,
               }}
             />
@@ -144,8 +144,8 @@ function StoryCard({
         )}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <span className="text-sm font-semibold">{entry.city ?? "Souvenir"}</span>
           {entry.country_region && <CountryFlag name={entry.country_region} className="text-base" />}
           {dayNumber != null && (
@@ -160,20 +160,44 @@ function StoryCard({
   );
 }
 
-/** Filament décoratif entre deux souvenirs consécutifs — donne une continuité visuelle façon
- * liane/fil qui relie les publications, purement décoratif (aria-hidden). */
-function JournalConnector() {
+const FILAMENT_COLORS = ["text-sky-400/40", "text-rose-400/40", "text-amber-400/40", "text-violet-400/40"];
+
+/** Filaments décoratifs entre deux souvenirs consécutifs : plusieurs fils de couleurs
+ * différentes, animés (défilement + léger balancement), qui donnent une continuité visuelle et
+ * une impression de légèreté — purement décoratif (aria-hidden). */
+function JournalConnector({ index }: { index: number }) {
+  const strands = [0, 1, 2];
   return (
-    <div className="flex h-16 items-center pl-[2.6rem] sm:h-20 sm:pl-[3rem]" aria-hidden="true">
-      <svg width="24" height="100%" viewBox="0 0 24 64" preserveAspectRatio="none" className="text-accent/25" fill="none">
-        <path
-          d="M12 0 C 22 12, 2 20, 12 32 C 22 44, 2 52, 12 64"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="1 8"
-        />
-      </svg>
+    <div className="flex h-20 items-center justify-center sm:h-24" aria-hidden="true">
+      <div className="journal-filament-sway relative h-full w-16" style={{ animationDelay: `${index * 0.6}s` }}>
+        {strands.map((s) => (
+          <svg
+            key={s}
+            width="100%"
+            height="100%"
+            viewBox="0 0 24 80"
+            preserveAspectRatio="none"
+            className={cn("absolute inset-0", FILAMENT_COLORS[(index + s) % FILAMENT_COLORS.length])}
+            fill="none"
+          >
+            <path
+              d={
+                s === 0
+                  ? "M12 0 C 22 16, 2 26, 12 40 C 22 54, 2 64, 12 80"
+                  : s === 1
+                    ? "M6 0 C 18 18, -2 30, 10 44 C 20 56, 0 66, 8 80"
+                    : "M18 0 C 6 14, 26 28, 14 42 C 4 56, 24 66, 16 80"
+              }
+              className="journal-filament"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeDasharray="1 7"
+              style={{ animationDelay: `${(index + s) * 0.25}s`, animationDuration: `${2 + s * 0.6}s` }}
+            />
+          </svg>
+        ))}
+      </div>
     </div>
   );
 }
