@@ -178,6 +178,26 @@ export type PublicJournalTraveler = {
   avatar_config: PersonAvatarConfig | null;
 };
 
+/** Réaction (emoji) d'un visiteur du journal sur une publication — un visiteur (identifié par
+ * son prénom) n'a qu'une seule réaction active par publication. */
+export type JournalPostReaction = {
+  post_id: string;
+  emoji: string;
+  visitor_name: string;
+};
+
+/** Commentaire (visiteur ou réponse de l'auteur du voyage, `is_owner_reply`) sur une publication
+ * du journal. `parent_comment_id` non nul = réponse imbriquée sous ce commentaire. */
+export type JournalPostComment = {
+  id: string;
+  post_id: string;
+  parent_comment_id: string | null;
+  author_name: string;
+  is_owner_reply: boolean;
+  content: string;
+  created_at: string;
+};
+
 /** Un article d'une liste de courses (projet de la catégorie "Courses"). */
 export type ShoppingListItem = {
   id: string;
@@ -480,6 +500,8 @@ export type Database = {
       notification_preferences: Table<NotificationPreferences>;
       voyage_journal_posts: Table<VoyageJournalPost>;
       voyage_journal_photos: Table<VoyageJournalPhoto>;
+      journal_post_reactions: Table<JournalPostReaction>;
+      journal_post_comments: Table<JournalPostComment>;
       shopping_list_items: Table<ShoppingListItem>;
       media_items: Table<MediaItem>;
     };
@@ -503,6 +525,32 @@ export type Database = {
       get_public_journal_travelers: {
         Args: { p_share_token: string };
         Returns: PublicJournalTraveler[];
+      };
+      get_public_journal_reactions: {
+        Args: { p_share_token: string };
+        Returns: JournalPostReaction[];
+      };
+      set_public_journal_reaction: {
+        Args: { p_share_token: string; p_post_id: string; p_visitor_name: string; p_emoji: string };
+        Returns: undefined;
+      };
+      remove_public_journal_reaction: {
+        Args: { p_share_token: string; p_post_id: string; p_visitor_name: string };
+        Returns: undefined;
+      };
+      get_public_journal_comments: {
+        Args: { p_share_token: string };
+        Returns: JournalPostComment[];
+      };
+      add_public_journal_comment: {
+        Args: {
+          p_share_token: string;
+          p_post_id: string;
+          p_visitor_name: string;
+          p_content: string;
+          p_parent_comment_id: string | null;
+        };
+        Returns: string;
       };
     };
     Enums: Record<string, never>;

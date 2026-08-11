@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { usePublicJournalSocial, useVisitorIdentity } from "@/features/voyages/journal/use-public-journal-social";
+import { toast } from "@/hooks/use-toast";
 import { formatDate, cn } from "@/lib/utils";
 import { Camera } from "lucide-react";
+import type { JournalPostComment, JournalPostReaction } from "@/types/database";
 
 /** Forme normalisée d'un souvenir pour cette vue, commune au journal privé et à la page publique. */
 export type StoryFeedEntry = {
@@ -53,24 +58,56 @@ function useSeenTracking(storageKey: string | undefined, ids: string[]) {
  * Vue d'ensemble légère du journal : une carte résumée par souvenir (miniatures flottantes,
  * date, ville/pays, numéro de jour du voyage), triée du plus récent (en haut) au plus ancien (en
  * bas) — l'ordre déjà renvoyé par l'API. Cliquer une carte l'agrandit pour voir toutes les
- * photos et le commentaire complet. `storageKey` (optionnel, ex. le token de partage) active le
- * repère "déjà vu / nouveau" pour les visiteurs anonymes de la page publique.
+ * photos, le commentaire complet, réagir et commenter. `shareToken` (optionnel) active le repère
+ * "déjà vu / nouveau" ainsi que les réactions/commentaires pour les visiteurs anonymes de la page
+ * publique.
  */
 export function JournalStoryFeed({
   entries,
   startDate,
-  storageKey,
+  shareToken,
 }: {
   entries: StoryFeedEntry[];
   startDate: string | null;
-  storageKey?: string;
+  shareToken?: string;
 }) {
   const [expanded, setExpanded] = useState<StoryFeedEntry | null>(null);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   const seenBefore = useSeenTracking(
-    storageKey,
+    shareToken ? `journal-seen-${shareToken}` : undefined,
     entries.map((e) => e.id)
   );
+  const { name: visitorName, setName: setVisitorName } = useVisitorIdentity(shareToken);
+  const { reactions, comments, setReaction, removeReaction, addComment } = usePublicJournalSocial(shareToken);
+  const [pendingAction, setPendingAction] = useState<((name: string) => void) | null>(null);
+
+  function runWithIdentity(action: (name: string) => void) {
+    if (visitorName) action(visitorName);
+    else setPendingAction(() => action);
+  }
+
+  function handleNameConfirm(name: string) {
+    setVisitorName(name);
+    const action = pendingAction;
+    setPendingAction(null);
+    action?.(name);
+  }
+
+  function handleReact(postId: string, emoji: string) {
+    runWithIdentity((name) => {
+      const mine = reactions.find((r) => r.post_id === postId && r.visitor_name === name);
+      const promise = mine?.emoji === emoji ? removeReaction(postId, name) : setReaction(postId, name, emoji);
+      promise.catch((err) => toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" }));
+    });
+  }
+
+  function handleComment(postId: string, content: string) {
+    runWithIdentity((name) => {
+      addComment(postId, name, content).catch((err) =>
+        toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" })
+      );
+    });
+  }
 
   return (
     <div className="relative">
@@ -85,7 +122,7 @@ export function JournalStoryFeed({
               entry={entry}
               index={i}
               dayNumber={dayNumber}
-              isNew={!!storageKey && !seenBefore.has(entry.id)}
+              isNew={!!shareToken && !seenBefore.has(entry.id)}
               onOpen={() => setExpanded(entry)}
             />
           </div>
@@ -116,10 +153,21 @@ export function JournalStoryFeed({
                 />
               )}
               {expanded.caption && <p className="whitespace-pre-wrap text-sm">{expanded.caption}</p>}
+              {shareToken && (
+                <JournalPostSocial
+                  reactions={reactions.filter((r) => r.post_id === expanded.id)}
+                  comments={comments.filter((c) => c.post_id === expanded.id)}
+                  visitorName={visitorName}
+                  onReact={(emoji) => handleReact(expanded.id, emoji)}
+                  onComment={(content) => handleComment(expanded.id, content)}
+                />
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <VisitorNameDialog open={!!pendingAction} onCancel={() => setPendingAction(null)} onConfirm={handleNameConfirm} />
 
       <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
         <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
@@ -138,11 +186,13 @@ export function JournalStoryFeed({
 }
 
 const LIGHTBOX_AUTO_ADVANCE_MS = 4000;
+const TAP_MAX_MS = 300;
 const SWIPE_THRESHOLD_PX = 50;
 
 /** Visionneuse façon "story" : défilement automatique après un temps limité, navigation par
- * appui sur les côtés gauche/droite de la photo ou par glissement (swipe) tactile, avec une
- * barre de progression par photo en haut. */
+ * appui sur les côtés gauche/droite de la photo ou par glissement (swipe), et rester appuyé
+ * (n'importe où sur la photo) met le défilement en pause tant qu'on ne relâche pas — comme sur
+ * Instagram. Une seule gestion pointer unifiée (souris + tactile) pilote les trois. */
 function StoryLightbox({
   urls,
   index,
@@ -154,8 +204,12 @@ function StoryLightbox({
   onIndexChange: (index: number) => void;
   onClose: () => void;
 }) {
-  const touchStartX = useRef<number | null>(null);
   const hasMultiple = urls.length > 1;
+  const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const rafRef = useRef<number | null>(null);
+  const lastTsRef = useRef<number | null>(null);
+  const pointerRef = useRef<{ x: number; time: number } | null>(null);
 
   function goPrev() {
     if (index > 0) onIndexChange(index - 1);
@@ -167,62 +221,219 @@ function StoryLightbox({
   }
 
   useEffect(() => {
-    if (!hasMultiple || index >= urls.length - 1) return;
-    const timer = setTimeout(() => onIndexChange(index + 1), LIGHTBOX_AUTO_ADVANCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, hasMultiple, urls.length]);
+    setProgress(0);
+    lastTsRef.current = null;
+  }, [index]);
 
-  function handleTouchStart(e: TouchEvent<HTMLDivElement>) {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
+  useEffect(() => {
+    if (!hasMultiple || paused) {
+      lastTsRef.current = null;
+      return;
+    }
+    function tick(ts: number) {
+      if (lastTsRef.current == null) lastTsRef.current = ts;
+      const delta = ts - lastTsRef.current;
+      lastTsRef.current = ts;
+      setProgress((p) => Math.min(1, p + delta / LIGHTBOX_AUTO_ADVANCE_MS));
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [index, hasMultiple, paused]);
+
+  useEffect(() => {
+    if (progress >= 1 && index < urls.length - 1) onIndexChange(index + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress]);
+
+  function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
+    pointerRef.current = { x: e.clientX, time: Date.now() };
+    if (hasMultiple) setPaused(true);
   }
 
-  function handleTouchEnd(e: TouchEvent<HTMLDivElement>) {
-    if (touchStartX.current == null) return;
-    const delta = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
-    touchStartX.current = null;
-    if (delta > SWIPE_THRESHOLD_PX) goPrev();
-    else if (delta < -SWIPE_THRESHOLD_PX) goNext();
+  function handlePointerUp(e: PointerEvent<HTMLDivElement>) {
+    const start = pointerRef.current;
+    pointerRef.current = null;
+    setPaused(false);
+    if (!hasMultiple || !start) return;
+    const deltaX = e.clientX - start.x;
+    const elapsed = Date.now() - start.time;
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX) {
+      if (deltaX > 0) goPrev();
+      else goNext();
+      return;
+    }
+    if (elapsed < TAP_MAX_MS) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeX = (e.clientX - rect.left) / rect.width;
+      if (relativeX < 1 / 3) goPrev();
+      else if (relativeX > 2 / 3) goNext();
+    }
+  }
+
+  function handlePointerCancel() {
+    pointerRef.current = null;
+    setPaused(false);
   }
 
   return (
-    <div className="relative select-none" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div
+      className="relative touch-none select-none"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={handlePointerCancel}
+    >
       {hasMultiple && (
         <div className="absolute inset-x-2 top-2 z-10 flex gap-1">
           {urls.map((_, i) => (
             <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/30">
-              {i < index && <div className="h-full w-full bg-white" />}
-              {i === index && (
-                <div
-                  key={index}
-                  className="story-progress h-full bg-white"
-                  style={{ animationDuration: `${LIGHTBOX_AUTO_ADVANCE_MS}ms` }}
-                />
-              )}
+              <div className="h-full bg-white" style={{ width: `${(i < index ? 1 : i === index ? progress : 0) * 100}%` }} />
             </div>
           ))}
         </div>
       )}
 
-      <img src={urls[index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />
-
-      {hasMultiple && (
-        <>
-          <button
-            type="button"
-            aria-label="Photo précédente"
-            onClick={goPrev}
-            className="absolute inset-y-0 left-0 w-1/3 cursor-pointer"
-          />
-          <button
-            type="button"
-            aria-label="Photo suivante"
-            onClick={goNext}
-            className="absolute inset-y-0 right-0 w-1/3 cursor-pointer"
-          />
-        </>
-      )}
+      <img src={urls[index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" draggable={false} />
     </div>
+  );
+}
+
+const REACTION_EMOJIS = ["❤️", "😍", "😂", "😮", "👏", "😢"];
+
+/** Barre de réactions (emoji) + fil de commentaires (avec réponses de l'auteur du voyage en
+ * retrait) + formulaire d'ajout, pour une publication du journal public. */
+function JournalPostSocial({
+  reactions,
+  comments,
+  visitorName,
+  onReact,
+  onComment,
+}: {
+  reactions: JournalPostReaction[];
+  comments: JournalPostComment[];
+  visitorName: string;
+  onReact: (emoji: string) => void;
+  onComment: (content: string) => void;
+}) {
+  const [commentText, setCommentText] = useState("");
+  const myReaction = reactions.find((r) => r.visitor_name === visitorName)?.emoji;
+  const counts = new Map<string, number>();
+  for (const r of reactions) counts.set(r.emoji, (counts.get(r.emoji) ?? 0) + 1);
+
+  const rootComments = comments.filter((c) => !c.parent_comment_id);
+  const repliesByParent = new Map<string, JournalPostComment[]>();
+  for (const c of comments) {
+    if (!c.parent_comment_id) continue;
+    const list = repliesByParent.get(c.parent_comment_id) ?? [];
+    list.push(c);
+    repliesByParent.set(c.parent_comment_id, list);
+  }
+
+  function submitComment() {
+    if (!commentText.trim()) return;
+    onComment(commentText.trim());
+    setCommentText("");
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border/60 pt-3">
+      <div className="flex flex-wrap gap-1.5">
+        {REACTION_EMOJIS.map((emoji) => {
+          const count = counts.get(emoji) ?? 0;
+          const active = myReaction === emoji;
+          return (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => onReact(emoji)}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2 py-1 text-sm transition-colors",
+                active ? "border-accent bg-accent/15" : "border-border/60 hover:bg-muted"
+              )}
+            >
+              <span>{emoji}</span>
+              {count > 0 && <span className="text-xs text-muted-foreground">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {rootComments.length > 0 && (
+        <div className="space-y-2">
+          {rootComments.map((c) => (
+            <div key={c.id} className="space-y-1">
+              <p className="text-sm">
+                <span className="font-medium">{c.author_name}</span> <span className="whitespace-pre-wrap">{c.content}</span>
+              </p>
+              {(repliesByParent.get(c.id) ?? []).map((r) => (
+                <p key={r.id} className="ml-4 border-l-2 border-accent/40 pl-2 text-sm">
+                  <span className="font-medium text-accent">{r.author_name}</span>{" "}
+                  <span className="whitespace-pre-wrap">{r.content}</span>
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Input
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submitComment()}
+          placeholder="Écrire un commentaire..."
+          className="h-9 text-sm"
+        />
+        <Button type="button" size="sm" onClick={submitComment} disabled={!commentText.trim()}>
+          Envoyer
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Demande le prénom du visiteur une seule fois (mémorisé ensuite en localStorage), avant sa
+ * première réaction ou son premier commentaire — pour que l'auteur du voyage sache qui a
+ * participé. */
+function VisitorNameDialog({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onConfirm: (name: string) => void;
+}) {
+  const [value, setValue] = useState("");
+
+  useEffect(() => {
+    if (open) setValue("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-xs">
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold">Comment vous appelez-vous ?</p>
+            <p className="text-xs text-muted-foreground">Pour que les auteurs du voyage sachent qui a réagi ou commenté.</p>
+          </div>
+          <Input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Prénom"
+            onKeyDown={(e) => e.key === "Enter" && value.trim() && onConfirm(value.trim())}
+          />
+          <Button className="w-full" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>
+            Valider
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

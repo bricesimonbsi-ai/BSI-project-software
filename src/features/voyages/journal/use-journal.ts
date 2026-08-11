@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
-import type { VoyageJournalPost, VoyageJournalPhoto } from "@/types/database";
+import type { VoyageJournalPost, VoyageJournalPhoto, JournalPostReaction, JournalPostComment } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -136,6 +136,49 @@ export function useDeleteJournalPost(voyageId: string) {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage-journal-posts", voyageId] }),
+    onError: onMutationError,
+  });
+}
+
+/** Réactions et commentaires (visiteurs anonymes + réponses de l'auteur) de toutes les
+ * publications passées en paramètre — lecture directe (RLS : accès collaborateur du voyage),
+ * contrairement à la page publique qui passe par les RPC dédiées. */
+export function useJournalSocial(voyageId: string, postIds: string[]) {
+  const idsKey = [...postIds].sort().join(",");
+  return useQuery({
+    queryKey: ["voyage-journal-social", voyageId, idsKey],
+    enabled: postIds.length > 0,
+    queryFn: async (): Promise<{ reactions: JournalPostReaction[]; comments: JournalPostComment[] }> => {
+      const [reactionsRes, commentsRes] = await Promise.all([
+        supabase.from("journal_post_reactions").select("*").in("post_id", postIds),
+        supabase.from("journal_post_comments").select("*").in("post_id", postIds).order("created_at", { ascending: true }),
+      ]);
+      if (reactionsRes.error) throw reactionsRes.error;
+      if (commentsRes.error) throw commentsRes.error;
+      return {
+        reactions: (reactionsRes.data ?? []) as JournalPostReaction[],
+        comments: (commentsRes.data ?? []) as JournalPostComment[],
+      };
+    },
+  });
+}
+
+/** Répond, en tant qu'auteur/collaborateur du voyage, à un commentaire de visiteur. */
+export function useReplyToComment(voyageId: string) {
+  const queryClient = useQueryClient();
+  const { profile, session } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { postId: string; parentCommentId: string; content: string }) => {
+      const { error } = await supabase.from("journal_post_comments").insert({
+        post_id: input.postId,
+        parent_comment_id: input.parentCommentId,
+        author_name: profile?.display_name || session?.user.email || "Vous",
+        is_owner_reply: true,
+        content: input.content.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage-journal-social", voyageId] }),
     onError: onMutationError,
   });
 }
