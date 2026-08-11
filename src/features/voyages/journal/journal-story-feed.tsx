@@ -74,6 +74,7 @@ export function JournalStoryFeed({
 
   return (
     <div className="relative">
+      <JourneyFilaments />
       <JourneyMotifs count={entries.length} />
 
       {entries.map((entry, i) => {
@@ -222,6 +223,56 @@ function StoryCard({
         <p className="text-xs text-muted-foreground">{formatDate(entry.entry_date)}</p>
       </div>
     </button>
+  );
+}
+
+const FILAMENT_LANES = [
+  { left: "6%", color: "text-sky-400/25" },
+  { left: "90%", color: "text-rose-400/25" },
+  { left: "20%", color: "text-violet-400/20" },
+  { left: "78%", color: "text-amber-400/20" },
+  { left: "50%", color: "text-teal-400/15" },
+];
+
+/** Un long filament vertical ondulé, se répétant sur toute la hauteur — le viewBox est
+ * volontairement grand (1200) et étiré (preserveAspectRatio="none") pour couvrir n'importe
+ * quelle longueur de fil sans dépendre du nombre de souvenirs. */
+function filamentPath(seed: number) {
+  const amp = 8 + (seed % 3) * 5;
+  const periods = 10;
+  const periodHeight = 1200 / periods;
+  const points = [`M 20 0`];
+  for (let i = 0; i < periods; i++) {
+    const yMid = i * periodHeight + periodHeight * 0.5;
+    const yEnd = (i + 1) * periodHeight;
+    const dir = (i + seed) % 2 === 0 ? 1 : -1;
+    points.push(`C ${20 + dir * amp} ${yMid}, ${20 - dir * amp} ${yMid}, 20 ${yEnd}`);
+  }
+  return points.join(" ");
+}
+
+/** Longs filaments décoratifs répartis à la verticale sur toute la vue (pas alignés sur les
+ * souvenirs), plusieurs couleurs, animés (défilement + léger balancement) — purement décoratif
+ * (aria-hidden), au même titre que JourneyMotifs. */
+function JourneyFilaments() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      {FILAMENT_LANES.map((lane, i) => (
+        <div key={i} className="journal-filament-sway absolute top-0 h-full w-10" style={{ left: lane.left, animationDelay: `${i * 0.7}s` }}>
+          <svg width="100%" height="100%" viewBox="0 0 40 1200" preserveAspectRatio="none" className={lane.color} fill="none">
+            <path
+              d={filamentPath(i)}
+              className="journal-filament"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeDasharray="1 9"
+              style={{ animationDelay: `${i * 0.4}s`, animationDuration: `${3 + i * 0.5}s` }}
+            />
+          </svg>
+        </div>
+      ))}
+    </div>
   );
 }
 
