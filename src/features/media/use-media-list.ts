@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { fetchWatchProviders } from "@/features/media/tmdb";
+import { fetchGameDescription } from "@/features/media/rawg";
 import type { MediaItem, MediaItemWatcher, MediaType, Person } from "@/types/database";
 
 function onMutationError(err: unknown) {
@@ -75,8 +76,44 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
   });
 }
 
-/** Ajoute un jeu vidéo saisi manuellement (pas de source automatique disponible) — les plateformes
- * sont les consoles cochées par l'utilisateur. */
+export type RawgAddInput = {
+  external_id: string;
+  title: string;
+  poster_path: string | null;
+  release_date: string | null;
+  external_rating: number | null;
+  platforms: string[];
+};
+
+/** Ajoute un jeu vidéo trouvé via RAWG — les plateformes viennent directement du résultat de
+ * recherche/tendances (pas d'appel séparé, contrairement à TMDB) ; la description, elle,
+ * nécessite un appel détaillé fait ici au moment de l'ajout. */
+export function useAddRawgMedia(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RawgAddInput) => {
+      const [position, synopsis] = await Promise.all([nextPosition(projectId, "jeu"), fetchGameDescription(input.external_id)]);
+      const { error } = await supabase.from("media_items").insert({
+        project_id: projectId,
+        type: "jeu",
+        external_id: input.external_id,
+        title: input.title,
+        poster_path: input.poster_path,
+        synopsis,
+        release_date: input.release_date,
+        external_rating: input.external_rating,
+        platforms: input.platforms,
+        position,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["media-items", projectId] }),
+    onError: onMutationError,
+  });
+}
+
+/** Ajoute un jeu vidéo saisi manuellement (repli utilisé tant que la clé RAWG n'est pas
+ * configurée) — les plateformes sont les consoles cochées par l'utilisateur. */
 export function useAddManualMedia(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

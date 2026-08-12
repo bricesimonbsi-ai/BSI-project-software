@@ -9,19 +9,22 @@ import {
   type TmdbMovieResult,
   type TmdbTvResult,
 } from "@/features/media/tmdb";
+import { searchGames, trendingGames, isRawgConfigured, type RawgGameResult } from "@/features/media/rawg";
 import {
   useMediaItems,
   useAddTmdbMedia,
+  useAddRawgMedia,
   useAddManualMedia,
   useToggleWatched,
   useUpdateMediaItem,
   useDeleteMediaItem,
   useMediaItemWatchers,
   type TmdbAddInput,
+  type RawgAddInput,
 } from "@/features/media/use-media-list";
 import { useProjectPeople } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
-import { CONSOLES, MEDIA_TYPE_LABELS } from "@/features/media/media-constants";
+import { CONSOLES, MEDIA_TYPE_LABELS, mediaPosterUrl } from "@/features/media/media-constants";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,7 +44,7 @@ type NormalizedResult = {
   posterPath: string | null;
   year: string | undefined;
   rating: number;
-  addInput: TmdbAddInput;
+  addInput: TmdbAddInput | RawgAddInput;
 };
 
 function normalizeMovie(m: TmdbMovieResult): NormalizedResult {
@@ -80,6 +83,26 @@ function normalizeTv(t: TmdbTvResult): NormalizedResult {
   };
 }
 
+/** RAWG note sur 5 ; on la ramène sur 10 pour rester cohérent avec l'affichage TMDB ("X.X/10"). */
+function normalizeGame(g: RawgGameResult): NormalizedResult {
+  const rating = g.rating ? Math.round(g.rating * 2 * 10) / 10 : 0;
+  return {
+    id: String(g.id),
+    title: g.name,
+    posterPath: g.background_image,
+    year: g.released?.slice(0, 4),
+    rating,
+    addInput: {
+      external_id: String(g.id),
+      title: g.name,
+      poster_path: g.background_image,
+      release_date: g.released || null,
+      external_rating: rating || null,
+      platforms: [...new Set((g.platforms ?? []).map((p) => p.platform.name))],
+    },
+  };
+}
+
 /**
  * Contenu d'un projet média d'un seul type (film, série ou jeu vidéo — le type est fixé à la
  * création du projet, voir NewProjectDialog). Trois onglets : Nouveautés (alimenté
@@ -90,12 +113,14 @@ function normalizeTv(t: TmdbTvResult): NormalizedResult {
  */
 export function MediaTypeSection({ projectId, type }: { projectId: string; type: MediaType }) {
   const labels = MEDIA_TYPE_LABELS[type];
-  const usesTmdb = type !== "jeu";
+  const isJeu = type === "jeu";
+  const autoAvailable = isJeu ? isRawgConfigured() : isTmdbConfigured();
   const { data: items, isLoading } = useMediaItems(projectId, type);
   const { data: linkedPeople } = useProjectPeople(projectId);
   const itemIds = useMemo(() => (items ?? []).map((i) => i.id), [items]);
   const { data: watchers } = useMediaItemWatchers(projectId, itemIds);
-  const addTmdb = useAddTmdbMedia(projectId, type === "jeu" ? "film" : type);
+  const addTmdb = useAddTmdbMedia(projectId, isJeu ? "film" : (type as "film" | "serie"));
+  const addRawg = useAddRawgMedia(projectId);
   const addManual = useAddManualMedia(projectId);
   const toggleWatched = useToggleWatched(projectId);
   const updateItem = useUpdateMediaItem(projectId);
@@ -115,7 +140,7 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
   const [pendingViewers, setPendingViewers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!usesTmdb) return;
+    if (!autoAvailable) return;
     if (!query.trim()) {
       setResults([]);
       setSearchError(null);
@@ -125,7 +150,8 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
     const timeout = setTimeout(async () => {
       try {
         if (type === "film") setResults((await searchMovies(query)).map(normalizeMovie).slice(0, 8));
-        else setResults((await searchTvShows(query)).map(normalizeTv).slice(0, 8));
+        else if (type === "serie") setResults((await searchTvShows(query)).map(normalizeTv).slice(0, 8));
+        else setResults((await searchGames(query)).map(normalizeGame).slice(0, 8));
         setSearchError(null);
       } catch (err) {
         setSearchError((err as Error).message);
@@ -134,27 +160,29 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
       }
     }, 350);
     return () => clearTimeout(timeout);
-  }, [query, type, usesTmdb]);
+  }, [query, type, autoAvailable]);
 
   useEffect(() => {
-    if (!usesTmdb || !isTmdbConfigured()) return;
+    if (!autoAvailable) return;
     setTrendingLoading(true);
     (async () => {
       try {
         if (type === "film") setTrending((await trendingMovies()).map(normalizeMovie));
-        else setTrending((await trendingTvShows()).map(normalizeTv));
+        else if (type === "serie") setTrending((await trendingTvShows()).map(normalizeTv));
+        else setTrending((await trendingGames()).map(normalizeGame));
       } catch {
         setTrending([]);
       } finally {
         setTrendingLoading(false);
       }
     })();
-  }, [type, usesTmdb]);
+  }, [type, autoAvailable]);
 
   const existingExternalIds = new Set((items ?? []).map((i) => i.external_id));
 
   async function handleAddResult(result: NormalizedResult) {
-    await addTmdb.mutateAsync(result.addInput);
+    if (isJeu) await addRawg.mutateAsync(result.addInput as RawgAddInput);
+    else await addTmdb.mutateAsync(result.addInput as TmdbAddInput);
     setQuery("");
     setResults([]);
   }
@@ -201,13 +229,15 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watched]);
 
-  if (usesTmdb && !isTmdbConfigured()) {
+  if (!isJeu && !isTmdbConfigured()) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         Configuration TMDB manquante — la recherche de {labels.plural.toLowerCase()} n'est pas encore activée.
       </p>
     );
   }
+
+  const Icon = TYPE_ICON[type];
 
   return (
     <div className="space-y-4">
@@ -221,9 +251,10 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
         </TabsList>
 
         <TabsContent value="nouveautes" className="pt-3">
-          {!usesTmdb ? (
+          {!autoAvailable ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Pas de source automatique de nouveautés pour les jeux vidéo pour l'instant — ajoute-les depuis l'onglet "Ma liste".
+              Pas de source automatique de nouveautés pour les jeux vidéo sans clé RAWG configurée — ajoute-les depuis l'onglet "Ma
+              liste".
             </p>
           ) : trendingLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Chargement...</p>
@@ -232,14 +263,14 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
               {trending
                 .filter((r) => !existingExternalIds.has(r.id))
                 .map((r) => (
-                  <TrendingCard key={r.id} result={r} onAdd={() => handleAddResult(r)} />
+                  <TrendingCard key={r.id} result={r} type={type} onAdd={() => handleAddResult(r)} />
                 ))}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="ma-liste" className="space-y-3 pt-3">
-          {usesTmdb ? (
+          {autoAvailable ? (
             <Card>
               <CardContent className="relative p-4">
                 <Input
@@ -266,7 +297,7 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
                               <img src={r.posterPath} alt="" className="h-14 w-10 flex-shrink-0 rounded object-cover" />
                             ) : (
                               <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded bg-muted">
-                                <Film className="h-4 w-4 text-muted-foreground" />
+                                <Icon className="h-4 w-4 text-muted-foreground" />
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
@@ -358,10 +389,13 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
         </TabsContent>
       </Tabs>
 
-      {usesTmdb && (
+      {!isJeu && (
         <p className="text-center text-[0.65rem] text-muted-foreground">
           Ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB.
         </p>
+      )}
+      {isJeu && autoAvailable && (
+        <p className="text-center text-[0.65rem] text-muted-foreground">Données jeux vidéo fournies par RAWG.io.</p>
       )}
 
       <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
@@ -431,14 +465,15 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
   );
 }
 
-function TrendingCard({ result, onAdd }: { result: NormalizedResult; onAdd: () => void }) {
+function TrendingCard({ result, type, onAdd }: { result: NormalizedResult; type: MediaType; onAdd: () => void }) {
+  const Icon = TYPE_ICON[type];
   return (
     <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-2">
       {result.posterPath ? (
         <img src={result.posterPath} alt="" className="aspect-[2/3] w-full rounded object-cover" />
       ) : (
         <div className="flex aspect-[2/3] w-full items-center justify-center rounded bg-muted">
-          <Film className="h-5 w-5 text-muted-foreground" />
+          <Icon className="h-5 w-5 text-muted-foreground" />
         </div>
       )}
       <p className="truncate text-xs font-medium">{result.title}</p>
@@ -474,7 +509,7 @@ function MediaRow({
   onDelete: () => void;
   onOpen: () => void;
 }) {
-  const poster = tmdbPosterUrl(item.poster_path);
+  const poster = mediaPosterUrl(item);
   const Icon = TYPE_ICON[type];
 
   return (
@@ -556,7 +591,7 @@ function ConsolesEditor({ item, onSave }: { item: MediaItem; onSave: (platforms:
 }
 
 function ExpandedMediaDetails({ item, type }: { item: MediaItem; type: MediaType }) {
-  const poster = tmdbPosterUrl(item.poster_path);
+  const poster = mediaPosterUrl(item);
   const Icon = TYPE_ICON[type];
   return (
     <div className="space-y-3">
