@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -19,9 +19,14 @@ import { IconGlow } from "@/features/shared/icon-glow";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 
+const PROJECT_TABS = ["details", "budget", "documents", "todos", "collaborators"];
+
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam && PROJECT_TABS.includes(tabParam) ? tabParam : "details";
   const { data: project, isLoading } = useProject(projectId);
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
@@ -118,7 +123,10 @@ export function ProjectDetailPage() {
         </div>
       </PageHeroCard>
 
-      <Tabs defaultValue="details">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), tab: v }), { replace: true })}
+      >
         <TabsList>
           <TabsTrigger value="details">Détails</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>

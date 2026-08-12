@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { usePublicJournalSocial, useVisitorIdentity } from "@/features/voyages/journal/use-public-journal-social";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, cn } from "@/lib/utils";
-import { Camera } from "lucide-react";
-import type { JournalPostComment, JournalPostReaction } from "@/types/database";
+import { Camera, Heart } from "lucide-react";
+import type { JournalCommentReaction, JournalPostComment, JournalPostReaction } from "@/types/database";
 
 /** Forme normalisée d'un souvenir pour cette vue, commune au journal privé et à la page publique. */
 export type StoryFeedEntry = {
@@ -78,7 +78,16 @@ export function JournalStoryFeed({
     entries.map((e) => e.id)
   );
   const { name: visitorName, setName: setVisitorName } = useVisitorIdentity(shareToken);
-  const { reactions, comments, setReaction, removeReaction, addComment } = usePublicJournalSocial(shareToken);
+  const {
+    reactions,
+    comments,
+    commentReactions,
+    setReaction,
+    removeReaction,
+    addComment,
+    setCommentReaction,
+    removeCommentReaction,
+  } = usePublicJournalSocial(shareToken);
   const [pendingAction, setPendingAction] = useState<((name: string) => void) | null>(null);
 
   function runWithIdentity(action: (name: string) => void) {
@@ -106,6 +115,14 @@ export function JournalStoryFeed({
       addComment(postId, name, content).catch((err) =>
         toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" })
       );
+    });
+  }
+
+  function handleCommentReact(commentId: string) {
+    runWithIdentity((name) => {
+      const mine = commentReactions.find((r) => r.comment_id === commentId && r.visitor_name === name);
+      const promise = mine ? removeCommentReaction(commentId, name) : setCommentReaction(commentId, name, "❤️");
+      promise.catch((err) => toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" }));
     });
   }
 
@@ -157,9 +174,11 @@ export function JournalStoryFeed({
                 <JournalPostSocial
                   reactions={reactions.filter((r) => r.post_id === expanded.id)}
                   comments={comments.filter((c) => c.post_id === expanded.id)}
+                  commentReactions={commentReactions}
                   visitorName={visitorName}
                   onReact={(emoji) => handleReact(expanded.id, emoji)}
                   onComment={(content) => handleComment(expanded.id, content)}
+                  onToggleCommentReaction={handleCommentReact}
                 />
               )}
             </div>
@@ -308,15 +327,19 @@ const REACTION_EMOJIS = ["❤️", "😍", "😂", "😮", "👏", "😢"];
 function JournalPostSocial({
   reactions,
   comments,
+  commentReactions,
   visitorName,
   onReact,
   onComment,
+  onToggleCommentReaction,
 }: {
   reactions: JournalPostReaction[];
   comments: JournalPostComment[];
+  commentReactions: JournalCommentReaction[];
   visitorName: string;
   onReact: (emoji: string) => void;
   onComment: (content: string) => void;
+  onToggleCommentReaction: (commentId: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
   const myReaction = reactions.find((r) => r.visitor_name === visitorName)?.emoji;
@@ -368,11 +391,25 @@ function JournalPostSocial({
               <p className="text-sm">
                 <span className="font-medium">{c.author_name}</span> <span className="whitespace-pre-wrap">{c.content}</span>
               </p>
+              <CommentLikeButton
+                commentId={c.id}
+                reactions={commentReactions}
+                visitorName={visitorName}
+                onToggle={onToggleCommentReaction}
+              />
               {(repliesByParent.get(c.id) ?? []).map((r) => (
-                <p key={r.id} className="ml-4 border-l-2 border-accent/40 pl-2 text-sm">
-                  <span className="font-medium text-accent">{r.author_name}</span>{" "}
-                  <span className="whitespace-pre-wrap">{r.content}</span>
-                </p>
+                <div key={r.id} className="ml-4 space-y-1 border-l-2 border-accent/40 pl-2">
+                  <p className="text-sm">
+                    <span className="font-medium text-accent">{r.author_name}</span>{" "}
+                    <span className="whitespace-pre-wrap">{r.content}</span>
+                  </p>
+                  <CommentLikeButton
+                    commentId={r.id}
+                    reactions={commentReactions}
+                    visitorName={visitorName}
+                    onToggle={onToggleCommentReaction}
+                  />
+                </div>
               ))}
             </div>
           ))}
@@ -392,6 +429,37 @@ function JournalPostSocial({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Petit cœur "j'aime" sous un commentaire (ou une réponse), avec compteur — réaction unique
+ * (pas de choix d'emoji, contrairement aux publications) pour rester léger visuellement. */
+export function CommentLikeButton({
+  commentId,
+  reactions,
+  visitorName,
+  onToggle,
+}: {
+  commentId: string;
+  reactions: JournalCommentReaction[];
+  visitorName: string;
+  onToggle: (commentId: string) => void;
+}) {
+  const commentLikes = reactions.filter((r) => r.comment_id === commentId);
+  const active = commentLikes.some((r) => r.visitor_name === visitorName);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(commentId)}
+      className={cn(
+        "flex items-center gap-1 text-xs transition-colors",
+        active ? "text-rose-500" : "text-muted-foreground hover:text-rose-500"
+      )}
+    >
+      <Heart className={cn("h-3 w-3", active && "fill-rose-500")} />
+      {commentLikes.length > 0 && commentLikes.length}
+    </button>
   );
 }
 

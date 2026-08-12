@@ -202,6 +202,15 @@ export type JournalPostComment = {
   created_at: string;
 };
 
+/** Réaction (emoji) sur un commentaire du journal — `is_owner` = réaction de l'auteur/collaborateur
+ * du voyage (identité connue), sinon d'un visiteur anonyme identifié par son prénom. */
+export type JournalCommentReaction = {
+  comment_id: string;
+  emoji: string;
+  visitor_name: string;
+  is_owner: boolean;
+};
+
 /** Un article d'une liste de courses (projet de la catégorie "Courses"). */
 export type ShoppingListItem = {
   id: string;
@@ -531,6 +540,7 @@ export type Database = {
       voyage_journal_photos: Table<VoyageJournalPhoto>;
       journal_post_reactions: Table<JournalPostReaction>;
       journal_post_comments: Table<JournalPostComment>;
+      journal_comment_reactions: Table<JournalCommentReaction>;
       shopping_list_items: Table<ShoppingListItem>;
       media_items: Table<MediaItem>;
       media_item_watchers: Table<MediaItemWatcher>;
@@ -582,6 +592,18 @@ export type Database = {
           p_parent_comment_id: string | null;
         };
         Returns: string;
+      };
+      get_public_journal_comment_reactions: {
+        Args: { p_share_token: string };
+        Returns: JournalCommentReaction[];
+      };
+      set_public_journal_comment_reaction: {
+        Args: { p_share_token: string; p_comment_id: string; p_visitor_name: string; p_emoji: string };
+        Returns: undefined;
+      };
+      remove_public_journal_comment_reaction: {
+        Args: { p_share_token: string; p_comment_id: string; p_visitor_name: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

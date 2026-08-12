@@ -6,11 +6,14 @@ import {
   useDeleteJournalPost,
   useJournalSocial,
   useReplyToComment,
+  useSetOwnerCommentReaction,
+  useRemoveOwnerCommentReaction,
   journalPhotoUrl,
   type JournalPostWithPhotos,
 } from "@/features/voyages/journal/use-journal";
+import { useAuth } from "@/app/providers/auth-provider";
 import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
-import { StoryLightbox } from "@/features/voyages/journal/journal-story-feed";
+import { StoryLightbox, CommentLikeButton } from "@/features/voyages/journal/journal-story-feed";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { formatDate, cn } from "@/lib/utils";
 import { Trash2, MapPin, Pencil } from "lucide-react";
-import type { JournalPostComment, JournalPostReaction } from "@/types/database";
+import type { JournalCommentReaction, JournalPostComment, JournalPostReaction } from "@/types/database";
 
 export function JournalTimeline({ voyageId, onEdit }: { voyageId: string; onEdit: (post: JournalPostWithPhotos) => void }) {
   const { data: posts, isLoading } = useJournalPosts(voyageId);
@@ -28,8 +31,18 @@ export function JournalTimeline({ voyageId, onEdit }: { voyageId: string; onEdit
   const postIds = useMemo(() => (posts ?? []).map((p) => p.id), [posts]);
   const { data: social } = useJournalSocial(voyageId, postIds);
   const replyToComment = useReplyToComment(voyageId);
+  const setOwnerCommentReaction = useSetOwnerCommentReaction(voyageId);
+  const removeOwnerCommentReaction = useRemoveOwnerCommentReaction(voyageId);
+  const { profile, session } = useAuth();
+  const ownerName = profile?.display_name || session?.user.email || "Vous";
   const [lightbox, setLightbox] = useState<string[] | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  function handleToggleCommentReaction(commentId: string) {
+    const mine = (social?.commentReactions ?? []).find((r) => r.comment_id === commentId && r.visitor_name === ownerName);
+    if (mine) removeOwnerCommentReaction.mutate(commentId);
+    else setOwnerCommentReaction.mutate({ commentId, emoji: "❤️" });
+  }
 
   const locationBySousEtape = useMemo(() => {
     const etapeById = new Map((etapes ?? []).map((e) => [e.id, e]));
@@ -56,9 +69,12 @@ export function JournalTimeline({ voyageId, onEdit }: { voyageId: string; onEdit
           location={post.sous_etape_id ? locationBySousEtape.get(post.sous_etape_id) : undefined}
           reactions={(social?.reactions ?? []).filter((r) => r.post_id === post.id)}
           comments={(social?.comments ?? []).filter((c) => c.post_id === post.id)}
+          commentReactions={social?.commentReactions ?? []}
+          visitorName={ownerName}
           onDelete={() => deletePost.mutate(post)}
           onEdit={() => onEdit(post)}
           onReply={(commentId, content) => replyToComment.mutate({ postId: post.id, parentCommentId: commentId, content })}
+          onToggleCommentReaction={handleToggleCommentReaction}
           onOpenPhoto={(urls, index) => {
             setLightbox(urls);
             setLightboxIndex(index);
@@ -87,18 +103,24 @@ function JournalPostCard({
   location,
   reactions,
   comments,
+  commentReactions,
+  visitorName,
   onDelete,
   onEdit,
   onReply,
+  onToggleCommentReaction,
   onOpenPhoto,
 }: {
   post: JournalPostWithPhotos;
   location?: { city: string; country: string };
   reactions: JournalPostReaction[];
   comments: JournalPostComment[];
+  commentReactions: JournalCommentReaction[];
+  visitorName: string;
   onDelete: () => void;
   onEdit: () => void;
   onReply: (commentId: string, content: string) => void;
+  onToggleCommentReaction: (commentId: string) => void;
   onOpenPhoto: (urls: string[], index: number) => void;
 }) {
   const urls = post.voyage_journal_photos.map((p) => journalPhotoUrl(p.storage_path));
@@ -175,11 +197,25 @@ function JournalPostCard({
                 <p className="text-sm">
                   <span className="font-medium">{c.author_name}</span> <span className="whitespace-pre-wrap">{c.content}</span>
                 </p>
+                <CommentLikeButton
+                  commentId={c.id}
+                  reactions={commentReactions}
+                  visitorName={visitorName}
+                  onToggle={onToggleCommentReaction}
+                />
                 {(repliesByParent.get(c.id) ?? []).map((r) => (
-                  <p key={r.id} className="ml-4 border-l-2 border-accent/40 pl-2 text-sm">
-                    <span className="font-medium text-accent">{r.author_name}</span>{" "}
-                    <span className="whitespace-pre-wrap">{r.content}</span>
-                  </p>
+                  <div key={r.id} className="ml-4 space-y-1 border-l-2 border-accent/40 pl-2">
+                    <p className="text-sm">
+                      <span className="font-medium text-accent">{r.author_name}</span>{" "}
+                      <span className="whitespace-pre-wrap">{r.content}</span>
+                    </p>
+                    <CommentLikeButton
+                      commentId={r.id}
+                      reactions={commentReactions}
+                      visitorName={visitorName}
+                      onToggle={onToggleCommentReaction}
+                    />
+                  </div>
                 ))}
                 {replyingTo === c.id ? (
                   <div className="ml-4 flex items-center gap-1.5">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
 import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
 import { useProjectPeople } from "@/features/people/use-people";
@@ -32,8 +32,13 @@ import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 import type { TravelStyle } from "@/types/database";
 
+const VOYAGE_TABS = ["overview", "itinerary", "journal", "budget", "equipment", "documents", "todos", "collaborators"];
+
 export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam && VOYAGE_TABS.includes(tabParam) ? tabParam : "itinerary";
   const { data: project } = useProject(projectId);
   const { data: voyage, isLoading } = useVoyage(projectId);
   const updateVoyage = useUpdateVoyage(projectId);
@@ -141,7 +146,10 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
         </div>
       </PageHeroCard>
 
-      <Tabs defaultValue="itinerary">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), tab: v }), { replace: true })}
+      >
         <TabsList>
           <TabsTrigger value="overview">Aperçu</TabsTrigger>
           <TabsTrigger value="itinerary">Itinéraire</TabsTrigger>

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { Briefcase, ListChecks, Settings, LogOut, Bell, Sun, Moon, Monitor } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useThemeStore } from "@/features/theme/theme-store";
@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import type { NotificationRow } from "@/types/database";
 
 const navItems = [
   { to: "/", label: "Accueil", icon: Briefcase, end: true },
@@ -28,12 +29,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const mode = useThemeStore((s) => s.mode);
   const setMode = useThemeStore((s) => s.setMode);
   const { data: notifications, unreadCount, markRead } = useNotifications();
+  const navigate = useNavigate();
 
   const modeIcon = mode === "dark" ? Moon : mode === "light" ? Sun : Monitor;
   const ModeIcon = modeIcon;
 
   function cycleMode() {
     setMode(mode === "light" ? "dark" : mode === "dark" ? "system" : "light");
+  }
+
+  function handleNotificationClick(n: NotificationRow) {
+    markRead(n.id);
+    const projectId = n.payload.project_id as string | undefined;
+    if ((n.type === "journal_reaction" || n.type === "journal_comment") && projectId) {
+      navigate(`/projects/${projectId}?tab=journal`);
+    } else if (n.type === "todo_assigned" && projectId) {
+      navigate(`/projects/${projectId}?tab=todos`);
+    }
   }
 
   return (
@@ -84,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <p className="px-2 py-4 text-center text-sm text-muted-foreground">Aucune notification</p>
                 )}
                 {notifications?.slice(0, 8).map((n) => (
-                  <DropdownMenuItem key={n.id} onClick={() => markRead(n.id)} className="flex-col items-start gap-0.5">
+                  <DropdownMenuItem key={n.id} onClick={() => handleNotificationClick(n)} className="flex-col items-start gap-0.5">
                     <span className={cn("text-sm", !n.read_at && "font-semibold")}>{n.title}</span>
                     {n.body && <span className="text-xs text-muted-foreground">{n.body}</span>}
                   </DropdownMenuItem>

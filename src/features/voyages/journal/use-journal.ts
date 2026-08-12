@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
-import type { VoyageJournalPost, VoyageJournalPhoto, JournalPostReaction, JournalPostComment } from "@/types/database";
+import type {
+  VoyageJournalPost,
+  VoyageJournalPhoto,
+  JournalPostReaction,
+  JournalPostComment,
+  JournalCommentReaction,
+} from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -148,18 +154,68 @@ export function useJournalSocial(voyageId: string, postIds: string[]) {
   return useQuery({
     queryKey: ["voyage-journal-social", voyageId, idsKey],
     enabled: postIds.length > 0,
-    queryFn: async (): Promise<{ reactions: JournalPostReaction[]; comments: JournalPostComment[] }> => {
+    queryFn: async (): Promise<{
+      reactions: JournalPostReaction[];
+      comments: JournalPostComment[];
+      commentReactions: JournalCommentReaction[];
+    }> => {
       const [reactionsRes, commentsRes] = await Promise.all([
         supabase.from("journal_post_reactions").select("*").in("post_id", postIds),
         supabase.from("journal_post_comments").select("*").in("post_id", postIds).order("created_at", { ascending: true }),
       ]);
       if (reactionsRes.error) throw reactionsRes.error;
       if (commentsRes.error) throw commentsRes.error;
+      const commentIds = ((commentsRes.data ?? []) as JournalPostComment[]).map((c) => c.id);
+      const commentReactionsRes =
+        commentIds.length > 0
+          ? await supabase.from("journal_comment_reactions").select("*").in("comment_id", commentIds)
+          : { data: [], error: null };
+      if (commentReactionsRes.error) throw commentReactionsRes.error;
       return {
         reactions: (reactionsRes.data ?? []) as JournalPostReaction[],
         comments: (commentsRes.data ?? []) as JournalPostComment[],
+        commentReactions: (commentReactionsRes.data ?? []) as JournalCommentReaction[],
       };
     },
+  });
+}
+
+/** Réagit (ou change de réaction) en tant qu'auteur/collaborateur du voyage à un commentaire —
+ * identité connue (pas de prénom à saisir, contrairement aux visiteurs). */
+export function useSetOwnerCommentReaction(voyageId: string) {
+  const queryClient = useQueryClient();
+  const { profile, session } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { commentId: string; emoji: string }) => {
+      const visitorName = profile?.display_name || session?.user.email || "Vous";
+      const { error } = await supabase
+        .from("journal_comment_reactions")
+        .upsert(
+          { comment_id: input.commentId, visitor_name: visitorName, emoji: input.emoji, is_owner: true },
+          { onConflict: "comment_id,visitor_name" }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage-journal-social", voyageId] }),
+    onError: onMutationError,
+  });
+}
+
+export function useRemoveOwnerCommentReaction(voyageId: string) {
+  const queryClient = useQueryClient();
+  const { profile, session } = useAuth();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      const visitorName = profile?.display_name || session?.user.email || "Vous";
+      const { error } = await supabase
+        .from("journal_comment_reactions")
+        .delete()
+        .eq("comment_id", commentId)
+        .eq("visitor_name", visitorName);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voyage-journal-social", voyageId] }),
+    onError: onMutationError,
   });
 }
 

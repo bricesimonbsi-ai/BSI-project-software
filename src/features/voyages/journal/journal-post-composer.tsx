@@ -132,7 +132,13 @@ export function JournalPostComposer({
 
   const etapeById = new Map((etapes ?? []).map((e) => [e.id, e]));
   const countryOptions = [...new Set((etapes ?? []).map((e) => e.country_region))];
-  const citiesForCountry = (sousEtapes ?? []).filter((se) => etapeById.get(se.etape_id)?.country_region === country);
+  // Un aller-retour par la même ville (ex. escale) crée plusieurs sous-étapes de même nom : on ne
+  // garde qu'une occurrence par ville dans la liste, comme déjà fait pour les pays ci-dessus.
+  const citiesForCountry = [
+    ...new Map(
+      (sousEtapes ?? []).filter((se) => etapeById.get(se.etape_id)?.country_region === country).map((se) => [se.city, se])
+    ).values(),
+  ];
 
   return (
     <Card>
