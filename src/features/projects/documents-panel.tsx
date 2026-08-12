@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDocuments, useUploadDocument, useDeleteDocument, useRenameDocument, getDocumentUrl } from "@/features/projects/use-documents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,29 @@ export function DocumentsPanel({ projectId, voyageEtapeId }: { projectId: string
   const [editingName, setEditingName] = useState("");
   const [preview, setPreview] = useState<{ doc: DocumentRow; url: string } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const imageDocs = (documents ?? []).filter((d) => d.mime_type?.startsWith("image/"));
+    if (imageDocs.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        imageDocs.map(async (d): Promise<[string, string] | null> => {
+          try {
+            return [d.id, await getDocumentUrl(d.storage_path)];
+          } catch {
+            return null;
+          }
+        })
+      );
+      if (cancelled) return;
+      setThumbnails(Object.fromEntries(entries.filter((e): e is [string, string] => e !== null)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [documents]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -93,9 +116,13 @@ export function DocumentsPanel({ projectId, voyageEtapeId }: { projectId: string
               <button
                 onClick={() => handleOpen(doc)}
                 disabled={loadingPreview === doc.id}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm hover:underline disabled:opacity-60"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-sm hover:underline disabled:opacity-60"
               >
-                <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                {thumbnails[doc.id] ? (
+                  <img src={thumbnails[doc.id]} alt="" className="h-10 w-10 flex-shrink-0 rounded-md object-cover" />
+                ) : (
+                  <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate">{doc.name}</span>
               </button>
             )}
