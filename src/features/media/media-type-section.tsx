@@ -19,13 +19,17 @@ import {
   useUpdateMediaItem,
   useDeleteMediaItem,
   useMediaItemWatchers,
+  useMediaItemRatings,
+  useSetMediaItemRating,
+  useDeleteMediaItemRating,
   type TmdbAddInput,
   type RawgAddInput,
 } from "@/features/media/use-media-list";
-import { useProjectPeople } from "@/features/people/use-people";
+import { useProjectPeople, type ProjectPersonRow } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { CONSOLES, MEDIA_TYPE_LABELS, mediaPosterUrl } from "@/features/media/media-constants";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +38,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Star, Trash2, Film, Tv, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MediaItem, MediaType } from "@/types/database";
+import type { MediaItem, MediaItemRating, MediaType, Person } from "@/types/database";
+
+type RatingRow = MediaItemRating & { people: Person };
 
 const TYPE_ICON: Record<MediaType, typeof Film> = { film: Film, serie: Tv, jeu: Gamepad2 };
 
@@ -119,12 +125,15 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
   const { data: linkedPeople } = useProjectPeople(projectId);
   const itemIds = useMemo(() => (items ?? []).map((i) => i.id), [items]);
   const { data: watchers } = useMediaItemWatchers(projectId, itemIds);
+  const { data: ratings } = useMediaItemRatings(projectId, itemIds);
   const addTmdb = useAddTmdbMedia(projectId, isJeu ? "film" : (type as "film" | "serie"));
   const addRawg = useAddRawgMedia(projectId);
   const addManual = useAddManualMedia(projectId);
   const toggleWatched = useToggleWatched(projectId);
   const updateItem = useUpdateMediaItem(projectId);
   const deleteItem = useDeleteMediaItem(projectId);
+  const setRating = useSetMediaItemRating(projectId);
+  const deleteRating = useDeleteMediaItemRating(projectId);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NormalizedResult[]>([]);
@@ -229,6 +238,30 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watched]);
 
+  const ratingsByItemId = new Map<string, RatingRow[]>();
+  for (const r of (ratings ?? []) as RatingRow[]) {
+    if (!r.people) continue;
+    const list = ratingsByItemId.get(r.media_item_id) ?? [];
+    list.push(r);
+    ratingsByItemId.set(r.media_item_id, list);
+  }
+
+  const currentYear = new Date().getFullYear().toString();
+  const ratedEntries = watched
+    .map((item) => {
+      const list = ratingsByItemId.get(item.id) ?? [];
+      if (list.length === 0) return null;
+      const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
+      const year = (item.watched_at ?? item.created_at).slice(0, 4);
+      return { item, avg, year };
+    })
+    .filter((x): x is { item: MediaItem; avg: number; year: string } => x !== null);
+  const ratedThisYear = ratedEntries.filter((e) => e.year === currentYear);
+  const bestAllTime = [...ratedEntries].sort((a, b) => b.avg - a.avg).slice(0, 5);
+  const worstAllTime = [...ratedEntries].sort((a, b) => a.avg - b.avg).slice(0, 5);
+  const bestThisYear = [...ratedThisYear].sort((a, b) => b.avg - a.avg).slice(0, 5);
+  const worstThisYear = [...ratedThisYear].sort((a, b) => a.avg - b.avg).slice(0, 5);
+
   if (!isJeu && !isTmdbConfigured()) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -248,6 +281,7 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
           <TabsTrigger value="vu">
             {labels.watchedLabel} ({watched.length})
           </TabsTrigger>
+          <TabsTrigger value="synthese">Synthèse</TabsTrigger>
         </TabsList>
 
         <TabsContent value="nouveautes" className="pt-3">
@@ -387,6 +421,15 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
             ))
           )}
         </TabsContent>
+
+        <TabsContent value="synthese" className="space-y-6 pt-3">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RankedList title={`Mieux noté(e)s en ${currentYear}`} entries={bestThisYear} />
+            <RankedList title={`Moins bien noté(e)s en ${currentYear}`} entries={worstThisYear} />
+            <RankedList title="Mieux noté(e)s de tous les temps" entries={bestAllTime} />
+            <RankedList title="Moins bien noté(e)s de tous les temps" entries={worstAllTime} />
+          </div>
+        </TabsContent>
       </Tabs>
 
       {!isJeu && (
@@ -400,7 +443,18 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
 
       <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          {expanded && <ExpandedMediaDetails item={expanded} type={type} />}
+          {expanded && (
+            <ExpandedMediaDetails
+              item={expanded}
+              type={type}
+              people={linkedPeople ?? []}
+              ratings={ratingsByItemId.get(expanded.id) ?? []}
+              onSaveRating={(personId, rating, comment) =>
+                setRating.mutate({ mediaItemId: expanded.id, personId, rating, comment })
+              }
+              onDeleteRating={(id) => deleteRating.mutate(id)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -590,11 +644,25 @@ function ConsolesEditor({ item, onSave }: { item: MediaItem; onSave: (platforms:
   );
 }
 
-function ExpandedMediaDetails({ item, type }: { item: MediaItem; type: MediaType }) {
+function ExpandedMediaDetails({
+  item,
+  type,
+  people,
+  ratings,
+  onSaveRating,
+  onDeleteRating,
+}: {
+  item: MediaItem;
+  type: MediaType;
+  people: ProjectPersonRow[];
+  ratings: RatingRow[];
+  onSaveRating: (personId: string, rating: number, comment: string | null) => void;
+  onDeleteRating: (ratingId: string) => void;
+}) {
   const poster = mediaPosterUrl(item);
   const Icon = TYPE_ICON[type];
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex gap-3">
         {poster ? (
           <img src={poster} alt="" className="h-36 w-24 flex-shrink-0 rounded object-cover" />
@@ -623,6 +691,153 @@ function ExpandedMediaDetails({ item, type }: { item: MediaItem; type: MediaType
         </div>
       </div>
       {item.synopsis && <p className="text-sm text-muted-foreground">{item.synopsis}</p>}
+
+      {item.watched && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-sm font-semibold">Notes</p>
+          <RatingsSection people={people} ratings={ratings} onSave={onSaveRating} onDelete={onDeleteRating} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Note (/10) + commentaire libre par personne associée au projet — une note par personne et par
+ * contenu, modifiable dans le temps (jamais un historique). */
+function RatingsSection({
+  people,
+  ratings,
+  onSave,
+  onDelete,
+}: {
+  people: ProjectPersonRow[];
+  ratings: RatingRow[];
+  onSave: (personId: string, rating: number, comment: string | null) => void;
+  onDelete: (ratingId: string) => void;
+}) {
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [ratingValue, setRatingValue] = useState("");
+  const [commentValue, setCommentValue] = useState("");
+
+  const ratingByPerson = new Map(ratings.map((r) => [r.person_id, r]));
+
+  function startEdit(personId: string) {
+    const existing = ratingByPerson.get(personId);
+    setEditingPersonId(personId);
+    setRatingValue(existing ? String(existing.rating) : "");
+    setCommentValue(existing?.comment ?? "");
+  }
+
+  function submit() {
+    if (!editingPersonId) return;
+    const value = Number(ratingValue.replace(",", "."));
+    if (Number.isNaN(value) || value < 0 || value > 10) return;
+    onSave(editingPersonId, value, commentValue.trim() || null);
+    setEditingPersonId(null);
+  }
+
+  if (people.length === 0) {
+    return <p className="text-sm text-muted-foreground">Aucune personne associée à ce projet pour l'instant (onglet Personnes).</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {people.map((l) => {
+        const existing = ratingByPerson.get(l.person_id);
+        const isEditing = editingPersonId === l.person_id;
+        return (
+          <div key={l.id} className="rounded-md border border-border/60 p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <PersonAvatarBadge
+                  name={l.people.name}
+                  avatarEmoji={l.people.avatar_emoji}
+                  avatarConfig={l.people.avatar_config}
+                  personId={l.people.id}
+                  index={0}
+                  className="h-6 w-6 text-xs"
+                />
+                <span className="text-sm font-medium">{l.people.name}</span>
+                {existing && (
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {existing.rating.toFixed(1)}/10
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => startEdit(l.person_id)}>
+                  {existing ? "Modifier" : "Noter"}
+                </Button>
+                {existing && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(existing.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            {existing?.comment && !isEditing && <p className="mt-1 text-xs text-muted-foreground">{existing.comment}</p>}
+            {isEditing && (
+              <div className="mt-2 space-y-2">
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={ratingValue}
+                  onChange={(e) => setRatingValue(e.target.value)}
+                  placeholder="Note /10"
+                  className="h-8 w-24 text-sm"
+                />
+                <Textarea
+                  value={commentValue}
+                  onChange={(e) => setCommentValue(e.target.value)}
+                  placeholder="Commentaire (optionnel)"
+                  rows={2}
+                  className="text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={submit} disabled={!ratingValue.trim()}>
+                    Enregistrer
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingPersonId(null)}>
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RankedList({ title, entries }: { title: string; entries: { item: MediaItem; avg: number }[] }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Rien pour l'instant.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {entries.map(({ item, avg }) => {
+            const poster = mediaPosterUrl(item);
+            return (
+              <div key={item.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-card p-2">
+                {poster ? (
+                  <img src={poster} alt="" className="h-10 w-7 flex-shrink-0 rounded object-cover" />
+                ) : (
+                  <div className="h-10 w-7 flex-shrink-0 rounded bg-muted" />
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
+                <span className="flex flex-shrink-0 items-center gap-1 text-sm font-medium">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {avg.toFixed(1)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { fetchWatchProviders } from "@/features/media/tmdb";
 import { fetchGameDescription } from "@/features/media/rawg";
-import type { MediaItem, MediaItemWatcher, MediaType, Person } from "@/types/database";
+import type { MediaItem, MediaItemWatcher, MediaItemRating, MediaType, Person } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -177,6 +177,53 @@ export function useMediaItemWatchers(projectId: string, itemIds: string[]) {
       if (error) throw error;
       return (data ?? []) as unknown as WatcherRow[];
     },
+  });
+}
+
+type RatingRow = MediaItemRating & { people: Person };
+
+/** Notes/commentaires personnels de toutes les personnes, pour les contenus passés en paramètre. */
+export function useMediaItemRatings(projectId: string, itemIds: string[]) {
+  const idsKey = [...itemIds].sort().join(",");
+  return useQuery({
+    queryKey: ["media-item-ratings", projectId, idsKey],
+    enabled: itemIds.length > 0,
+    queryFn: async (): Promise<RatingRow[]> => {
+      const { data, error } = await supabase.from("media_item_ratings").select("*, people(*)").in("media_item_id", itemIds);
+      if (error) throw error;
+      return (data ?? []) as unknown as RatingRow[];
+    },
+  });
+}
+
+/** Pose ou met à jour la note/le commentaire d'une personne sur un contenu (une seule note par
+ * personne et par contenu — modifiable dans le temps, jamais un historique). */
+export function useSetMediaItemRating(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { mediaItemId: string; personId: string; rating: number; comment: string | null }) => {
+      const { error } = await supabase
+        .from("media_item_ratings")
+        .upsert(
+          { media_item_id: input.mediaItemId, person_id: input.personId, rating: input.rating, comment: input.comment, updated_at: new Date().toISOString() },
+          { onConflict: "media_item_id,person_id" }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["media-item-ratings", projectId] }),
+    onError: onMutationError,
+  });
+}
+
+export function useDeleteMediaItemRating(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("media_item_ratings").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["media-item-ratings", projectId] }),
+    onError: onMutationError,
   });
 }
 

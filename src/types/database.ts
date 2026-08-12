@@ -250,6 +250,18 @@ export type MediaItemWatcher = {
   created_at: string;
 };
 
+/** Note personnelle (/10) + commentaire libre d'une personne sur un contenu — une par personne et
+ * par contenu, modifiable dans le temps (jamais un historique). */
+export type MediaItemRating = {
+  id: string;
+  media_item_id: string;
+  person_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
  * `ProjectPerson`. Le type et la table restent en base (migration additive) mais ne sont plus
  * utilisés par l'application. */
@@ -522,6 +534,7 @@ export type Database = {
       shopping_list_items: Table<ShoppingListItem>;
       media_items: Table<MediaItem>;
       media_item_watchers: Table<MediaItemWatcher>;
+      media_item_ratings: Table<MediaItemRating>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

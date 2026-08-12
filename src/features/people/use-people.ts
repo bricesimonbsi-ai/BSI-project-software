@@ -69,7 +69,7 @@ export function useDeletePerson() {
   });
 }
 
-type ProjectPersonRow = ProjectPerson & { people: Person };
+export type ProjectPersonRow = ProjectPerson & { people: Person };
 
 /** Personnes associées à un projet donné (ex. les voyageurs d'un voyage). */
 export function useProjectPeople(projectId: string | undefined) {
