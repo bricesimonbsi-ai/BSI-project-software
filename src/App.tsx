@@ -5,6 +5,8 @@ import { LoginPage } from "@/features/auth/login-page";
 import { SignupPage } from "@/features/auth/signup-page";
 import { AcceptInvitePage } from "@/features/auth/accept-invite-page";
 import { PublicJournalPage } from "@/features/journal/public-journal-page";
+import { PublicMediaSynthesisPage } from "@/features/media/public-media-synthesis-page";
+import { NotificationSettingsPage } from "@/features/notifications/notification-settings-page";
 import { PortfolioHome } from "@/features/portfolio/portfolio-home";
 import { CategoryDetailPage } from "@/features/portfolio/category-detail-page";
 import { CategoriesAdminPage } from "@/features/portfolio/categories-admin-page";
@@ -28,6 +30,7 @@ export default function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route path="/journal/:token" element={<PublicJournalPage />} />
+      <Route path="/media/:token" element={<PublicMediaSynthesisPage />} />
       <Route
         path="/"
         element={
@@ -81,6 +84,14 @@ export default function App() {
         element={
           <Shell>
             <SettingsPage />
+          </Shell>
+        }
+      />
+      <Route
+        path="/settings/notifications"
+        element={
+          <Shell>
+            <NotificationSettingsPage />
           </Shell>
         }
       />

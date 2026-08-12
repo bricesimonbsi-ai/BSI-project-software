@@ -83,7 +83,7 @@ export function MediaListPage() {
           </TabsList>
 
           <TabsContent value="contenu">
-            <MediaTypeSection projectId={projectId} type={project.media_type} />
+            <MediaTypeSection projectId={projectId} type={project.media_type} mediaShareToken={project.media_share_token} />
           </TabsContent>
 
           <TabsContent value="people">

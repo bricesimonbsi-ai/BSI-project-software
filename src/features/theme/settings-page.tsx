@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle, Fingerprint } from "lucide-react";
+import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle, Fingerprint, Bell } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
@@ -126,12 +126,17 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Administration</CardTitle>
-            <CardDescription>Gestion des catégories de projets du portefeuille.</CardDescription>
+            <CardDescription>Gestion des catégories de projets du portefeuille et des notifications reçues.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap gap-2">
             <Link to="/categories">
               <Button variant="outline">
                 <Shapes className="mr-2 h-4 w-4" /> Gérer les catégories
+              </Button>
+            </Link>
+            <Link to="/settings/notifications">
+              <Button variant="outline">
+                <Bell className="mr-2 h-4 w-4" /> Gérer les notifications
               </Button>
             </Link>
           </CardContent>

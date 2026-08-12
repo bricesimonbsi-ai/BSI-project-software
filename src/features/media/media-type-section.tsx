@@ -22,6 +22,7 @@ import {
   useMediaItemRatings,
   useSetMediaItemRating,
   useDeleteMediaItemRating,
+  useSetMediaShareToken,
   type TmdbAddInput,
   type RawgAddInput,
 } from "@/features/media/use-media-list";
@@ -36,8 +37,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Star, Trash2, Film, Tv, Gamepad2 } from "lucide-react";
+import { Star, Trash2, Film, Tv, Gamepad2, Share2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { APP_URL } from "@/lib/app-url";
 import type { MediaItem, MediaItemRating, MediaType, Person } from "@/types/database";
 
 type RatingRow = MediaItemRating & { people: Person };
@@ -117,7 +119,15 @@ function normalizeGame(g: RawgGameResult): NormalizedResult {
  * "Où le voir" est récupéré automatiquement (streaming, région France) pour film/série ; pour les
  * jeux, les consoles sont sélectionnées manuellement (pas d'API jeu vidéo configurée).
  */
-export function MediaTypeSection({ projectId, type }: { projectId: string; type: MediaType }) {
+export function MediaTypeSection({
+  projectId,
+  type,
+  mediaShareToken,
+}: {
+  projectId: string;
+  type: MediaType;
+  mediaShareToken: string | null;
+}) {
   const labels = MEDIA_TYPE_LABELS[type];
   const isJeu = type === "jeu";
   const autoAvailable = isJeu ? isRawgConfigured() : isTmdbConfigured();
@@ -423,6 +433,7 @@ export function MediaTypeSection({ projectId, type }: { projectId: string; type:
         </TabsContent>
 
         <TabsContent value="synthese" className="space-y-6 pt-3">
+          <MediaShareCard projectId={projectId} shareToken={mediaShareToken} />
           <div className="grid gap-4 sm:grid-cols-2">
             <RankedList title={`Mieux noté(e)s en ${currentYear}`} entries={bestThisYear} />
             <RankedList title={`Moins bien noté(e)s en ${currentYear}`} entries={worstThisYear} />
@@ -809,6 +820,56 @@ function RatingsSection({
         );
       })}
     </div>
+  );
+}
+
+/** Lien de partage public de la synthèse (notes/commentaires) — pour diffuser ses recommandations
+ * sans donner accès au reste du projet, même principe que le partage du journal de voyage. */
+function MediaShareCard({ projectId, shareToken }: { projectId: string; shareToken: string | null }) {
+  const setShareToken = useSetMediaShareToken(projectId);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = shareToken ? `${APP_URL}/media/${shareToken}` : null;
+
+  async function handleCopy() {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Card className="border-accent/40 bg-gradient-to-br from-accent/10 to-transparent">
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="flex items-center gap-2">
+          <Share2 className="h-4 w-4 text-accent" />
+          <div>
+            <p className="text-sm font-semibold">Partage public</p>
+            <p className="text-xs text-muted-foreground">
+              {shareUrl
+                ? "Visible par toute personne ayant ce lien, sans compte."
+                : "Non partagé — partage ce lien pour diffuser tes recommandations."}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {shareUrl && (
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : null}
+              {copied ? "Copié" : "Copier le lien"}
+            </Button>
+          )}
+          <Button
+            variant={shareUrl ? "outline" : "default"}
+            size="sm"
+            onClick={() => setShareToken.mutate(!shareUrl)}
+            disabled={setShareToken.isPending}
+          >
+            {shareUrl ? "Désactiver" : "Activer le partage"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -250,3 +250,19 @@ export function useDeleteMediaItem(projectId: string) {
     onError: onMutationError,
   });
 }
+
+/** Active/régénère (nouveau token) ou désactive (token null) le lien de partage public de la
+ * synthèse (notes/commentaires) — même principe que le partage du journal de voyage. */
+export function useSetMediaShareToken(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enable: boolean) => {
+      const media_share_token = enable ? crypto.randomUUID() : null;
+      const { error } = await supabase.from("projects").update({ media_share_token }).eq("id", projectId);
+      if (error) throw error;
+      return media_share_token;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onError: onMutationError,
+  });
+}

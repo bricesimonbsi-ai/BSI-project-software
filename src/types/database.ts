@@ -69,6 +69,9 @@ export type Project = {
    * vidéo) — détermine les onglets et la source de recherche affichés ; null pour tout autre
    * projet. */
   media_type: MediaType | null;
+  /** Présence = partage public de la synthèse (notes/commentaires) active (lien
+   * /media/{token}, aucune authentification requise pour le visiteur) ; null = désactivé. */
+  media_share_token: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -269,6 +272,34 @@ export type MediaItemRating = {
   comment: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Ligne renvoyée par get_public_media_meta (partage public de la synthèse). */
+export type PublicMediaMeta = {
+  project_id: string;
+  title: string;
+  icon: string | null;
+  media_type: MediaType;
+};
+
+/** Une note/commentaire individuel dans le détail d'un contenu de la synthèse publique. */
+export type PublicMediaRatingEntry = {
+  person_name: string;
+  rating: number;
+  comment: string | null;
+};
+
+/** Ligne renvoyée par get_public_media_synthesis : un contenu noté (au moins une fois), avec le
+ * détail par personne. */
+export type PublicMediaSynthesisItem = {
+  item_id: string;
+  title: string;
+  poster_path: string | null;
+  media_type: MediaType;
+  release_date: string | null;
+  external_rating: number | null;
+  avg_rating: number;
+  ratings: PublicMediaRatingEntry[];
 };
 
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
@@ -472,6 +503,16 @@ export type NotificationPreferences = {
   updated_at: string;
 };
 
+/** Préférence granulaire pour un type de notification donné, sur un projet donné — absence de
+ * ligne = notification active (comportement par défaut), une ligne enabled=false la désactive. */
+export type NotificationTypePreference = {
+  user_id: string;
+  notification_type: string;
+  project_id: string;
+  enabled: boolean;
+  updated_at: string;
+};
+
 export type VoyageBudgetSummary = {
   voyage_id: string;
   project_id: string;
@@ -536,6 +577,7 @@ export type Database = {
       documents: Table<DocumentRow>;
       notifications: Table<NotificationRow>;
       notification_preferences: Table<NotificationPreferences>;
+      notification_type_preferences: Table<NotificationTypePreference>;
       voyage_journal_posts: Table<VoyageJournalPost>;
       voyage_journal_photos: Table<VoyageJournalPhoto>;
       journal_post_reactions: Table<JournalPostReaction>;
@@ -604,6 +646,14 @@ export type Database = {
       remove_public_journal_comment_reaction: {
         Args: { p_share_token: string; p_comment_id: string; p_visitor_name: string };
         Returns: undefined;
+      };
+      get_public_media_meta: {
+        Args: { p_share_token: string };
+        Returns: PublicMediaMeta[];
+      };
+      get_public_media_synthesis: {
+        Args: { p_share_token: string };
+        Returns: PublicMediaSynthesisItem[];
       };
     };
     Enums: Record<string, never>;
