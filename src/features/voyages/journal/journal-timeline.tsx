@@ -10,6 +10,7 @@ import {
   type JournalPostWithPhotos,
 } from "@/features/voyages/journal/use-journal";
 import { PhotoCollage } from "@/features/voyages/journal/photo-collage";
+import { StoryLightbox } from "@/features/voyages/journal/journal-story-feed";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,14 @@ export function JournalTimeline({ voyageId, onEdit }: { voyageId: string; onEdit
 
       <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
         <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
-          {lightbox && <img src={lightbox[lightboxIndex]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" />}
+          {lightbox && (
+            <StoryLightbox
+              urls={lightbox}
+              index={lightboxIndex}
+              onIndexChange={setLightboxIndex}
+              onClose={() => setLightbox(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

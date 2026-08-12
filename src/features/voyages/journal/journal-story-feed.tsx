@@ -193,7 +193,7 @@ const SWIPE_THRESHOLD_PX = 50;
  * appui sur les côtés gauche/droite de la photo ou par glissement (swipe), et rester appuyé
  * (n'importe où sur la photo) met le défilement en pause tant qu'on ne relâche pas — comme sur
  * Instagram. Une seule gestion pointer unifiée (souris + tactile) pilote les trois. */
-function StoryLightbox({
+export function StoryLightbox({
   urls,
   index,
   onIndexChange,
