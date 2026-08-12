@@ -65,6 +65,10 @@ export type Project = {
   budget_actual: number | null;
   currency: string;
   status: ProjectStatus;
+  /** Modèle choisi à la création pour un projet de la catégorie "Médias" (Films/Séries/Jeux
+   * vidéo) — détermine les onglets et la source de recherche affichés ; null pour tout autre
+   * projet. */
+  media_type: MediaType | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -225,12 +229,25 @@ export type MediaItem = {
   synopsis: string | null;
   release_date: string | null;
   external_rating: number | null;
+  /** @deprecated Remplacé par `platforms` (liste). Reste en base (migration additive), plus lu
+   * ni écrit par l'application. */
   platform: string | null;
+  /** Où le voir (streaming, auto-récupéré via TMDB pour film/série) ou sur quelle console y jouer
+   * (jeu, sélection manuelle) — plusieurs valeurs possibles. */
+  platforms: string[];
   watched: boolean;
   watched_at: string | null;
   position: number;
   created_at: string;
   updated_at: string;
+};
+
+/** Une personne (répertoire "people") ayant vu/joué un contenu — plusieurs par contenu possibles. */
+export type MediaItemWatcher = {
+  id: string;
+  media_item_id: string;
+  person_id: string;
+  created_at: string;
 };
 
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
@@ -504,6 +521,7 @@ export type Database = {
       journal_post_comments: Table<JournalPostComment>;
       shopping_list_items: Table<ShoppingListItem>;
       media_items: Table<MediaItem>;
+      media_item_watchers: Table<MediaItemWatcher>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

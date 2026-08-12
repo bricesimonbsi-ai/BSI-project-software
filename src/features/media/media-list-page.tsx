@@ -10,7 +10,9 @@ import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
-import { FilmsTab } from "@/features/media/films-tab";
+import { MediaTypeSection } from "@/features/media/media-type-section";
+import { MediaPeoplePanel } from "@/features/media/media-people-panel";
+import { MEDIA_TYPE_LABELS } from "@/features/media/media-constants";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 
@@ -68,30 +70,31 @@ export function MediaListPage() {
         </div>
       </PageHeroCard>
 
-      <Tabs defaultValue="films">
-        <TabsList>
-          <TabsTrigger value="films">Films</TabsTrigger>
-          <TabsTrigger value="series">Séries</TabsTrigger>
-          <TabsTrigger value="jeux">Jeux vidéo</TabsTrigger>
-          <TabsTrigger value="collaborators">Collaborateurs</TabsTrigger>
-        </TabsList>
+      {!project.media_type ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Ce projet n'a pas de modèle défini (Films/Séries/Jeux vidéo) — recrée-le depuis "Nouveau projet".
+        </p>
+      ) : (
+        <Tabs defaultValue="contenu">
+          <TabsList>
+            <TabsTrigger value="contenu">{MEDIA_TYPE_LABELS[project.media_type].plural}</TabsTrigger>
+            <TabsTrigger value="people">Personnes</TabsTrigger>
+            <TabsTrigger value="collaborators">Collaborateurs</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="films">
-          <FilmsTab projectId={projectId} />
-        </TabsContent>
+          <TabsContent value="contenu">
+            <MediaTypeSection projectId={projectId} type={project.media_type} />
+          </TabsContent>
 
-        <TabsContent value="series">
-          <p className="py-8 text-center text-sm text-muted-foreground">Bientôt disponible.</p>
-        </TabsContent>
+          <TabsContent value="people">
+            <MediaPeoplePanel projectId={projectId} />
+          </TabsContent>
 
-        <TabsContent value="jeux">
-          <p className="py-8 text-center text-sm text-muted-foreground">Bientôt disponible.</p>
-        </TabsContent>
-
-        <TabsContent value="collaborators">
-          <CollaboratorsPanel projectId={projectId} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="collaborators">
+            <CollaboratorsPanel projectId={projectId} />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

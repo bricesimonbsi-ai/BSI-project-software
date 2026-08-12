@@ -1,0 +1,593 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  searchMovies,
+  searchTvShows,
+  trendingMovies,
+  trendingTvShows,
+  tmdbPosterUrl,
+  isTmdbConfigured,
+  type TmdbMovieResult,
+  type TmdbTvResult,
+} from "@/features/media/tmdb";
+import {
+  useMediaItems,
+  useAddTmdbMedia,
+  useAddManualMedia,
+  useToggleWatched,
+  useUpdateMediaItem,
+  useDeleteMediaItem,
+  useMediaItemWatchers,
+  type TmdbAddInput,
+} from "@/features/media/use-media-list";
+import { useProjectPeople } from "@/features/people/use-people";
+import { PersonAvatarBadge } from "@/features/people/person-avatar";
+import { CONSOLES, MEDIA_TYPE_LABELS } from "@/features/media/media-constants";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Star, Trash2, Film, Tv, Gamepad2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { MediaItem, MediaType } from "@/types/database";
+
+const TYPE_ICON: Record<MediaType, typeof Film> = { film: Film, serie: Tv, jeu: Gamepad2 };
+
+type NormalizedResult = {
+  id: string;
+  title: string;
+  posterPath: string | null;
+  year: string | undefined;
+  rating: number;
+  addInput: TmdbAddInput;
+};
+
+function normalizeMovie(m: TmdbMovieResult): NormalizedResult {
+  return {
+    id: String(m.id),
+    title: m.title,
+    posterPath: tmdbPosterUrl(m.poster_path),
+    year: m.release_date?.slice(0, 4),
+    rating: m.vote_average,
+    addInput: {
+      external_id: String(m.id),
+      title: m.title,
+      poster_path: m.poster_path,
+      synopsis: m.overview || null,
+      release_date: m.release_date || null,
+      external_rating: m.vote_average || null,
+    },
+  };
+}
+
+function normalizeTv(t: TmdbTvResult): NormalizedResult {
+  return {
+    id: String(t.id),
+    title: t.name,
+    posterPath: tmdbPosterUrl(t.poster_path),
+    year: t.first_air_date?.slice(0, 4),
+    rating: t.vote_average,
+    addInput: {
+      external_id: String(t.id),
+      title: t.name,
+      poster_path: t.poster_path,
+      synopsis: t.overview || null,
+      release_date: t.first_air_date || null,
+      external_rating: t.vote_average || null,
+    },
+  };
+}
+
+/**
+ * Contenu d'un projet média d'un seul type (film, série ou jeu vidéo — le type est fixé à la
+ * création du projet, voir NewProjectDialog). Trois onglets : Nouveautés (alimenté
+ * automatiquement via TMDB pour film/série, pas de source pour les jeux), Ma liste (recherche +
+ * ajout, ou saisie manuelle pour les jeux), et Vu/Joué (classé par année, avec qui l'a vu/joué).
+ * "Où le voir" est récupéré automatiquement (streaming, région France) pour film/série ; pour les
+ * jeux, les consoles sont sélectionnées manuellement (pas d'API jeu vidéo configurée).
+ */
+export function MediaTypeSection({ projectId, type }: { projectId: string; type: MediaType }) {
+  const labels = MEDIA_TYPE_LABELS[type];
+  const usesTmdb = type !== "jeu";
+  const { data: items, isLoading } = useMediaItems(projectId, type);
+  const { data: linkedPeople } = useProjectPeople(projectId);
+  const itemIds = useMemo(() => (items ?? []).map((i) => i.id), [items]);
+  const { data: watchers } = useMediaItemWatchers(projectId, itemIds);
+  const addTmdb = useAddTmdbMedia(projectId, type === "jeu" ? "film" : type);
+  const addManual = useAddManualMedia(projectId);
+  const toggleWatched = useToggleWatched(projectId);
+  const updateItem = useUpdateMediaItem(projectId);
+  const deleteItem = useDeleteMediaItem(projectId);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<NormalizedResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [trending, setTrending] = useState<NormalizedResult[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [expanded, setExpanded] = useState<MediaItem | null>(null);
+  const [consolesTarget, setConsolesTarget] = useState<MediaItem | null>(null);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualConsoles, setManualConsoles] = useState<Set<string>>(new Set());
+  const [pendingWatch, setPendingWatch] = useState<MediaItem | null>(null);
+  const [pendingViewers, setPendingViewers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!usesTmdb) return;
+    if (!query.trim()) {
+      setResults([]);
+      setSearchError(null);
+      return;
+    }
+    setSearching(true);
+    const timeout = setTimeout(async () => {
+      try {
+        if (type === "film") setResults((await searchMovies(query)).map(normalizeMovie).slice(0, 8));
+        else setResults((await searchTvShows(query)).map(normalizeTv).slice(0, 8));
+        setSearchError(null);
+      } catch (err) {
+        setSearchError((err as Error).message);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [query, type, usesTmdb]);
+
+  useEffect(() => {
+    if (!usesTmdb || !isTmdbConfigured()) return;
+    setTrendingLoading(true);
+    (async () => {
+      try {
+        if (type === "film") setTrending((await trendingMovies()).map(normalizeMovie));
+        else setTrending((await trendingTvShows()).map(normalizeTv));
+      } catch {
+        setTrending([]);
+      } finally {
+        setTrendingLoading(false);
+      }
+    })();
+  }, [type, usesTmdb]);
+
+  const existingExternalIds = new Set((items ?? []).map((i) => i.external_id));
+
+  async function handleAddResult(result: NormalizedResult) {
+    await addTmdb.mutateAsync(result.addInput);
+    setQuery("");
+    setResults([]);
+  }
+
+  async function handleManualAdd() {
+    if (!manualTitle.trim()) return;
+    await addManual.mutateAsync({ title: manualTitle.trim(), platforms: [...manualConsoles] });
+    setManualTitle("");
+    setManualConsoles(new Set());
+  }
+
+  function requestToggle(item: MediaItem, checked: boolean) {
+    if (!checked) {
+      toggleWatched.mutate({ id: item.id, watched: false });
+      return;
+    }
+    setPendingWatch(item);
+    setPendingViewers(new Set());
+  }
+
+  function confirmWatch() {
+    if (!pendingWatch) return;
+    toggleWatched.mutate({ id: pendingWatch.id, watched: true, viewerIds: [...pendingViewers] });
+    setPendingWatch(null);
+  }
+
+  const watcherNamesByItem = new Map<string, string[]>();
+  for (const w of watchers ?? []) {
+    if (!w.people) continue;
+    const list = watcherNamesByItem.get(w.media_item_id) ?? [];
+    list.push(w.people.name);
+    watcherNamesByItem.set(w.media_item_id, list);
+  }
+
+  const notWatched = (items ?? []).filter((i) => !i.watched);
+  const watched = (items ?? []).filter((i) => i.watched);
+  const watchedByYear = useMemo(() => {
+    const map = new Map<string, MediaItem[]>();
+    for (const item of watched) {
+      const year = (item.watched_at ?? item.created_at).slice(0, 4);
+      map.set(year, [...(map.get(year) ?? []), item]);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watched]);
+
+  if (usesTmdb && !isTmdbConfigured()) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Configuration TMDB manquante — la recherche de {labels.plural.toLowerCase()} n'est pas encore activée.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Tabs defaultValue="nouveautes">
+        <TabsList>
+          <TabsTrigger value="nouveautes">Nouveautés</TabsTrigger>
+          <TabsTrigger value="ma-liste">Ma liste ({notWatched.length})</TabsTrigger>
+          <TabsTrigger value="vu">
+            {labels.watchedLabel} ({watched.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="nouveautes" className="pt-3">
+          {!usesTmdb ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Pas de source automatique de nouveautés pour les jeux vidéo pour l'instant — ajoute-les depuis l'onglet "Ma liste".
+            </p>
+          ) : trendingLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Chargement...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {trending
+                .filter((r) => !existingExternalIds.has(r.id))
+                .map((r) => (
+                  <TrendingCard key={r.id} result={r} onAdd={() => handleAddResult(r)} />
+                ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="ma-liste" className="space-y-3 pt-3">
+          {usesTmdb ? (
+            <Card>
+              <CardContent className="relative p-4">
+                <Input
+                  placeholder={`Rechercher un(e) ${labels.singular.toLowerCase()} à ajouter...`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
+                {(results.length > 0 || searching) && (
+                  <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                    {searching && <p className="p-3 text-sm text-muted-foreground">Recherche...</p>}
+                    {!searching &&
+                      results.map((r) => {
+                        const already = existingExternalIds.has(r.id);
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            disabled={already}
+                            onClick={() => handleAddResult(r)}
+                            className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-secondary disabled:opacity-50"
+                          >
+                            {r.posterPath ? (
+                              <img src={r.posterPath} alt="" className="h-14 w-10 flex-shrink-0 rounded object-cover" />
+                            ) : (
+                              <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded bg-muted">
+                                <Film className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{r.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {r.year ?? "?"} {already && "· déjà dans la liste"}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <Input placeholder="Titre du jeu" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} />
+                <div className="flex flex-wrap gap-2">
+                  {CONSOLES.map((c) => (
+                    <label key={c} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs">
+                      <Checkbox
+                        checked={manualConsoles.has(c)}
+                        onCheckedChange={(checked) =>
+                          setManualConsoles((prev) => {
+                            const next = new Set(prev);
+                            if (checked) next.add(c);
+                            else next.delete(c);
+                            return next;
+                          })
+                        }
+                      />
+                      {c}
+                    </label>
+                  ))}
+                </div>
+                <Button type="button" size="sm" onClick={handleManualAdd} disabled={!manualTitle.trim()}>
+                  Ajouter
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {notWatched.length === 0 && !isLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente.</p>
+          ) : (
+            <div className="space-y-2">
+              {notWatched.map((item) => (
+                <MediaRow
+                  key={item.id}
+                  item={item}
+                  type={type}
+                  watcherNames={watcherNamesByItem.get(item.id) ?? []}
+                  onToggle={(c) => requestToggle(item, c)}
+                  onEditConsoles={() => setConsolesTarget(item)}
+                  onDelete={() => deleteItem.mutate(item.id)}
+                  onOpen={() => setExpanded(item)}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="vu" className="space-y-5 pt-3">
+          {watchedByYear.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Rien pour l'instant.</p>
+          ) : (
+            watchedByYear.map(([year, yearItems]) => (
+              <div key={year} className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {year} ({yearItems.length})
+                </p>
+                {yearItems.map((item) => (
+                  <MediaRow
+                    key={item.id}
+                    item={item}
+                    type={type}
+                    watcherNames={watcherNamesByItem.get(item.id) ?? []}
+                    onToggle={(c) => requestToggle(item, c)}
+                    onEditConsoles={() => setConsolesTarget(item)}
+                    onDelete={() => deleteItem.mutate(item.id)}
+                    onOpen={() => setExpanded(item)}
+                  />
+                ))}
+              </div>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {usesTmdb && (
+        <p className="text-center text-[0.65rem] text-muted-foreground">
+          Ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB.
+        </p>
+      )}
+
+      <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          {expanded && <ExpandedMediaDetails item={expanded} type={type} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!consolesTarget} onOpenChange={(o) => !o && setConsolesTarget(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Sur quelles consoles ?</DialogTitle>
+          </DialogHeader>
+          {consolesTarget && (
+            <ConsolesEditor
+              item={consolesTarget}
+              onSave={(platforms) => {
+                updateItem.mutate({ id: consolesTarget.id, platforms });
+                setConsolesTarget(null);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingWatch} onOpenChange={(o) => !o && setPendingWatch(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Qui l'a {type === "jeu" ? "joué" : "vu"} ?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(linkedPeople ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune personne associée à ce projet (onglet Personnes).</p>
+            ) : (
+              (linkedPeople ?? []).map((l, i) => (
+                <label key={l.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={pendingViewers.has(l.person_id)}
+                    onCheckedChange={(checked) =>
+                      setPendingViewers((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(l.person_id);
+                        else next.delete(l.person_id);
+                        return next;
+                      })
+                    }
+                  />
+                  <PersonAvatarBadge
+                    name={l.people.name}
+                    avatarEmoji={l.people.avatar_emoji}
+                    avatarConfig={l.people.avatar_config}
+                    personId={l.people.id}
+                    index={i}
+                    className="h-6 w-6 text-xs"
+                  />
+                  {l.people.name}
+                </label>
+              ))
+            )}
+          </div>
+          <Button className="w-full" onClick={confirmWatch}>
+            Valider
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TrendingCard({ result, onAdd }: { result: NormalizedResult; onAdd: () => void }) {
+  return (
+    <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-2">
+      {result.posterPath ? (
+        <img src={result.posterPath} alt="" className="aspect-[2/3] w-full rounded object-cover" />
+      ) : (
+        <div className="flex aspect-[2/3] w-full items-center justify-center rounded bg-muted">
+          <Film className="h-5 w-5 text-muted-foreground" />
+        </div>
+      )}
+      <p className="truncate text-xs font-medium">{result.title}</p>
+      <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground">
+        <span>{result.year ?? "?"}</span>
+        {result.rating > 0 && (
+          <span className="flex items-center gap-0.5">
+            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" /> {result.rating.toFixed(1)}
+          </span>
+        )}
+      </div>
+      <Button type="button" size="sm" variant="outline" className="h-7 w-full text-xs" onClick={onAdd}>
+        Ajouter
+      </Button>
+    </div>
+  );
+}
+
+function MediaRow({
+  item,
+  type,
+  watcherNames,
+  onToggle,
+  onEditConsoles,
+  onDelete,
+  onOpen,
+}: {
+  item: MediaItem;
+  type: MediaType;
+  watcherNames: string[];
+  onToggle: (watched: boolean) => void;
+  onEditConsoles: () => void;
+  onDelete: () => void;
+  onOpen: () => void;
+}) {
+  const poster = tmdbPosterUrl(item.poster_path);
+  const Icon = TYPE_ICON[type];
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-card p-2.5">
+      <Checkbox checked={item.watched} onCheckedChange={(c) => onToggle(!!c)} className="flex-shrink-0" />
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        {poster ? (
+          <img src={poster} alt="" className="h-14 w-10 flex-shrink-0 rounded object-cover" />
+        ) : (
+          <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded bg-muted">
+            <Icon className="h-4 w-4 text-muted-foreground" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className={cn("truncate text-sm font-medium", item.watched && "text-muted-foreground line-through")}>{item.title}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {item.release_date && <span>{item.release_date.slice(0, 4)}</span>}
+            {item.external_rating != null && (
+              <span className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {item.external_rating.toFixed(1)}
+              </span>
+            )}
+          </div>
+          {item.platforms.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {item.platforms.map((p) => (
+                <Badge key={p} variant="secondary" className="text-[0.65rem]">
+                  {p}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {item.watched && watcherNames.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {type === "jeu" ? "Joué par" : "Vu par"} {watcherNames.join(", ")}
+            </p>
+          )}
+        </div>
+      </button>
+      {type === "jeu" && (
+        <Button variant="ghost" size="sm" className="h-8 flex-shrink-0 text-xs" onClick={onEditConsoles}>
+          Consoles
+        </Button>
+      )}
+      <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={onDelete}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function ConsolesEditor({ item, onSave }: { item: MediaItem; onSave: (platforms: string[]) => void }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(item.platforms));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {CONSOLES.map((c) => (
+          <label key={c} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={selected.has(c)}
+              onCheckedChange={(checked) =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.add(c);
+                  else next.delete(c);
+                  return next;
+                })
+              }
+            />
+            {c}
+          </label>
+        ))}
+      </div>
+      <Button className="w-full" onClick={() => onSave([...selected])}>
+        Enregistrer
+      </Button>
+    </div>
+  );
+}
+
+function ExpandedMediaDetails({ item, type }: { item: MediaItem; type: MediaType }) {
+  const poster = tmdbPosterUrl(item.poster_path);
+  const Icon = TYPE_ICON[type];
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        {poster ? (
+          <img src={poster} alt="" className="h-36 w-24 flex-shrink-0 rounded object-cover" />
+        ) : (
+          <div className="flex h-36 w-24 flex-shrink-0 items-center justify-center rounded bg-muted">
+            <Icon className="h-6 w-6 text-muted-foreground" />
+          </div>
+        )}
+        <div className="space-y-1">
+          <h3 className="font-semibold leading-tight">{item.title}</h3>
+          {item.release_date && <p className="text-xs text-muted-foreground">{item.release_date.slice(0, 4)}</p>}
+          {item.external_rating != null && (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {item.external_rating.toFixed(1)}/10
+            </p>
+          )}
+          {item.platforms.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {item.platforms.map((p) => (
+                <Badge key={p} variant="secondary" className="text-[0.65rem]">
+                  {p}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {item.synopsis && <p className="text-sm text-muted-foreground">{item.synopsis}</p>}
+    </div>
+  );
+}

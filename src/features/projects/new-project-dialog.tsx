@@ -9,10 +9,14 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useCreateProject, useProjects } from "@/features/projects/use-projects";
 import { copyShoppingListItems } from "@/features/shopping/use-shopping-list";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
+import { MEDIA_TYPE_LABELS } from "@/features/media/media-constants";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import type { Category } from "@/types/database";
+import { cn } from "@/lib/utils";
+import type { Category, MediaType } from "@/types/database";
 import { Plus } from "lucide-react";
+
+const MEDIA_TYPES: MediaType[] = ["film", "serie", "jeu"];
 
 export function NewProjectDialog({ category }: { category: Category }) {
   const [open, setOpen] = useState(false);
@@ -23,6 +27,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
   const [endDate, setEndDate] = useState("");
   const [budgetPlanned, setBudgetPlanned] = useState("");
   const [copyFromId, setCopyFromId] = useState<string>("none");
+  const [mediaType, setMediaType] = useState<MediaType | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const createProject = useCreateProject();
   const { data: projects } = useProjects();
@@ -37,6 +42,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (isMedia && !mediaType) return;
     setSubmitting(true);
     try {
       const project = await createProject.mutateAsync({
@@ -47,6 +53,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
         start_date: hidesDates ? null : startDate || null,
         end_date: hidesDates ? null : endDate || null,
         budget_planned: hidesBudget ? null : budgetPlanned ? Number(budgetPlanned) : null,
+        media_type: isMedia ? mediaType : undefined,
       });
 
       if (isVoyage) {
@@ -70,6 +77,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
       setEndDate("");
       setBudgetPlanned("");
       setCopyFromId("none");
+      setMediaType(null);
       navigate(`/projects/${project.id}`);
     } catch (err) {
       toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -101,6 +109,30 @@ export function NewProjectDialog({ category }: { category: Category }) {
             <Label htmlFor="description">Description</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+          {isMedia && (
+            <div className="space-y-2">
+              <Label>Modèle</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {MEDIA_TYPES.map((t) => {
+                  const labels = MEDIA_TYPE_LABELS[t];
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setMediaType(t)}
+                      className={cn(
+                        "flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors",
+                        mediaType === t ? "border-accent bg-accent/10 font-medium" : "border-border hover:bg-secondary"
+                      )}
+                    >
+                      <span className="text-xl">{labels.icon}</span>
+                      {labels.plural}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {isCourses && existingLists.length > 0 && (
             <div className="space-y-2">
               <Label>Repartir d'une liste existante (optionnel)</Label>
@@ -146,7 +178,7 @@ export function NewProjectDialog({ category }: { category: Category }) {
             </div>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || (isMedia && !mediaType)}>
               {submitting ? "Création..." : "Créer"}
             </Button>
           </DialogFooter>
