@@ -4,6 +4,7 @@ import { ProjectDetailPage } from "@/features/projects/project-detail-page";
 import { VoyageDetailPage } from "@/features/voyages/voyage-detail-page";
 import { ShoppingListPage } from "@/features/shopping/shopping-list-page";
 import { MediaListPage } from "@/features/media/media-list-page";
+import { RestaurantListPage } from "@/features/restaurants/restaurant-list-page";
 
 export function ProjectDetailRouter() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -14,6 +15,7 @@ export function ProjectDetailRouter() {
   const isVoyage = project.categories?.module_key === "voyages";
   const isCourses = project.categories?.module_key === "courses";
   const isMedia = project.categories?.module_key === "media";
+  const isRestaurants = project.categories?.module_key === "restaurants";
 
   if (isVoyage && projectId) {
     return <VoyageDetailPage projectId={projectId} />;
@@ -25,6 +27,10 @@ export function ProjectDetailRouter() {
 
   if (isMedia) {
     return <MediaListPage />;
+  }
+
+  if (isRestaurants) {
+    return <RestaurantListPage />;
   }
 
   return <ProjectDetailPage />;

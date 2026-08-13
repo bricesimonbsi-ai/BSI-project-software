@@ -302,6 +302,51 @@ export type PublicMediaSynthesisItem = {
   ratings: PublicMediaRatingEntry[];
 };
 
+/** Un bar/restaurant suivi dans un projet de la catégorie "Bars & Restaurants". "Où" est récupéré
+ * automatiquement via Google Places (adresse, photo, note, horaires...) quand la clé est
+ * configurée, sinon saisi manuellement (name/address uniquement). */
+export type RestaurantItem = {
+  id: string;
+  project_id: string;
+  place_id: string | null;
+  name: string;
+  address: string | null;
+  categories: string[];
+  photo_url: string | null;
+  google_rating: number | null;
+  price_level: string | null;
+  phone: string | null;
+  website: string | null;
+  opening_hours: string[];
+  latitude: number | null;
+  longitude: number | null;
+  visited: boolean;
+  visited_at: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Une personne (répertoire "people") ayant testé un lieu — plusieurs par lieu possibles. */
+export type RestaurantItemVisitor = {
+  id: string;
+  restaurant_item_id: string;
+  person_id: string;
+  created_at: string;
+};
+
+/** Note personnelle (/10) + commentaire libre d'une personne sur un lieu — une par personne et par
+ * lieu, modifiable dans le temps (jamais un historique). */
+export type RestaurantItemRating = {
+  id: string;
+  restaurant_item_id: string;
+  person_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** @deprecated Remplacé par `Person` (liste globale, paramétrable pour toute l'application) +
  * `ProjectPerson`. Le type et la table restent en base (migration additive) mais ne sont plus
  * utilisés par l'application. */
@@ -587,6 +632,9 @@ export type Database = {
       media_items: Table<MediaItem>;
       media_item_watchers: Table<MediaItemWatcher>;
       media_item_ratings: Table<MediaItemRating>;
+      restaurant_items: Table<RestaurantItem>;
+      restaurant_item_visitors: Table<RestaurantItemVisitor>;
+      restaurant_item_ratings: Table<RestaurantItemRating>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

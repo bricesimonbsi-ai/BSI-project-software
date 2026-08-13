@@ -7,8 +7,8 @@ import { PersonAvatarBadge, PERSON_EMOJI_SUGGESTIONS } from "@/features/people/p
 import { Plus, Trash2 } from "lucide-react";
 
 /** Version allégée de ProjectPeoplePicker (sans budget cible, propre aux voyages) : associe des
- * personnes de la liste globale à ce projet média, pour pouvoir ensuite préciser qui a vu/joué
- * chaque contenu. */
+ * personnes de la liste globale à ce projet (média ou restaurants), pour pouvoir ensuite préciser
+ * qui a vu/joué/visité chaque contenu. Réutilisé tel quel entre les deux modules. */
 export function MediaPeoplePanel({ projectId }: { projectId: string }) {
   const { data: allPeople } = usePeople();
   const { data: linked } = useProjectPeople(projectId);
@@ -43,8 +43,8 @@ export function MediaPeoplePanel({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Les personnes associées ici peuvent être sélectionnées quand tu coches un contenu vu/joué, pour savoir qui l'a
-        regardé ou y a joué.
+        Les personnes associées ici peuvent être sélectionnées quand tu coches un contenu comme vu/joué/visité, pour
+        savoir qui était concerné.
       </p>
       <div className="flex flex-wrap gap-3">
         {(linked ?? [])
