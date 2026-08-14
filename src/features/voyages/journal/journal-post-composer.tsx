@@ -123,6 +123,7 @@ export function JournalPostComposer({
         sousEtapeId: resolvedSousEtapeId,
         files,
       });
+      onDone?.();
     }
     reset();
   }

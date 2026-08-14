@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -15,11 +15,12 @@ import {
 } from "@/features/voyages/journal/use-journal";
 import { JournalOwnerSocial } from "@/features/voyages/journal/journal-timeline";
 import { StoryLightbox } from "@/features/voyages/journal/journal-story-feed";
+import { JournalPostComposer } from "@/features/voyages/journal/journal-post-composer";
 import { useAuth } from "@/app/providers/auth-provider";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, cn } from "@/lib/utils";
-import { Heart, MessageCircle, Images } from "lucide-react";
+import { Heart, MessageCircle, Images, Plus } from "lucide-react";
 
 type MapStep = {
   post: JournalPostWithPhotos;
@@ -108,6 +109,7 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [openPhotoIndex, setOpenPhotoIndex] = useState(0);
+  const [composerOpen, setComposerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -165,10 +167,20 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
 
   if (steps.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Aucun souvenir localisé pour l'instant — associe une ville à un souvenir depuis l'onglet "Chronologie" pour le voir
-        apparaître ici.
-      </p>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <p className="text-sm text-muted-foreground">
+          Aucun souvenir localisé pour l'instant — ajoute-en un avec une ville associée pour le voir apparaître ici.
+        </p>
+        <button
+          type="button"
+          onClick={() => setComposerOpen(true)}
+          className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-accent/60 text-accent transition-colors hover:bg-accent/10"
+          title="Ajouter un souvenir"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+        <ComposerDialog voyageId={voyageId} open={composerOpen} onOpenChange={setComposerOpen} />
+      </div>
     );
   }
 
@@ -178,7 +190,7 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="relative h-[520px] overflow-hidden rounded-lg border border-border">
+      <div className="relative h-[75vh] min-h-[560px] overflow-hidden rounded-lg border border-border">
         <MapContainer
           center={[activeStep.location.lat, activeStep.location.lng]}
           zoom={6}
@@ -223,21 +235,26 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
           className="absolute inset-x-0 bottom-0 z-[1000] flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 pt-16"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}
         >
+          <AddStepButton onClick={() => setComposerOpen(true)} />
           {steps.map((s, i) => (
-            <StepCard
-              key={s.post.id}
-              refCallback={(el) => {
-                cardRefs.current[i] = el;
-              }}
-              step={s}
-              active={i === activeIndex}
-              reactionCount={(social?.reactions ?? []).filter((r) => r.post_id === s.post.id).length}
-              commentCount={(social?.comments ?? []).filter((c) => c.post_id === s.post.id).length}
-              onClick={() => selectAndOpen(i)}
-            />
+            <Fragment key={s.post.id}>
+              <StepCard
+                refCallback={(el) => {
+                  cardRefs.current[i] = el;
+                }}
+                step={s}
+                active={i === activeIndex}
+                reactionCount={(social?.reactions ?? []).filter((r) => r.post_id === s.post.id).length}
+                commentCount={(social?.comments ?? []).filter((c) => c.post_id === s.post.id).length}
+                onClick={() => selectAndOpen(i)}
+              />
+              <AddStepButton onClick={() => setComposerOpen(true)} />
+            </Fragment>
           ))}
         </div>
       </div>
+
+      <ComposerDialog voyageId={voyageId} open={composerOpen} onOpenChange={setComposerOpen} />
 
       {skippedCount > 0 && (
         <p className="text-xs text-muted-foreground">
@@ -274,6 +291,44 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Bouton "+" pour insérer un souvenir avant/entre/après les étapes du bandeau — ouvre le
+ * composeur habituel dans une fenêtre, sans présélectionner de position (l'ordre est de toute
+ * façon recalculé automatiquement, chronologique par date de souvenir). */
+function AddStepButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Ajouter un souvenir"
+      className="flex w-10 flex-shrink-0 snap-center items-center justify-center self-center rounded-full border-2 border-dashed border-white/50 bg-black/30 text-white/80 transition-colors hover:border-accent hover:bg-accent/20 hover:text-accent"
+      style={{ height: "8rem" }}
+    >
+      <Plus className="h-5 w-5" />
+    </button>
+  );
+}
+
+function ComposerDialog({
+  voyageId,
+  open,
+  onOpenChange,
+}: {
+  voyageId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nouveau souvenir</DialogTitle>
+        </DialogHeader>
+        <JournalPostComposer voyageId={voyageId} onDone={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
   );
 }
 
