@@ -105,7 +105,7 @@ export function MapView({ groups }: { groups: CountryGroup[] }) {
   }
 
   return (
-    <div className="relative h-[480px] overflow-hidden rounded-md border border-border">
+    <div className="relative isolate h-[480px] overflow-hidden rounded-md border border-border">
       <div className="absolute right-3 top-3 z-[1000] flex gap-1 rounded-full border border-border bg-card/90 p-1 backdrop-blur">
         <Button
           size="sm"

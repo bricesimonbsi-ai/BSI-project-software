@@ -190,7 +190,7 @@ export function JournalMapView({ voyageId }: { voyageId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="relative h-[75vh] min-h-[560px] overflow-hidden rounded-lg border border-border">
+      <div className="relative isolate h-[75vh] min-h-[560px] overflow-hidden rounded-lg border border-border">
         <MapContainer
           center={[activeStep.location.lat, activeStep.location.lng]}
           zoom={6}
