@@ -98,6 +98,7 @@ export function PublicJournalMapView({
   const [openPhotoIndex, setOpenPhotoIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const scrollDebounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     setActiveIndex(steps.length > 0 ? steps.length - 1 : 0);
@@ -154,22 +155,28 @@ export function PublicJournalMapView({
     setOpenPhotoIndex(0);
   }
 
+  /** Débounce (au lieu de recalculer à chaque pixel défilé) : évite de relancer en continu
+   * l'animation de la carte (flyTo) et la régénération des icônes de marqueurs pendant le
+   * défilement — c'est ce qui rendait le geste saccadé. */
   function handleScroll() {
-    const container = scrollRef.current;
-    if (!container) return;
-    const center = container.scrollLeft + container.clientWidth / 2;
-    let closest = 0;
-    let closestDist = Infinity;
-    cardRefs.current.forEach((el, i) => {
-      if (!el) return;
-      const cardCenter = el.offsetLeft + el.offsetWidth / 2;
-      const dist = Math.abs(cardCenter - center);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = i;
-      }
-    });
-    setActiveIndex(closest);
+    if (scrollDebounceRef.current != null) window.clearTimeout(scrollDebounceRef.current);
+    scrollDebounceRef.current = window.setTimeout(() => {
+      const container = scrollRef.current;
+      if (!container) return;
+      const center = container.scrollLeft + container.clientWidth / 2;
+      let closest = 0;
+      let closestDist = Infinity;
+      cardRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const cardCenter = el.offsetLeft + el.offsetWidth / 2;
+        const dist = Math.abs(cardCenter - center);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = i;
+        }
+      });
+      setActiveIndex(closest);
+    }, 120);
   }
 
   function handlePhotosExhausted() {

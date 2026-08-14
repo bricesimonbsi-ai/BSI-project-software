@@ -10,14 +10,28 @@ const LIGHTBOX_AUTO_ADVANCE_MS = 4000;
 const TAP_MAX_MS = 300;
 const SWIPE_THRESHOLD_PX = 50;
 const SWIPE_DOWN_CLOSE_PX = 80;
+const DISMISS_RESISTANCE = 0.55;
+
+/** Précharge les images voisines (index-1, index+1) pour éviter un flash/chargement visible au
+ * changement de photo — le navigateur garde l'image en cache, `<img>` l'affiche alors instantanément. */
+function usePreloadNeighbors(urls: string[], index: number) {
+  useEffect(() => {
+    for (const i of [index - 1, index + 1]) {
+      const url = urls[i];
+      if (url) new Image().src = url;
+    }
+  }, [urls, index]);
+}
 
 /** Visionneuse façon "story" : défilement automatique après un temps limité, navigation par
  * appui sur les côtés gauche/droite de la photo ou par glissement horizontal (swipe), glisser
  * vers le bas ferme la visionneuse (comme Instagram, `onDismiss` — distinct de `onExhausted` :
  * l'un ferme tout, l'autre enchaîne sur le contenu suivant), et rester appuyé (n'importe où sur
- * la photo) met le défilement en pause tant qu'on ne relâche pas. Une seule gestion pointer
- * unifiée (souris + tactile) pilote le tout. Partagé entre la vue Carte privée et la vue Carte
- * publique. */
+ * la photo) met le défilement en pause tant qu'on ne relâche pas. Le geste est suivi en direct
+ * (la photo suit le doigt via une transformation CSS appliquée directement au DOM, hors du cycle
+ * de rendu React) pour rester fluide même sur les appareils modestes ; seul le résultat du geste
+ * (changement d'index, fermeture) passe par l'état React. Une seule gestion pointer unifiée
+ * (souris + tactile) pilote le tout. Partagé entre la vue Carte privée et la vue Carte publique. */
 export function StoryLightbox({
   urls,
   index,
@@ -40,6 +54,9 @@ export function StoryLightbox({
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const pointerRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const dragRef = useRef<HTMLDivElement>(null);
+
+  usePreloadNeighbors(urls, index);
 
   function goPrev() {
     if (index > 0) onIndexChange(index - 1);
@@ -50,7 +67,16 @@ export function StoryLightbox({
     else onExhausted();
   }
 
+  function resetTransform(animate: boolean) {
+    const el = dragRef.current;
+    if (!el) return;
+    el.style.transition = animate ? "transform 180ms ease-out, opacity 180ms ease-out" : "none";
+    el.style.transform = "translate3d(0,0,0)";
+    el.style.opacity = "1";
+  }
+
   useEffect(() => {
+    resetTransform(false);
     setProgress(0);
     lastTsRef.current = null;
   }, [index]);
@@ -79,25 +105,59 @@ export function StoryLightbox({
   }, [progress]);
 
   function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
     pointerRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
     setPaused(true);
+    const el = dragRef.current;
+    if (el) el.style.transition = "none";
+  }
+
+  function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
+    const start = pointerRef.current;
+    const el = dragRef.current;
+    if (!start || !el) return;
+    const deltaX = e.clientX - start.x;
+    const deltaY = e.clientY - start.y;
+    // Le glissement vertical (fermeture) domine dès qu'il est plus prononcé que l'horizontal ;
+    // une légère résistance rend le geste moins "collant" au doigt qu'un suivi 1:1 (ressenti Instagram).
+    if (deltaY > 0 && deltaY > Math.abs(deltaX)) {
+      const y = deltaY * DISMISS_RESISTANCE;
+      el.style.transform = `translate3d(0,${y}px,0)`;
+      el.style.opacity = String(Math.max(0.4, 1 - y / 400));
+    } else if (hasMultiple) {
+      el.style.transform = `translate3d(${deltaX}px,0,0)`;
+      el.style.opacity = "1";
+    }
   }
 
   function handlePointerUp(e: PointerEvent<HTMLDivElement>) {
     const start = pointerRef.current;
     pointerRef.current = null;
     setPaused(false);
-    if (!start) return;
+    if (!start) {
+      resetTransform(true);
+      return;
+    }
     const deltaX = e.clientX - start.x;
     const deltaY = e.clientY - start.y;
     const elapsed = Date.now() - start.time;
 
     if (deltaY > SWIPE_DOWN_CLOSE_PX && deltaY > Math.abs(deltaX)) {
-      onDismiss();
+      const el = dragRef.current;
+      if (el) {
+        el.style.transition = "transform 160ms ease-in, opacity 160ms ease-in";
+        el.style.transform = "translate3d(0,60vh,0)";
+        el.style.opacity = "0";
+      }
+      setTimeout(onDismiss, 140);
       return;
     }
-    if (!hasMultiple) return;
+    if (!hasMultiple) {
+      resetTransform(true);
+      return;
+    }
     if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX) {
+      resetTransform(false);
       if (deltaX > 0) goPrev();
       else goNext();
       return;
@@ -105,23 +165,28 @@ export function StoryLightbox({
     if (elapsed < TAP_MAX_MS) {
       const rect = e.currentTarget.getBoundingClientRect();
       const relativeX = (e.clientX - rect.left) / rect.width;
+      resetTransform(false);
       if (relativeX < 1 / 3) goPrev();
       else if (relativeX > 2 / 3) goNext();
+      else resetTransform(true);
+      return;
     }
+    resetTransform(true);
   }
 
   function handlePointerCancel() {
     pointerRef.current = null;
     setPaused(false);
+    resetTransform(true);
   }
 
   return (
     <div
-      className="relative touch-none select-none"
+      className="relative touch-none select-none overflow-hidden"
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
-      onPointerLeave={handlePointerCancel}
     >
       {hasMultiple && (
         <div className="absolute inset-x-2 top-2 z-10 flex gap-1">
@@ -133,7 +198,9 @@ export function StoryLightbox({
         </div>
       )}
 
-      <img src={urls[index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" draggable={false} />
+      <div ref={dragRef} style={{ willChange: "transform, opacity" }}>
+        <img src={urls[index]} alt="" className="max-h-[85vh] w-full rounded-lg object-contain" draggable={false} />
+      </div>
     </div>
   );
 }
