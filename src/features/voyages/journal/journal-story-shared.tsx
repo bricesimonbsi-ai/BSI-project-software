@@ -13,19 +13,26 @@ const SWIPE_DOWN_CLOSE_PX = 80;
 
 /** Visionneuse façon "story" : défilement automatique après un temps limité, navigation par
  * appui sur les côtés gauche/droite de la photo ou par glissement horizontal (swipe), glisser
- * vers le bas ferme la visionneuse (comme Instagram), et rester appuyé (n'importe où sur la
- * photo) met le défilement en pause tant qu'on ne relâche pas. Une seule gestion pointer unifiée
- * (souris + tactile) pilote le tout. Partagé entre la vue Carte privée et la vue Carte publique. */
+ * vers le bas ferme la visionneuse (comme Instagram, `onDismiss` — distinct de `onExhausted` :
+ * l'un ferme tout, l'autre enchaîne sur le contenu suivant), et rester appuyé (n'importe où sur
+ * la photo) met le défilement en pause tant qu'on ne relâche pas. Une seule gestion pointer
+ * unifiée (souris + tactile) pilote le tout. Partagé entre la vue Carte privée et la vue Carte
+ * publique. */
 export function StoryLightbox({
   urls,
   index,
   onIndexChange,
-  onClose,
+  onExhausted,
+  onDismiss,
 }: {
   urls: string[];
   index: number;
   onIndexChange: (index: number) => void;
-  onClose: () => void;
+  /** Swipe/tap au-delà de la dernière photo (ou fin du défilement auto) — enchaîne sur l'étape
+   * suivante côté appelant, sans fermer la fenêtre. */
+  onExhausted: () => void;
+  /** Glisser vers le bas — ferme complètement la visionneuse. */
+  onDismiss: () => void;
 }) {
   const hasMultiple = urls.length > 1;
   const [progress, setProgress] = useState(0);
@@ -40,7 +47,7 @@ export function StoryLightbox({
 
   function goNext() {
     if (index < urls.length - 1) onIndexChange(index + 1);
-    else onClose();
+    else onExhausted();
   }
 
   useEffect(() => {
@@ -86,7 +93,7 @@ export function StoryLightbox({
     const elapsed = Date.now() - start.time;
 
     if (deltaY > SWIPE_DOWN_CLOSE_PX && deltaY > Math.abs(deltaX)) {
-      onClose();
+      onDismiss();
       return;
     }
     if (!hasMultiple) return;

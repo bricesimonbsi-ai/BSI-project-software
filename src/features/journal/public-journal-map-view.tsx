@@ -272,7 +272,8 @@ export function PublicJournalMapView({
                 urls={openStep.photoUrls}
                 index={openPhotoIndex}
                 onIndexChange={setOpenPhotoIndex}
-                onClose={handlePhotosExhausted}
+                onExhausted={handlePhotosExhausted}
+                onDismiss={() => setOpenIndex(null)}
               />
               <div className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">

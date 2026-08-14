@@ -301,7 +301,13 @@ export function JournalMapView({ voyageId, startDate }: { voyageId: string; star
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto p-0">
           {openStep && (
             <div className="flex flex-col">
-              <StoryLightbox urls={openUrls} index={openPhotoIndex} onIndexChange={setOpenPhotoIndex} onClose={handlePhotosExhausted} />
+              <StoryLightbox
+                urls={openUrls}
+                index={openPhotoIndex}
+                onIndexChange={setOpenPhotoIndex}
+                onExhausted={handlePhotosExhausted}
+                onDismiss={() => setOpenIndex(null)}
+              />
               <div className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{openStep.post.author_name}</span>
