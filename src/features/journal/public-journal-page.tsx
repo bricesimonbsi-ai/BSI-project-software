@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
-import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
-import { JournalStoryFeed, type StoryFeedEntry } from "@/features/voyages/journal/journal-story-feed";
 import { PublicJournalMapView } from "@/features/journal/public-journal-map-view";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/utils";
 import type { PublicJournalEntry, PublicJournalMeta, PublicJournalTraveler } from "@/types/database";
 
@@ -45,20 +42,6 @@ export function PublicJournalPage() {
     return `${formatDate(meta.start_date)} → ${formatDate(meta.end_date)}`;
   }, [meta]);
 
-  const storyEntries: StoryFeedEntry[] = useMemo(
-    () =>
-      entries.map((e) => ({
-        id: e.post_id,
-        caption: e.caption,
-        entry_date: e.entry_date,
-        author_name: e.author_name,
-        city: e.city,
-        country_region: e.country_region,
-        photo_urls: e.photo_paths.map((p) => journalPhotoUrl(p)),
-      })),
-    [entries]
-  );
-
   if (meta === undefined) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Chargement...</div>;
   }
@@ -97,23 +80,10 @@ export function PublicJournalPage() {
           )}
         </div>
 
-        {storyEntries.length === 0 ? (
+        {entries.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Aucun souvenir publié pour l'instant.</p>
         ) : (
-          <Tabs defaultValue="chronologie">
-            <TabsList>
-              <TabsTrigger value="chronologie">Chronologie</TabsTrigger>
-              <TabsTrigger value="carte">Carte</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="chronologie" className="pt-3">
-              <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} shareToken={token} />
-            </TabsContent>
-
-            <TabsContent value="carte" className="pt-3">
-              <PublicJournalMapView entries={entries} token={token as string} />
-            </TabsContent>
-          </Tabs>
+          <PublicJournalMapView entries={entries} startDate={meta.start_date} token={token as string} />
         )}
 
         <p className="pt-4 text-center text-xs text-muted-foreground">Publié avec Projeko</p>

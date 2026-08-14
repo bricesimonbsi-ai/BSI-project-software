@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
-import {
-  StoryLightbox,
-  JournalPostSocial,
-  VisitorNameDialog,
-} from "@/features/voyages/journal/journal-story-feed";
+import { StoryLightbox, JournalPostSocial, VisitorNameDialog } from "@/features/voyages/journal/journal-story-shared";
 import { usePublicJournalSocial, useVisitorIdentity } from "@/features/voyages/journal/use-public-journal-social";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -63,12 +60,21 @@ function FlyToActive({ lat, lng }: { lat: number; lng: number }) {
 
 /**
  * Vue "Carte" du journal public (même principe que la vue Carte côté propriétaire) : carte
- * satellite avec le tracé du voyage, un marqueur photo par étape localisée, et un bandeau de
- * vignettes défilable en bas — cliquer une étape l'ouvre en plein écran façon story Instagram,
- * avec réactions/commentaires de visiteurs sous la photo. Pas de bouton "+" (lecture seule pour
- * les visiteurs, contrairement à la vue propriétaire).
+ * satellite (avec les noms des principales villes alentours) avec le tracé du voyage, un marqueur
+ * photo par étape localisée, et un bandeau de vignettes défilable en bas (numéro de jour
+ * au-dessus) — cliquer une étape l'ouvre en plein écran façon story Instagram, avec
+ * réactions/commentaires de visiteurs sous la photo. Pas de bouton "+" (lecture seule pour les
+ * visiteurs, contrairement à la vue propriétaire).
  */
-export function PublicJournalMapView({ entries, token }: { entries: PublicJournalEntry[]; token: string }) {
+export function PublicJournalMapView({
+  entries,
+  startDate,
+  token,
+}: {
+  entries: PublicJournalEntry[];
+  startDate: string | null;
+  token: string;
+}) {
   const { reactions, comments, commentReactions, setReaction, removeReaction, addComment, setCommentReaction, removeCommentReaction } =
     usePublicJournalSocial(token);
   const { name: visitorName, setName: setVisitorName } = useVisitorIdentity(token);
@@ -96,6 +102,10 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
   useEffect(() => {
     setActiveIndex(steps.length > 0 ? steps.length - 1 : 0);
   }, [steps.length]);
+
+  function dayNumberFor(entryDate: string): number | null {
+    return startDate ? differenceInCalendarDays(parseISO(entryDate), parseISO(startDate)) + 1 : null;
+  }
 
   function runWithIdentity(action: (name: string) => void) {
     if (visitorName) action(visitorName);
@@ -174,11 +184,7 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
   }
 
   if (steps.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Aucun souvenir localisé pour l'instant sur ce voyage.
-      </p>
-    );
+    return <p className="py-8 text-center text-sm text-muted-foreground">Aucun souvenir localisé pour l'instant sur ce voyage.</p>;
   }
 
   const activeStep = steps[activeIndex];
@@ -186,7 +192,12 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
 
   return (
     <div className="space-y-2">
-      <div className="relative isolate h-[75vh] min-h-[560px] overflow-hidden rounded-lg border border-border">
+      <div
+        className={cn(
+          "relative isolate -mx-4 h-[calc(100dvh-9rem)] min-h-[500px] w-[calc(100%+2rem)] overflow-hidden border-0",
+          "sm:mx-0 sm:h-[75vh] sm:min-h-[560px] sm:w-full sm:rounded-lg sm:border sm:border-border"
+        )}
+      >
         <MapContainer
           center={[activeStep.location.lat, activeStep.location.lng]}
           zoom={6}
@@ -197,6 +208,7 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
+          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
           <FitBoundsOnce points={steps.map((s) => [s.location.lat, s.location.lng] as [number, number])} />
           <FlyToActive lat={activeStep.location.lat} lng={activeStep.location.lng} />
           {steps.slice(1).map((s, i) => {
@@ -225,7 +237,7 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="absolute inset-x-0 bottom-0 z-[1000] flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 pt-16"
+          className="absolute inset-x-0 bottom-0 z-[1000] flex snap-x snap-mandatory items-end gap-3 overflow-x-auto px-4 pb-4 pt-16"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}
         >
           {steps.map((s, i) => (
@@ -236,6 +248,7 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
               }}
               step={s}
               active={i === activeIndex}
+              dayNumber={dayNumberFor(s.entry.entry_date)}
               reactionCount={reactions.filter((r) => r.post_id === s.entry.post_id).length}
               commentCount={comments.filter((c) => c.post_id === s.entry.post_id).length}
               onClick={() => selectAndOpen(i)}
@@ -294,6 +307,7 @@ export function PublicJournalMapView({ entries, token }: { entries: PublicJourna
 function StepCard({
   step,
   active,
+  dayNumber,
   reactionCount,
   commentCount,
   refCallback,
@@ -301,6 +315,7 @@ function StepCard({
 }: {
   step: MapStep;
   active: boolean;
+  dayNumber: number | null;
   reactionCount: number;
   commentCount: number;
   refCallback: (el: HTMLButtonElement | null) => void;
@@ -310,43 +325,46 @@ function StepCard({
   const photoCount = step.photoUrls.length;
 
   return (
-    <button
-      ref={refCallback}
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative flex w-32 flex-shrink-0 snap-center flex-col overflow-hidden rounded-xl border-2 text-left shadow-lg transition-all",
-        active ? "scale-105 border-sky-400" : "border-white/40 opacity-80"
-      )}
-    >
-      <div className="relative h-32 w-full bg-slate-800">
-        {photoUrl ? (
-          <img src={photoUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl">📍</div>
+    <div className="flex w-32 flex-shrink-0 flex-col items-center gap-1 snap-center">
+      {dayNumber != null && <span className="text-[10px] font-semibold text-white/90">Jour {dayNumber}</span>}
+      <button
+        ref={refCallback}
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "relative flex w-32 flex-col overflow-hidden rounded-xl border-2 text-left shadow-lg transition-all",
+          active ? "scale-105 border-sky-400" : "border-white/40 opacity-80"
         )}
-        {step.location.country && (
-          <span className="absolute left-1.5 top-1.5 rounded-full bg-black/50 px-1.5 py-0.5 text-xs">
-            <CountryFlag name={step.location.country} className="text-xs" />
-          </span>
-        )}
-      </div>
-      <div className="space-y-0.5 bg-black/60 p-1.5">
-        <p className="truncate text-xs font-semibold text-white">{step.location.city}</p>
-        <div className="flex items-center gap-2 text-[10px] text-white/80">
-          <span className="flex items-center gap-0.5">
-            <Heart className="h-2.5 w-2.5" /> {reactionCount}
-          </span>
-          <span className="flex items-center gap-0.5">
-            <MessageCircle className="h-2.5 w-2.5" /> {commentCount}
-          </span>
-          {photoCount > 1 && (
-            <span className="flex items-center gap-0.5">
-              <Images className="h-2.5 w-2.5" /> {photoCount}
+      >
+        <div className="relative h-32 w-full bg-slate-800">
+          {photoUrl ? (
+            <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl">📍</div>
+          )}
+          {step.location.country && (
+            <span className="absolute left-1.5 top-1.5 rounded-full bg-black/50 px-1.5 py-0.5 text-xs">
+              <CountryFlag name={step.location.country} className="text-xs" />
             </span>
           )}
         </div>
-      </div>
-    </button>
+        <div className="space-y-0.5 bg-black/60 p-1.5">
+          <p className="truncate text-xs font-semibold text-white">{step.location.city}</p>
+          <div className="flex items-center gap-2 text-[10px] text-white/80">
+            <span className="flex items-center gap-0.5">
+              <Heart className="h-2.5 w-2.5" /> {reactionCount}
+            </span>
+            <span className="flex items-center gap-0.5">
+              <MessageCircle className="h-2.5 w-2.5" /> {commentCount}
+            </span>
+            {photoCount > 1 && (
+              <span className="flex items-center gap-0.5">
+                <Images className="h-2.5 w-2.5" /> {photoCount}
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }

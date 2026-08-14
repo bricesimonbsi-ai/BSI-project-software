@@ -1,21 +1,18 @@
 import { useState } from "react";
-import { useSetJournalShareToken, type JournalPostWithPhotos } from "@/features/voyages/journal/use-journal";
-import { JournalPostComposer } from "@/features/voyages/journal/journal-post-composer";
-import { JournalTimeline } from "@/features/voyages/journal/journal-timeline";
+import { useSetJournalShareToken } from "@/features/voyages/journal/use-journal";
 import { JournalMapView } from "@/features/voyages/journal/journal-map-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { APP_URL } from "@/lib/app-url";
 import { Share2, Check } from "lucide-react";
 import type { Voyage } from "@/types/database";
 
-/** Onglet "Journal" du voyage : composeur de souvenirs (photos + texte), fil chronologique, et
- * gestion du lien de partage public (aucune authentification requise pour les visiteurs). */
+/** Onglet "Journal" du voyage : vue Carte (souvenirs localisés sur une carte satellite, story
+ * plein écran au clic, ajout via les boutons "+" du bandeau) et gestion du lien de partage public
+ * (aucune authentification requise pour les visiteurs). */
 export function JournalTab({ voyage }: { voyage: Voyage }) {
   const setShareToken = useSetJournalShareToken(voyage.id);
   const [copied, setCopied] = useState(false);
-  const [editingPost, setEditingPost] = useState<JournalPostWithPhotos | null>(null);
 
   const shareUrl = voyage.journal_share_token ? `${APP_URL}/journal/${voyage.journal_share_token}` : null;
 
@@ -60,22 +57,7 @@ export function JournalTab({ voyage }: { voyage: Voyage }) {
         </CardContent>
       </Card>
 
-      <JournalPostComposer voyageId={voyage.id} editingPost={editingPost} onDone={() => setEditingPost(null)} />
-
-      <Tabs defaultValue="chronologie">
-        <TabsList>
-          <TabsTrigger value="chronologie">Chronologie</TabsTrigger>
-          <TabsTrigger value="carte">Carte</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="chronologie" className="pt-3">
-          <JournalTimeline voyageId={voyage.id} onEdit={setEditingPost} />
-        </TabsContent>
-
-        <TabsContent value="carte" className="pt-3">
-          <JournalMapView voyageId={voyage.id} />
-        </TabsContent>
-      </Tabs>
+      <JournalMapView voyageId={voyage.id} startDate={voyage.start_date} />
     </div>
   );
 }
