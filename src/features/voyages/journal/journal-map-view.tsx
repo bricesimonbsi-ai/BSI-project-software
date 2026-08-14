@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatDate, cn } from "@/lib/utils";
 import { Heart, MessageCircle, Images, Plus, Pencil, Trash2 } from "lucide-react";
 import type { JournalCommentReaction, JournalPostComment, JournalPostReaction } from "@/types/database";
+import { toast } from "@/hooks/use-toast";
 
 type MapStep = {
   post: JournalPostWithPhotos;
@@ -84,7 +85,18 @@ export function JournalMapView({ voyageId, startDate }: { voyageId: string; star
   const { data: etapes } = useEtapes(voyageId);
   const { data: sousEtapes } = useVoyageSousEtapes(voyageId);
   const postIds = useMemo(() => (posts ?? []).map((p) => p.id), [posts]);
-  const { data: social } = useJournalSocial(voyageId, postIds);
+  const { data: social, error: socialError } = useJournalSocial(voyageId, postIds);
+  useEffect(() => {
+    // Sans ce toast, une erreur ici (ex. accès refusé par une politique RLS) reste invisible :
+    // le hook n'expose que des tableaux vides, indiscernable d'un "0 réaction réel".
+    if (socialError) {
+      toast({
+        title: "Réactions/commentaires non chargés",
+        description: (socialError as Error).message,
+        variant: "destructive",
+      });
+    }
+  }, [socialError]);
   const deletePost = useDeleteJournalPost(voyageId);
   const replyToComment = useReplyToComment(voyageId);
   const setOwnerCommentReaction = useSetOwnerCommentReaction(voyageId);
