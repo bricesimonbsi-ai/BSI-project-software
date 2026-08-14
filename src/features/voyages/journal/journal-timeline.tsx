@@ -124,30 +124,6 @@ function JournalPostCard({
   onOpenPhoto: (urls: string[], index: number) => void;
 }) {
   const urls = post.voyage_journal_photos.map((p) => journalPhotoUrl(p.storage_path));
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-
-  const reactionsByEmoji = new Map<string, string[]>();
-  for (const r of reactions) {
-    const list = reactionsByEmoji.get(r.emoji) ?? [];
-    list.push(r.visitor_name);
-    reactionsByEmoji.set(r.emoji, list);
-  }
-  const rootComments = comments.filter((c) => !c.parent_comment_id);
-  const repliesByParent = new Map<string, JournalPostComment[]>();
-  for (const c of comments) {
-    if (!c.parent_comment_id) continue;
-    const list = repliesByParent.get(c.parent_comment_id) ?? [];
-    list.push(c);
-    repliesByParent.set(c.parent_comment_id, list);
-  }
-
-  function submitReply(commentId: string) {
-    if (!replyText.trim()) return;
-    onReply(commentId, replyText.trim());
-    setReplyingTo(null);
-    setReplyText("");
-  }
 
   return (
     <Card className="overflow-hidden">
@@ -180,74 +156,132 @@ function JournalPostCard({
 
         {post.caption && <p className="whitespace-pre-wrap text-sm">{post.caption}</p>}
 
-        {reactionsByEmoji.size > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-            {[...reactionsByEmoji.entries()].map(([emoji, names]) => (
-              <span key={emoji} title={names.join(", ")}>
-                {emoji} {names.join(", ")}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {rootComments.length > 0 && (
-          <div className={cn("space-y-2", reactionsByEmoji.size === 0 && "border-t border-border pt-2")}>
-            {rootComments.map((c) => (
-              <div key={c.id} className="space-y-1">
-                <p className="text-sm">
-                  <span className="font-medium">{c.author_name}</span> <span className="whitespace-pre-wrap">{c.content}</span>
-                </p>
-                <CommentLikeButton
-                  commentId={c.id}
-                  reactions={commentReactions}
-                  visitorName={visitorName}
-                  onToggle={onToggleCommentReaction}
-                />
-                {(repliesByParent.get(c.id) ?? []).map((r) => (
-                  <div key={r.id} className="ml-4 space-y-1 border-l-2 border-accent/40 pl-2">
-                    <p className="text-sm">
-                      <span className="font-medium text-accent">{r.author_name}</span>{" "}
-                      <span className="whitespace-pre-wrap">{r.content}</span>
-                    </p>
-                    <CommentLikeButton
-                      commentId={r.id}
-                      reactions={commentReactions}
-                      visitorName={visitorName}
-                      onToggle={onToggleCommentReaction}
-                    />
-                  </div>
-                ))}
-                {replyingTo === c.id ? (
-                  <div className="ml-4 flex items-center gap-1.5">
-                    <Input
-                      autoFocus
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && submitReply(c.id)}
-                      placeholder="Répondre..."
-                      className="h-7 text-xs"
-                    />
-                    <Button size="sm" className="h-7 flex-shrink-0" onClick={() => submitReply(c.id)} disabled={!replyText.trim()}>
-                      Envoyer
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="ml-4 text-xs text-muted-foreground hover:underline"
-                    onClick={() => {
-                      setReplyingTo(c.id);
-                      setReplyText("");
-                    }}
-                  >
-                    Répondre
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <JournalOwnerSocial
+          reactions={reactions}
+          comments={comments}
+          commentReactions={commentReactions}
+          visitorName={visitorName}
+          onReply={onReply}
+          onToggleCommentReaction={onToggleCommentReaction}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+/** Réactions (emoji, groupées avec la liste des noms) + fil de commentaires (avec réponses de
+ * l'auteur du voyage en retrait, et formulaire de réponse) pour un souvenir — vue "propriétaire"
+ * (identité connue, pas de prénom à saisir, contrairement aux visiteurs de la page publique).
+ * Réutilisé par JournalPostCard (fil chronologique) et JournalMapView (story plein écran). */
+export function JournalOwnerSocial({
+  reactions,
+  comments,
+  commentReactions,
+  visitorName,
+  onReply,
+  onToggleCommentReaction,
+}: {
+  reactions: JournalPostReaction[];
+  comments: JournalPostComment[];
+  commentReactions: JournalCommentReaction[];
+  visitorName: string;
+  onReply: (commentId: string, content: string) => void;
+  onToggleCommentReaction: (commentId: string) => void;
+}) {
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  const reactionsByEmoji = new Map<string, string[]>();
+  for (const r of reactions) {
+    const list = reactionsByEmoji.get(r.emoji) ?? [];
+    list.push(r.visitor_name);
+    reactionsByEmoji.set(r.emoji, list);
+  }
+  const rootComments = comments.filter((c) => !c.parent_comment_id);
+  const repliesByParent = new Map<string, JournalPostComment[]>();
+  for (const c of comments) {
+    if (!c.parent_comment_id) continue;
+    const list = repliesByParent.get(c.parent_comment_id) ?? [];
+    list.push(c);
+    repliesByParent.set(c.parent_comment_id, list);
+  }
+
+  function submitReply(commentId: string) {
+    if (!replyText.trim()) return;
+    onReply(commentId, replyText.trim());
+    setReplyingTo(null);
+    setReplyText("");
+  }
+
+  return (
+    <>
+      {reactionsByEmoji.size > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+          {[...reactionsByEmoji.entries()].map(([emoji, names]) => (
+            <span key={emoji} title={names.join(", ")}>
+              {emoji} {names.join(", ")}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {rootComments.length > 0 && (
+        <div className={cn("space-y-2", reactionsByEmoji.size === 0 && "border-t border-border pt-2")}>
+          {rootComments.map((c) => (
+            <div key={c.id} className="space-y-1">
+              <p className="text-sm">
+                <span className="font-medium">{c.author_name}</span> <span className="whitespace-pre-wrap">{c.content}</span>
+              </p>
+              <CommentLikeButton
+                commentId={c.id}
+                reactions={commentReactions}
+                visitorName={visitorName}
+                onToggle={onToggleCommentReaction}
+              />
+              {(repliesByParent.get(c.id) ?? []).map((r) => (
+                <div key={r.id} className="ml-4 space-y-1 border-l-2 border-accent/40 pl-2">
+                  <p className="text-sm">
+                    <span className="font-medium text-accent">{r.author_name}</span>{" "}
+                    <span className="whitespace-pre-wrap">{r.content}</span>
+                  </p>
+                  <CommentLikeButton
+                    commentId={r.id}
+                    reactions={commentReactions}
+                    visitorName={visitorName}
+                    onToggle={onToggleCommentReaction}
+                  />
+                </div>
+              ))}
+              {replyingTo === c.id ? (
+                <div className="ml-4 flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submitReply(c.id)}
+                    placeholder="Répondre..."
+                    className="h-7 text-xs"
+                  />
+                  <Button size="sm" className="h-7 flex-shrink-0" onClick={() => submitReply(c.id)} disabled={!replyText.trim()}>
+                    Envoyer
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="ml-4 text-xs text-muted-foreground hover:underline"
+                  onClick={() => {
+                    setReplyingTo(c.id);
+                    setReplyText("");
+                  }}
+                >
+                  Répondre
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

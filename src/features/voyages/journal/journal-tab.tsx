@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useSetJournalShareToken, type JournalPostWithPhotos } from "@/features/voyages/journal/use-journal";
 import { JournalPostComposer } from "@/features/voyages/journal/journal-post-composer";
 import { JournalTimeline } from "@/features/voyages/journal/journal-timeline";
+import { JournalMapView } from "@/features/voyages/journal/journal-map-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { APP_URL } from "@/lib/app-url";
 import { Share2, Check } from "lucide-react";
 import type { Voyage } from "@/types/database";
@@ -59,7 +61,21 @@ export function JournalTab({ voyage }: { voyage: Voyage }) {
       </Card>
 
       <JournalPostComposer voyageId={voyage.id} editingPost={editingPost} onDone={() => setEditingPost(null)} />
-      <JournalTimeline voyageId={voyage.id} onEdit={setEditingPost} />
+
+      <Tabs defaultValue="chronologie">
+        <TabsList>
+          <TabsTrigger value="chronologie">Chronologie</TabsTrigger>
+          <TabsTrigger value="carte">Carte</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="chronologie" className="pt-3">
+          <JournalTimeline voyageId={voyage.id} onEdit={setEditingPost} />
+        </TabsContent>
+
+        <TabsContent value="carte" className="pt-3">
+          <JournalMapView voyageId={voyage.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
