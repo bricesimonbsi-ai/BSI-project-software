@@ -323,8 +323,9 @@ export function StoryLightbox({
 const REACTION_EMOJIS = ["❤️", "😍", "😂", "😮", "👏", "😢"];
 
 /** Barre de réactions (emoji) + fil de commentaires (avec réponses de l'auteur du voyage en
- * retrait) + formulaire d'ajout, pour une publication du journal public. */
-function JournalPostSocial({
+ * retrait) + formulaire d'ajout, pour une publication du journal public. Exporté pour être
+ * réutilisé par PublicJournalMapView (vue Carte du lien de partage). */
+export function JournalPostSocial({
   reactions,
   comments,
   commentReactions,
@@ -465,8 +466,8 @@ export function CommentLikeButton({
 
 /** Demande le prénom du visiteur une seule fois (mémorisé ensuite en localStorage), avant sa
  * première réaction ou son premier commentaire — pour que l'auteur du voyage sache qui a
- * participé. */
-function VisitorNameDialog({
+ * participé. Exporté pour être réutilisé par PublicJournalMapView. */
+export function VisitorNameDialog({
   open,
   onCancel,
   onConfirm,

@@ -167,6 +167,8 @@ export type PublicJournalEntry = {
   city: string | null;
   country_region: string | null;
   photo_paths: string[];
+  latitude: number | null;
+  longitude: number | null;
 };
 
 /** Ligne renvoyée par get_public_journal_meta. */

@@ -3,7 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
 import { journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { JournalStoryFeed, type StoryFeedEntry } from "@/features/voyages/journal/journal-story-feed";
+import { PublicJournalMapView } from "@/features/journal/public-journal-map-view";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/utils";
 import type { PublicJournalEntry, PublicJournalMeta, PublicJournalTraveler } from "@/types/database";
 
@@ -98,7 +100,20 @@ export function PublicJournalPage() {
         {storyEntries.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Aucun souvenir publié pour l'instant.</p>
         ) : (
-          <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} shareToken={token} />
+          <Tabs defaultValue="chronologie">
+            <TabsList>
+              <TabsTrigger value="chronologie">Chronologie</TabsTrigger>
+              <TabsTrigger value="carte">Carte</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="chronologie" className="pt-3">
+              <JournalStoryFeed entries={storyEntries} startDate={meta.start_date} shareToken={token} />
+            </TabsContent>
+
+            <TabsContent value="carte" className="pt-3">
+              <PublicJournalMapView entries={entries} token={token as string} />
+            </TabsContent>
+          </Tabs>
         )}
 
         <p className="pt-4 text-center text-xs text-muted-foreground">Publié avec Projeko</p>
