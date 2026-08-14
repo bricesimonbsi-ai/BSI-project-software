@@ -82,7 +82,19 @@ async function placesPost(path: string, body: Record<string, unknown>): Promise<
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error("Erreur lors de l'appel à Google Places");
+  if (!res.ok) {
+    // Le message générique précédent ("Erreur lors de l'appel à Google Places") masquait la
+    // vraie cause (clé absente/mal restreinte, API non activée, facturation...) — indispensable
+    // pour diagnostiquer sans accès aux logs réseau du visiteur.
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body?.error?.message ?? "";
+    } catch {
+      // réponse non-JSON : on garde juste le statut HTTP
+    }
+    throw new Error(`Erreur Google Places (HTTP ${res.status})${detail ? ` : ${detail}` : ""}`);
+  }
   const data = await res.json();
   return (data.places ?? []) as GooglePlaceResult[];
 }
