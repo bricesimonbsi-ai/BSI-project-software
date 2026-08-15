@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
-import type { Project, MediaType } from "@/types/database";
+import type { Project, MediaType, RestaurantType } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -56,6 +56,7 @@ export function useCreateProject() {
       budget_planned?: number | null;
       currency?: string;
       media_type?: MediaType | null;
+      restaurant_type?: RestaurantType | null;
     }) => {
       if (!session) throw new Error("Non authentifié");
       const { data, error } = await supabase

@@ -18,6 +18,7 @@ import {
   useRestaurantItemRatings,
   useSetRestaurantItemRating,
   useDeleteRestaurantItemRating,
+  useUpdateRestaurantItem,
   useDeleteRestaurantItem,
   type PlaceAddInput,
 } from "@/features/restaurants/use-restaurant-list";
@@ -31,9 +32,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Star, Trash2, UtensilsCrossed, MapPin, Phone, Globe, Clock, Navigation } from "lucide-react";
+import { Star, Trash2, UtensilsCrossed, MapPin, Phone, Globe, Clock, Navigation, Plus, X } from "lucide-react";
+import {
+  RESTAURANT_TYPE_LABELS,
+  RESTAURANT_TYPE_PLACE_TYPES,
+  SUGGESTED_STYLE_TAGS,
+} from "@/features/restaurants/restaurant-constants";
+import { PodiumBoard, PersonRankingPanels, type PodiumEntry } from "@/features/shared/rating-podium";
 import { cn } from "@/lib/utils";
-import type { RestaurantItem, RestaurantItemRating, Person } from "@/types/database";
+import type { RestaurantItem, RestaurantItemRating, Person, RestaurantType } from "@/types/database";
 
 type RatingRow = RestaurantItemRating & { people: Person };
 
@@ -47,6 +54,22 @@ type NormalizedResult = {
   categories: string[];
   addInput: PlaceAddInput;
 };
+
+/** Regroupe les lieux par style d'établissement (premier tag de `categories`, "Sans catégorie" à
+ * défaut), groupes triés alphabétiquement — c'est le "classement" demandé, indépendant des notes
+ * et de l'ordre d'ajout. */
+function groupByStyle<T extends RestaurantItem>(list: T[]): [string, T[]][] {
+  const map = new Map<string, T[]>();
+  for (const item of list) {
+    const key = item.categories[0] ?? "Sans catégorie";
+    map.set(key, [...(map.get(key) ?? []), item]);
+  }
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function toPodiumEntry({ item, avg }: { item: RestaurantItem; avg: number }): PodiumEntry {
+  return { id: item.id, title: item.name, imageUrl: item.photo_url, avg };
+}
 
 function normalizePlace(p: GooglePlaceResult): NormalizedResult {
   const photoUrl = p.photos?.[0]?.name ? placePhotoUrl(p.photos[0].name) : null;
@@ -81,8 +104,9 @@ function normalizePlace(p: GooglePlaceResult): NormalizedResult {
  * Places), Ma liste (recherche + ajout, ou saisie manuelle nom/adresse si Google Places n'est pas
  * configuré), Visités (classé par année, avec qui y est allé) et Synthèse (meilleures/pires notes).
  */
-export function RestaurantSection({ projectId }: { projectId: string }) {
+export function RestaurantSection({ projectId, restaurantType }: { projectId: string; restaurantType: RestaurantType | null }) {
   const autoAvailable = isGooglePlacesConfigured();
+  const placeLabel = restaurantType ? RESTAURANT_TYPE_LABELS[restaurantType].plural.toLowerCase() : "bars/restaurants";
   const { data: items, isLoading } = useRestaurantItems(projectId);
   const { data: linkedPeople } = useProjectPeople(projectId);
   const itemIds = useMemo(() => (items ?? []).map((i) => i.id), [items]);
@@ -91,6 +115,7 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
   const addPlace = useAddPlaceRestaurant(projectId);
   const addManual = useAddManualRestaurant(projectId);
   const toggleVisited = useToggleVisited(projectId);
+  const updateItem = useUpdateRestaurantItem(projectId);
   const deleteItem = useDeleteRestaurantItem(projectId);
   const setRating = useSetRestaurantItemRating(projectId);
   const deleteRating = useDeleteRestaurantItemRating(projectId);
@@ -136,7 +161,8 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
     setNearbyError(null);
     try {
       const position = await getCurrentPosition();
-      const places = await nearbyPlaces(position.coords.latitude, position.coords.longitude);
+      const includedTypes = restaurantType ? RESTAURANT_TYPE_PLACE_TYPES[restaurantType] : undefined;
+      const places = await nearbyPlaces(position.coords.latitude, position.coords.longitude, includedTypes);
       setNearby(places.map(normalizePlace));
     } catch (err) {
       setNearbyError((err as Error).message);
@@ -194,6 +220,7 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visited]);
+  const notVisitedByStyle = useMemo(() => groupByStyle(notVisited), [notVisited]);
 
   const ratingsByItemId = new Map<string, RatingRow[]>();
   for (const r of (ratings ?? []) as RatingRow[]) {
@@ -202,6 +229,7 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
     list.push(r);
     ratingsByItemId.set(r.restaurant_item_id, list);
   }
+  const itemsById = new Map((items ?? []).map((i) => [i.id, { title: i.name, imageUrl: i.photo_url }]));
 
   const currentYear = new Date().getFullYear().toString();
   const ratedEntries = visited
@@ -237,7 +265,7 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
             </p>
           ) : !nearbyAsked ? (
             <div className="flex flex-col items-center gap-3 py-8">
-              <p className="text-sm text-muted-foreground">Trouve des bars/restaurants autour de toi.</p>
+              <p className="text-sm text-muted-foreground">Trouve des {placeLabel} autour de toi.</p>
               <Button type="button" onClick={handleUseLocation}>
                 <Navigation className="mr-2 h-4 w-4" /> Utiliser ma position
               </Button>
@@ -269,7 +297,7 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
           {autoAvailable ? (
             <Card>
               <CardContent className="relative p-4">
-                <Input placeholder="Rechercher un bar/restaurant à ajouter..." value={query} onChange={(e) => setQuery(e.target.value)} />
+                <Input placeholder={`Rechercher un ${restaurantType ? RESTAURANT_TYPE_LABELS[restaurantType].singular.toLowerCase() : "bar/restaurant"} à ajouter...`} value={query} onChange={(e) => setQuery(e.target.value)} />
                 {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
                 {(results.length > 0 || searching) && (
                   <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
@@ -320,16 +348,23 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
           {notVisited.length === 0 && !isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente.</p>
           ) : (
-            <div className="space-y-2">
-              {notVisited.map((item) => (
-                <RestaurantRow
-                  key={item.id}
-                  item={item}
-                  visitorNames={visitorNamesByItem.get(item.id) ?? []}
-                  onToggle={(c) => requestToggle(item, c)}
-                  onDelete={() => deleteItem.mutate(item.id)}
-                  onOpen={() => setExpanded(item)}
-                />
+            <div className="space-y-4">
+              {notVisitedByStyle.map(([style, styleItems]) => (
+                <div key={style} className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    {style} ({styleItems.length})
+                  </p>
+                  {styleItems.map((item) => (
+                    <RestaurantRow
+                      key={item.id}
+                      item={item}
+                      visitorNames={visitorNamesByItem.get(item.id) ?? []}
+                      onToggle={(c) => requestToggle(item, c)}
+                      onDelete={() => deleteItem.mutate(item.id)}
+                      onOpen={() => setExpanded(item)}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
           )}
@@ -340,19 +375,26 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
             <p className="py-6 text-center text-sm text-muted-foreground">Rien pour l'instant.</p>
           ) : (
             visitedByYear.map(([year, yearItems]) => (
-              <div key={year} className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">
+              <div key={year} className="space-y-3">
+                <p className="text-sm font-semibold">
                   {year} ({yearItems.length})
                 </p>
-                {yearItems.map((item) => (
-                  <RestaurantRow
-                    key={item.id}
-                    item={item}
-                    visitorNames={visitorNamesByItem.get(item.id) ?? []}
-                    onToggle={(c) => requestToggle(item, c)}
-                    onDelete={() => deleteItem.mutate(item.id)}
-                    onOpen={() => setExpanded(item)}
-                  />
+                {groupByStyle(yearItems).map(([style, styleItems]) => (
+                  <div key={style} className="space-y-2 pl-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {style} ({styleItems.length})
+                    </p>
+                    {styleItems.map((item) => (
+                      <RestaurantRow
+                        key={item.id}
+                        item={item}
+                        visitorNames={visitorNamesByItem.get(item.id) ?? []}
+                        onToggle={(c) => requestToggle(item, c)}
+                        onDelete={() => deleteItem.mutate(item.id)}
+                        onOpen={() => setExpanded(item)}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             ))
@@ -360,12 +402,21 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="synthese" className="space-y-6 pt-3">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <RankedList title={`Mieux notés en ${currentYear}`} entries={bestThisYear} />
-            <RankedList title={`Moins bien notés en ${currentYear}`} entries={worstThisYear} />
-            <RankedList title="Mieux notés de tous les temps" entries={bestAllTime} />
-            <RankedList title="Moins bien notés de tous les temps" entries={worstAllTime} />
+          <div className="grid gap-6 sm:grid-cols-2">
+            <PodiumBoard title={`Mieux notés en ${currentYear}`} entries={bestThisYear.map(toPodiumEntry)} tone="best" />
+            <PodiumBoard title={`Moins bien notés en ${currentYear}`} entries={worstThisYear.map(toPodiumEntry)} tone="worst" />
+            <PodiumBoard title="Mieux notés de tous les temps" entries={bestAllTime.map(toPodiumEntry)} tone="best" />
+            <PodiumBoard title="Moins bien notés de tous les temps" entries={worstAllTime.map(toPodiumEntry)} tone="worst" />
           </div>
+          <PersonRankingPanels
+            people={linkedPeople ?? []}
+            ratings={((ratings ?? []) as RatingRow[]).filter((r) => r.people).map((r) => ({
+              person_id: r.person_id,
+              itemId: r.restaurant_item_id,
+              rating: r.rating,
+            }))}
+            itemsById={itemsById}
+          />
         </TabsContent>
       </Tabs>
 
@@ -376,12 +427,14 @@ export function RestaurantSection({ projectId }: { projectId: string }) {
           {expanded && (
             <ExpandedRestaurantDetails
               item={expanded}
+              restaurantType={restaurantType}
               people={linkedPeople ?? []}
               ratings={ratingsByItemId.get(expanded.id) ?? []}
               onSaveRating={(personId, rating, comment) =>
                 setRating.mutate({ restaurantItemId: expanded.id, personId, rating, comment })
               }
               onDeleteRating={(id) => deleteRating.mutate(id)}
+              onUpdateCategories={(categories) => updateItem.mutate({ id: expanded.id, categories })}
             />
           )}
         </DialogContent>
@@ -513,16 +566,20 @@ function RestaurantRow({
 
 function ExpandedRestaurantDetails({
   item,
+  restaurantType,
   people,
   ratings,
   onSaveRating,
   onDeleteRating,
+  onUpdateCategories,
 }: {
   item: RestaurantItem;
+  restaurantType: RestaurantType | null;
   people: ProjectPersonRow[];
   ratings: RatingRow[];
   onSaveRating: (personId: string, rating: number, comment: string | null) => void;
   onDeleteRating: (ratingId: string) => void;
+  onUpdateCategories: (categories: string[]) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -562,15 +619,11 @@ function ExpandedRestaurantDetails({
               <Globe className="h-3 w-3 flex-shrink-0" /> Site web
             </a>
           )}
-          {item.categories.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {item.categories.map((c) => (
-                <Badge key={c} variant="secondary" className="text-[0.65rem]">
-                  {c}
-                </Badge>
-              ))}
-            </div>
-          )}
+          <StyleTagEditor
+            categories={item.categories}
+            suggestions={SUGGESTED_STYLE_TAGS[restaurantType ?? "restaurant"]}
+            onChange={onUpdateCategories}
+          />
         </div>
       </div>
 
@@ -591,6 +644,93 @@ function ExpandedRestaurantDetails({
         <div className="space-y-2 border-t border-border pt-3">
           <p className="text-sm font-semibold">Notes</p>
           <RatingsSection people={people} ratings={ratings} onSave={onSaveRating} onDelete={onDeleteRating} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tags de style éditables (classement par style d'établissement) — badges retirables + ajout
+ * libre ou depuis les suggestions du modèle du projet (bar/restaurant), non encore utilisées. */
+function StyleTagEditor({
+  categories,
+  suggestions,
+  onChange,
+}: {
+  categories: string[];
+  suggestions: string[];
+  onChange: (categories: string[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [value, setValue] = useState("");
+
+  function addTag(tag: string) {
+    const trimmed = tag.trim();
+    if (!trimmed || categories.includes(trimmed)) {
+      setAdding(false);
+      setValue("");
+      return;
+    }
+    onChange([...categories, trimmed]);
+    setValue("");
+    setAdding(false);
+  }
+
+  function removeTag(tag: string) {
+    onChange(categories.filter((c) => c !== tag));
+  }
+
+  const remainingSuggestions = suggestions.filter((s) => !categories.includes(s));
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <div className="flex flex-wrap items-center gap-1">
+        {categories.map((c) => (
+          <Badge key={c} variant="secondary" className="flex items-center gap-1 text-[0.65rem]">
+            {c}
+            <button type="button" onClick={() => removeTag(c)} className="hover:text-destructive">
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </Badge>
+        ))}
+        {adding ? (
+          <Input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addTag(value);
+              if (e.key === "Escape") {
+                setAdding(false);
+                setValue("");
+              }
+            }}
+            onBlur={() => (value.trim() ? addTag(value) : setAdding(false))}
+            placeholder="Style..."
+            className="h-6 w-28 text-xs"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-0.5 rounded-full border border-dashed border-border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground hover:border-accent hover:text-accent"
+          >
+            <Plus className="h-2.5 w-2.5" /> Style
+          </button>
+        )}
+      </div>
+      {remainingSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {remainingSuggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => addTag(s)}
+              className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground hover:border-accent hover:text-accent"
+            >
+              + {s}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -703,33 +843,6 @@ function RatingsSection({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function RankedList({ title, entries }: { title: string; entries: { item: RestaurantItem; avg: number }[] }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
-      {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Rien pour l'instant.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {entries.map(({ item, avg }) => (
-            <div key={item.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-card p-2">
-              {item.photo_url ? (
-                <img src={item.photo_url} alt="" className="h-10 w-10 flex-shrink-0 rounded object-cover" />
-              ) : (
-                <div className="h-10 w-10 flex-shrink-0 rounded bg-muted" />
-              )}
-              <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
-              <span className="flex flex-shrink-0 items-center gap-1 text-sm font-medium">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {avg.toFixed(1)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

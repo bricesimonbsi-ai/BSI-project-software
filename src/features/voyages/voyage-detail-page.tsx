@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVoyage, useUpdateVoyage } from "@/features/voyages/use-voyages";
 import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
+import { ProjectTitleInput } from "@/features/projects/project-title-input";
 import { useProjectPeople } from "@/features/people/use-people";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -286,28 +287,3 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
 
 /** Titre modifiable en ligne (pas d'onglet "Détails" séparé pour ce module voyage, contrairement
  * au modèle de projet générique) : édite au clic, enregistre à la perte de focus ou sur Entrée. */
-function ProjectTitleInput({ projectId, title }: { projectId: string; title: string }) {
-  const updateProject = useUpdateProject();
-  const [value, setValue] = useState(title);
-
-  useEffect(() => setValue(title), [title]);
-
-  function commit() {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed === title) {
-      setValue(title);
-      return;
-    }
-    updateProject.mutate({ id: projectId, title: trimmed });
-  }
-
-  return (
-    <Input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
-      className="h-auto border-transparent bg-transparent px-1.5 py-0 text-2xl font-bold hover:border-border focus-visible:border-border"
-    />
-  );
-}

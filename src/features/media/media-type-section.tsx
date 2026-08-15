@@ -29,6 +29,7 @@ import {
 import { useProjectPeople, type ProjectPersonRow } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { CONSOLES, MEDIA_TYPE_LABELS, mediaPosterUrl } from "@/features/media/media-constants";
+import { PodiumBoard, PersonRankingPanels, type PodiumEntry } from "@/features/shared/rating-podium";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,6 +55,10 @@ type NormalizedResult = {
   rating: number;
   addInput: TmdbAddInput | RawgAddInput;
 };
+
+function toPodiumEntry({ item, avg }: { item: MediaItem; avg: number }): PodiumEntry {
+  return { id: item.id, title: item.title, imageUrl: mediaPosterUrl(item), avg };
+}
 
 function normalizeMovie(m: TmdbMovieResult): NormalizedResult {
   return {
@@ -255,6 +260,7 @@ export function MediaTypeSection({
     list.push(r);
     ratingsByItemId.set(r.media_item_id, list);
   }
+  const itemsById = new Map((items ?? []).map((i) => [i.id, { title: i.title, imageUrl: mediaPosterUrl(i) }]));
 
   const currentYear = new Date().getFullYear().toString();
   const ratedEntries = watched
@@ -434,12 +440,21 @@ export function MediaTypeSection({
 
         <TabsContent value="synthese" className="space-y-6 pt-3">
           <MediaShareCard projectId={projectId} shareToken={mediaShareToken} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <RankedList title={`Mieux noté(e)s en ${currentYear}`} entries={bestThisYear} />
-            <RankedList title={`Moins bien noté(e)s en ${currentYear}`} entries={worstThisYear} />
-            <RankedList title="Mieux noté(e)s de tous les temps" entries={bestAllTime} />
-            <RankedList title="Moins bien noté(e)s de tous les temps" entries={worstAllTime} />
+          <div className="grid gap-6 sm:grid-cols-2">
+            <PodiumBoard title={`Mieux noté(e)s en ${currentYear}`} entries={bestThisYear.map(toPodiumEntry)} tone="best" />
+            <PodiumBoard title={`Moins bien noté(e)s en ${currentYear}`} entries={worstThisYear.map(toPodiumEntry)} tone="worst" />
+            <PodiumBoard title="Mieux noté(e)s de tous les temps" entries={bestAllTime.map(toPodiumEntry)} tone="best" />
+            <PodiumBoard title="Moins bien noté(e)s de tous les temps" entries={worstAllTime.map(toPodiumEntry)} tone="worst" />
           </div>
+          <PersonRankingPanels
+            people={linkedPeople ?? []}
+            ratings={((ratings ?? []) as RatingRow[]).filter((r) => r.people).map((r) => ({
+              person_id: r.person_id,
+              itemId: r.media_item_id,
+              rating: r.rating,
+            }))}
+            itemsById={itemsById}
+          />
         </TabsContent>
       </Tabs>
 
@@ -870,35 +885,5 @@ function MediaShareCard({ projectId, shareToken }: { projectId: string; shareTok
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function RankedList({ title, entries }: { title: string; entries: { item: MediaItem; avg: number }[] }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
-      {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Rien pour l'instant.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {entries.map(({ item, avg }) => {
-            const poster = mediaPosterUrl(item);
-            return (
-              <div key={item.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-card p-2">
-                {poster ? (
-                  <img src={poster} alt="" className="h-10 w-7 flex-shrink-0 rounded object-cover" />
-                ) : (
-                  <div className="h-10 w-7 flex-shrink-0 rounded bg-muted" />
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
-                <span className="flex flex-shrink-0 items-center gap-1 text-sm font-medium">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {avg.toFixed(1)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
   );
 }

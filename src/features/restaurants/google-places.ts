@@ -105,10 +105,15 @@ export async function searchPlaces(query: string): Promise<GooglePlaceResult[]> 
 }
 
 /** Bars/restaurants à proximité d'un point (géolocalisation du visiteur), dans un rayon de 1.5 km —
- * alimente automatiquement l'onglet "Suggestions à proximité". */
-export async function nearbyPlaces(latitude: number, longitude: number): Promise<GooglePlaceResult[]> {
+ * alimente automatiquement l'onglet "Suggestions à proximité". `includedTypes` se restreint selon
+ * le modèle du projet (bar/restaurant) ; par défaut mixte pour les projets sans modèle défini. */
+export async function nearbyPlaces(
+  latitude: number,
+  longitude: number,
+  includedTypes: string[] = ["restaurant", "bar", "cafe"]
+): Promise<GooglePlaceResult[]> {
   return placesPost("searchNearby", {
-    includedTypes: ["restaurant", "bar", "cafe"],
+    includedTypes,
     maxResultCount: 12,
     languageCode: "fr",
     locationRestriction: { circle: { center: { latitude, longitude }, radius: 1500 } },

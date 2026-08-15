@@ -181,6 +181,21 @@ export function useDeleteRestaurantItemRating(projectId: string) {
   });
 }
 
+/** Édite les tags de style d'un lieu (classement par style d'établissement) — seul champ
+ * modifiable manuellement après ajout, pour compléter/corriger ce que Google Places a détecté ou
+ * pour les lieux ajoutés manuellement (sans tags automatiques). */
+export function useUpdateRestaurantItem(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, categories }: { id: string; categories: string[] }) => {
+      const { error } = await supabase.from("restaurant_items").update({ categories }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["restaurant-items", projectId] }),
+    onError: onMutationError,
+  });
+}
+
 export function useDeleteRestaurantItem(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

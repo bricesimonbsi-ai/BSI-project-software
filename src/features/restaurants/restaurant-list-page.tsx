@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
+import { ProjectTitleInput } from "@/features/projects/project-title-input";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
 import { RestaurantSection } from "@/features/restaurants/restaurant-section";
+import { RESTAURANT_TYPE_LABELS } from "@/features/restaurants/restaurant-constants";
 import { MediaPeoplePanel } from "@/features/media/media-people-panel";
 import { toast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
@@ -61,7 +63,7 @@ export function RestaurantListPage() {
             <IconGlow>
               <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: project.id, icon })} />
             </IconGlow>
-            <h1 className="text-2xl font-bold">{project.title}</h1>
+            <ProjectTitleInput projectId={project.id} title={project.title} />
           </div>
           <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting}>
             <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer"}
@@ -71,13 +73,15 @@ export function RestaurantListPage() {
 
       <Tabs defaultValue="contenu">
         <TabsList>
-          <TabsTrigger value="contenu">Bars & Restaurants</TabsTrigger>
+          <TabsTrigger value="contenu">
+            {project.restaurant_type ? RESTAURANT_TYPE_LABELS[project.restaurant_type].plural : "Bars & Restaurants"}
+          </TabsTrigger>
           <TabsTrigger value="people">Personnes</TabsTrigger>
           <TabsTrigger value="collaborators">Collaborateurs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="contenu">
-          <RestaurantSection projectId={projectId} />
+          <RestaurantSection projectId={projectId} restaurantType={project.restaurant_type} />
         </TabsContent>
 
         <TabsContent value="people">

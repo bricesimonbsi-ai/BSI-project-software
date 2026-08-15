@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProject, useUpdateProject, useDeleteProject } from "@/features/projects/use-projects";
+import { ProjectTitleInput } from "@/features/projects/project-title-input";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export function MediaListPage() {
             <IconGlow>
               <EmojiPickerButton value={project.icon} onChange={(icon) => updateProject.mutate({ id: project.id, icon })} />
             </IconGlow>
-            <h1 className="text-2xl font-bold">{project.title}</h1>
+            <ProjectTitleInput projectId={project.id} title={project.title} />
           </div>
           <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting}>
             <Trash2 className="mr-2 h-4 w-4" /> {deleting ? "Suppression..." : "Supprimer"}

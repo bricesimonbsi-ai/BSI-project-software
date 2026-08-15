@@ -72,6 +72,10 @@ export type Project = {
   /** Présence = partage public de la synthèse (notes/commentaires) active (lien
    * /media/{token}, aucune authentification requise pour le visiteur) ; null = désactivé. */
   media_share_token: string | null;
+  /** Modèle choisi à la création pour un projet de la catégorie "Bars & Restaurants" — même
+   * principe que media_type ; null pour les projets créés avant cette distinction (comportement
+   * mixte bar+restaurant inchangé) ou pour tout autre projet. */
+  restaurant_type: RestaurantType | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -303,6 +307,8 @@ export type PublicMediaSynthesisItem = {
   avg_rating: number;
   ratings: PublicMediaRatingEntry[];
 };
+
+export type RestaurantType = "bar" | "restaurant";
 
 /** Un bar/restaurant suivi dans un projet de la catégorie "Bars & Restaurants". "Où" est récupéré
  * automatiquement via Google Places (adresse, photo, note, horaires...) quand la clé est
