@@ -3,14 +3,27 @@ import { cn } from "@/lib/utils";
 import { generateAvatarDataUri } from "@/features/people/avatar-generator";
 import type { PersonAvatarConfig } from "@/types/database";
 
-/** Palette cyclique, une couleur par personne selon sa position (pas de choix manuel à faire). */
-const AVATAR_COLOR_CLASSES = [
+/** Palette cyclique, une couleur par personne selon sa position (pas de choix manuel à faire) —
+ * exportée pour que d'autres vues (ex. l'agenda) dérivent une couleur stable par personne à
+ * partir du même index de position que celui utilisé ici pour l'avatar. */
+export const AVATAR_COLOR_CLASSES = [
   "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
   "bg-sky-500/20 text-sky-700 dark:text-sky-300",
   "bg-amber-500/20 text-amber-700 dark:text-amber-300",
   "bg-violet-500/20 text-violet-700 dark:text-violet-300",
   "bg-rose-500/20 text-rose-700 dark:text-rose-300",
   "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300",
+];
+
+/** Même palette que AVATAR_COLOR_CLASSES (teintes alignées par index), en couleur pleine — pour
+ * une simple pastille (ex. puce d'événement d'agenda) plutôt qu'un badge avatar. */
+export const AVATAR_DOT_CLASSES = [
+  "bg-emerald-500",
+  "bg-sky-500",
+  "bg-amber-500",
+  "bg-violet-500",
+  "bg-rose-500",
+  "bg-cyan-500",
 ];
 
 /** Émojis suggérés pour un avatar de personne, sans forcer une saisie. */

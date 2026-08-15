@@ -13,6 +13,7 @@ import { CategoriesAdminPage } from "@/features/portfolio/categories-admin-page"
 import { PeopleAdminPage } from "@/features/people/people-admin-page";
 import { ProjectDetailRouter } from "@/features/projects/project-detail-router";
 import { TodosPage } from "@/features/todos/todos-page";
+import { AgendaPage } from "@/features/agenda/agenda-page";
 import { SettingsPage } from "@/features/theme/settings-page";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,14 @@ export default function App() {
         element={
           <Shell>
             <ProjectDetailRouter />
+          </Shell>
+        }
+      />
+      <Route
+        path="/agenda"
+        element={
+          <Shell>
+            <AgendaPage />
           </Shell>
         }
       />

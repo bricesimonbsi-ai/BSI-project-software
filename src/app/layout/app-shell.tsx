@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Briefcase, ListChecks, Settings, LogOut, Bell, Sun, Moon, Monitor } from "lucide-react";
+import { Briefcase, ListChecks, CalendarDays, Settings, LogOut, Bell, Sun, Moon, Monitor } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { useNotifications } from "@/features/notifications/use-notifications";
@@ -20,6 +20,7 @@ import type { NotificationRow } from "@/types/database";
 
 const navItems = [
   { to: "/", label: "Accueil", icon: Briefcase, end: true },
+  { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/todos", label: "Tâches", icon: ListChecks },
   { to: "/settings", label: "Réglages", icon: Settings },
 ];

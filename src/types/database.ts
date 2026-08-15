@@ -91,6 +91,41 @@ export type ProjectCollaborator = {
   created_at: string;
 };
 
+/** Un événement de l'agenda partageable — libre, indépendant de tout projet, appartenant à un
+ * compte (owner_id) plutôt qu'à un projet. */
+export type AgendaEvent = {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Une personne (répertoire "people") participant à un événement — plusieurs par événement. */
+export type AgendaEventParticipant = {
+  id: string;
+  event_id: string;
+  person_id: string;
+};
+
+/** Collaborateur ayant accès à l'agenda d'un compte — même principe que ProjectCollaborator, mais
+ * indexé par owner_id (le compte propriétaire) plutôt que par project_id. */
+export type AgendaCollaborator = {
+  id: string;
+  owner_id: string;
+  email: string;
+  user_id: string | null;
+  permission: Permission;
+  invited_by: string;
+  created_at: string;
+};
+
 export type TodoCategory = "visa" | "vaccin" | "permis" | "materiel" | "itineraire" | "autre";
 
 export type Todo = {
@@ -643,6 +678,9 @@ export type Database = {
       restaurant_items: Table<RestaurantItem>;
       restaurant_item_visitors: Table<RestaurantItemVisitor>;
       restaurant_item_ratings: Table<RestaurantItemRating>;
+      agenda_events: Table<AgendaEvent>;
+      agenda_event_participants: Table<AgendaEventParticipant>;
+      agenda_collaborators: Table<AgendaCollaborator>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };
