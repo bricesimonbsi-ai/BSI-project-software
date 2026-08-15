@@ -207,6 +207,18 @@ export function useAddAgendaCollaborator(ownerId: string) {
   });
 }
 
+export function useUpdateAgendaCollaboratorPermission(ownerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, permission }: { id: string; permission: Permission }) => {
+      const { error } = await supabase.from("agenda_collaborators").update({ permission }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agenda-collaborators", ownerId] }),
+    onError: onMutationError,
+  });
+}
+
 export function useRemoveAgendaCollaborator(ownerId: string) {
   const queryClient = useQueryClient();
   return useMutation({

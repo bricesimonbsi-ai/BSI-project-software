@@ -14,6 +14,7 @@ import { PeopleAdminPage } from "@/features/people/people-admin-page";
 import { ProjectDetailRouter } from "@/features/projects/project-detail-router";
 import { TodosPage } from "@/features/todos/todos-page";
 import { AgendaPage } from "@/features/agenda/agenda-page";
+import { CollaboratorsAdminPage } from "@/features/projects/collaborators-admin-page";
 import { SettingsPage } from "@/features/theme/settings-page";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,14 @@ export default function App() {
         element={
           <Shell>
             <TodosPage />
+          </Shell>
+        }
+      />
+      <Route
+        path="/collaborators"
+        element={
+          <Shell>
+            <CollaboratorsAdminPage />
           </Shell>
         }
       />

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
 import { usePeople } from "@/features/people/use-people";
 import { useAgendaEvents, useAgendaEventParticipants, useSharedAgendas } from "@/features/agenda/use-agenda";
-import { personDotColorClass } from "@/features/agenda/person-color";
+import { personDotColorClass, combinationDotColorClass } from "@/features/agenda/person-color";
 import { AgendaEventDialog } from "@/features/agenda/agenda-event-dialog";
 import { AgendaCollaboratorsPanel } from "@/features/agenda/agenda-collaborators-panel";
 import { Button } from "@/components/ui/button";
@@ -86,11 +86,22 @@ export function AgendaPage() {
     return map;
   }, [participants]);
 
+  // Un événement qui dure plusieurs jours doit apparaître dans CHAQUE case qu'il couvre (pas
+  // seulement le jour de début) — on parcourt donc la plage start_at → end_at jour par jour.
+  // Plafond de sécurité à 366 jours pour ne jamais boucler indéfiniment sur une donnée aberrante.
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
     for (const e of events ?? []) {
-      const key = dateKey(new Date(e.start_at));
-      map.set(key, [...(map.get(key) ?? []), e]);
+      const startDay = startOfDay(new Date(e.start_at));
+      const endDay = startOfDay(new Date(e.end_at ?? e.start_at));
+      const cursor = new Date(startDay);
+      let guard = 0;
+      while (cursor.getTime() <= endDay.getTime() && guard < 366) {
+        const key = dateKey(cursor);
+        map.set(key, [...(map.get(key) ?? []), e]);
+        cursor.setDate(cursor.getDate() + 1);
+        guard += 1;
+      }
     }
     return map;
   }, [events]);
@@ -178,19 +189,27 @@ export function AgendaPage() {
                 type="button"
                 onClick={() => setSelectedDay(day)}
                 className={cn(
-                  "flex min-h-16 flex-col items-start gap-0.5 rounded-md border p-1 text-left transition-colors",
+                  "flex min-h-20 flex-col items-start gap-0.5 rounded-md border p-1 text-left transition-colors",
                   inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30 text-muted-foreground",
                   today && "border-accent"
                 )}
               >
                 <span className={cn("text-xs", today && "font-bold text-accent")}>{day.getDate()}</span>
-                <div className="flex w-full flex-wrap gap-0.5">
-                  {dayEvents.slice(0, 3).map((e) => {
-                    const firstParticipant = (participantsByEvent.get(e.id) ?? [])[0];
-                    const dotClass = firstParticipant ? personDotColorClass(firstParticipant, people ?? []) : "bg-muted-foreground/40";
-                    return <span key={e.id} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", dotClass)} title={e.title} />;
+                <div className="flex w-full flex-col gap-0.5">
+                  {dayEvents.slice(0, 2).map((e) => {
+                    const dotClass = combinationDotColorClass(participantsByEvent.get(e.id) ?? [], people ?? []);
+                    return (
+                      <span
+                        key={e.id}
+                        title={e.title}
+                        className="flex items-center gap-1 truncate rounded bg-secondary px-1 py-0.5 text-[0.6rem] leading-tight"
+                      >
+                        <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", dotClass)} />
+                        <span className="truncate">{e.title}</span>
+                      </span>
+                    );
                   })}
-                  {dayEvents.length > 3 && <span className="text-[0.6rem] text-muted-foreground">+{dayEvents.length - 3}</span>}
+                  {dayEvents.length > 2 && <span className="text-[0.6rem] text-muted-foreground">+{dayEvents.length - 2}</span>}
                 </div>
               </button>
             );

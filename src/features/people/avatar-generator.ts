@@ -129,9 +129,9 @@ export const DEFAULT_AVATAR_CONFIG: PersonAvatarConfig = {
 };
 
 /** Rendu déterministe : mêmes genre/couleurs/coiffure/accessoire choisis par l'utilisateur (tenue
- * toujours simple, visage toujours souriant), mais les traits non exposés dans le picker (yeux,
- * sourcils...) restent stables d'un rendu à l'autre grâce au seed (id de la personne) plutôt que
- * de re-tirer au hasard à chaque appel. */
+ * toujours simple, visage toujours souriant et neutre — yeux et sourcils fixés, pas seulement la
+ * bouche, pour éviter les expressions fantaisistes type clin d'œil/surprise/dizzy que DiceBear
+ * tirait au hasard à partir du seed). */
 export function generateAvatarDataUri(seed: string, config: PersonAvatarConfig): string {
   const gender = config.gender ?? "homme";
   const avatar = createAvatar(avataaars, {
@@ -143,6 +143,8 @@ export function generateAvatarDataUri(seed: string, config: PersonAvatarConfig):
     accessories: config.accessories ? [config.accessories as never] : [],
     accessoriesProbability: config.accessories ? 100 : 0,
     mouth: ["smile" as never],
+    eyes: ["default" as never],
+    eyebrows: ["defaultNatural" as never],
     clothing: SIMPLE_CLOTHING as never,
     facialHair: gender === "homme" ? (MALE_FACIAL_HAIR as never) : [],
     facialHairProbability: gender === "homme" ? 20 : 0,

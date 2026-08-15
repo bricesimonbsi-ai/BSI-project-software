@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { Sun, Moon, Monitor, Shapes, Users, Check, List, LayoutGrid, Circle, Fingerprint, Bell } from "lucide-react";
+import { Sun, Moon, Monitor, Shapes, Users, UserCog, Check, List, LayoutGrid, Circle, Fingerprint, Bell } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
@@ -117,6 +117,23 @@ export function SettingsPage() {
           <Link to="/people">
             <Button variant="outline">
               <Users className="mr-2 h-4 w-4" /> Gérer les personnes
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Collaborateurs</CardTitle>
+          <CardDescription>
+            Toutes les personnes ayant accès à tes projets ou à ton agenda, en un seul endroit — plus besoin d'ouvrir
+            chaque projet séparément.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link to="/collaborators">
+            <Button variant="outline">
+              <UserCog className="mr-2 h-4 w-4" /> Gérer les accès
             </Button>
           </Link>
         </CardContent>
