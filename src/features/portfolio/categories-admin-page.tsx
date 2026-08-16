@@ -22,7 +22,7 @@ export function CategoriesAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Catégories de projets</h1>
         <NewCategoryDialog nextPosition={(categories?.length ?? 0)} />
       </div>
@@ -32,26 +32,26 @@ export function CategoriesAdminPage() {
       <div className="space-y-2">
         {categories?.map((category) => (
           <Card key={category.id}>
-            <CardContent className="flex items-center justify-between gap-4 p-4">
-              <div className="flex items-center gap-3">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <input
                   type="color"
                   value={category.color}
                   onChange={(e) => updateCategory.mutate({ id: category.id, color: e.target.value })}
-                  className="h-8 w-8 cursor-pointer rounded border-0"
+                  className="h-8 w-8 flex-shrink-0 cursor-pointer rounded border-0"
                   title="Couleur d'accent"
                 />
                 <EmojiPickerButton
                   value={category.icon}
                   onChange={(icon) => updateCategory.mutate({ id: category.id, icon })}
-                  className="h-8 w-8"
+                  className="h-8 w-8 flex-shrink-0"
                 />
-                <div>
+                <div className="min-w-0">
                   <CategoryNameInput category={category} updateCategory={updateCategory} />
-                  {category.module_key && <p className="text-xs text-muted-foreground">Module dédié : {category.module_key}</p>}
+                  {category.module_key && <p className="truncate text-xs text-muted-foreground">Module dédié : {category.module_key}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 <Badge variant={category.status === "active" ? "secondary" : "outline"}>
                   {category.status === "active" ? "Active" : "Archivée"}
                 </Badge>
@@ -100,7 +100,7 @@ function CategoryNameInput({ category, updateCategory }: { category: Category; u
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
-      className="h-8 w-48 border-transparent bg-transparent px-1.5 font-medium hover:border-border focus-visible:border-border"
+      className="h-8 w-full min-w-0 max-w-[12rem] border-transparent bg-transparent px-1.5 font-medium hover:border-border focus-visible:border-border"
     />
   );
 }
