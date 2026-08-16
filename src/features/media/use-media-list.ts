@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { fetchWatchProviders } from "@/features/media/tmdb";
-import { fetchGameDescription } from "@/features/media/rawg";
+import { fetchGameDescription } from "@/features/media/igdb";
 import type { MediaItem, MediaItemWatcher, MediaItemRating, MediaType, Person } from "@/types/database";
 
 function onMutationError(err: unknown) {
@@ -81,7 +81,7 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
   });
 }
 
-export type RawgAddInput = {
+export type IgdbAddInput = {
   external_id: string;
   title: string;
   poster_path: string | null;
@@ -92,13 +92,13 @@ export type RawgAddInput = {
   watched?: boolean;
 };
 
-/** Ajoute un jeu vidéo trouvé via RAWG — les plateformes viennent directement du résultat de
+/** Ajoute un jeu vidéo trouvé via IGDB — les plateformes viennent directement du résultat de
  * recherche/tendances (pas d'appel séparé, contrairement à TMDB) ; la description, elle,
  * nécessite un appel détaillé fait ici au moment de l'ajout. */
-export function useAddRawgMedia(projectId: string) {
+export function useAddIgdbMedia(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RawgAddInput) => {
+    mutationFn: async (input: IgdbAddInput) => {
       const [position, synopsis] = await Promise.all([nextPosition(projectId, "jeu"), fetchGameDescription(input.external_id)]);
       const { error } = await supabase.from("media_items").insert({
         project_id: projectId,

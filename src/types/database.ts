@@ -642,6 +642,26 @@ export type VoyagePersonExpenseSummary = {
   total_actual: number | null;
 };
 
+export type GiftOccasion = "anniversaire" | "noel" | "autre";
+export type GiftStatus = "idee" | "achete" | "offert";
+
+/** Une idée de cadeau dans un projet de la catégorie "Cadeaux" — la personne visée (facultative)
+ * vient du répertoire "Personnes" déjà existant, pas d'une table dédiée. */
+export type GiftItem = {
+  id: string;
+  project_id: string;
+  title: string;
+  person_id: string | null;
+  occasion: GiftOccasion;
+  status: GiftStatus;
+  price_estimate: number | null;
+  link: string | null;
+  notes: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
 type Table<Row, InsertShape = Partial<Row>> = {
   Row: Row;
   Insert: InsertShape;
@@ -684,6 +704,7 @@ export type Database = {
       agenda_events: Table<AgendaEvent>;
       agenda_event_participants: Table<AgendaEventParticipant>;
       agenda_collaborators: Table<AgendaCollaborator>;
+      gift_items: Table<GiftItem>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

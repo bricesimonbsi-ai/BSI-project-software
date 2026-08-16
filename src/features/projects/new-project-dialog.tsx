@@ -39,8 +39,9 @@ export function NewProjectDialog({ category }: { category: Category }) {
   const isCourses = category.module_key === "courses";
   const isMedia = category.module_key === "media";
   const isRestaurants = category.module_key === "restaurants";
-  const hidesDates = isCourses || isMedia || isRestaurants;
-  const hidesBudget = isVoyage || isCourses || isMedia || isRestaurants;
+  const isGifts = category.module_key === "cadeaux";
+  const hidesDates = isCourses || isMedia || isRestaurants || isGifts;
+  const hidesBudget = isVoyage || isCourses || isMedia || isRestaurants || isGifts;
 
   const existingLists = (projects ?? []).filter((p) => p.category_id === category.id);
 

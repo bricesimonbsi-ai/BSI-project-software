@@ -2,7 +2,7 @@
  * (géolocalisation du visiteur) et photos, pour alimenter automatiquement "où" un bar/restaurant
  * est situé (adresse, note, horaires, téléphone, site, prix). La clé est injectée au build via une
  * variable d'environnement (jamais codée en dur ni committée) : VITE_GOOGLE_PLACES_API_KEY, à
- * définir dans les variables d'environnement Vercel. Contrairement à TMDB/RAWG, Google Places
+ * définir dans les variables d'environnement Vercel. Contrairement à TMDB/IGDB, Google Places
  * nécessite une clé avec facturation activée côté Google Cloud (quota gratuit mensuel, au-delà
  * facturé à l'usage) — restreins la clé par référent HTTP (domaine projeko.fr) côté Google Cloud. */
 

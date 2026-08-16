@@ -9,11 +9,11 @@ import {
   type TmdbMovieResult,
   type TmdbTvResult,
 } from "@/features/media/tmdb";
-import { searchGames, trendingGames, isRawgConfigured, type RawgGameResult } from "@/features/media/rawg";
+import { searchGames, trendingGames, isIgdbConfigured, type IgdbGameResult } from "@/features/media/igdb";
 import {
   useMediaItems,
   useAddTmdbMedia,
-  useAddRawgMedia,
+  useAddIgdbMedia,
   useAddManualMedia,
   useToggleWatched,
   useUpdateMediaItem,
@@ -24,7 +24,7 @@ import {
   useDeleteMediaItemRating,
   useSetMediaShareToken,
   type TmdbAddInput,
-  type RawgAddInput,
+  type IgdbAddInput,
 } from "@/features/media/use-media-list";
 import { useProjectPeople, type ProjectPersonRow } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
@@ -53,7 +53,7 @@ type NormalizedResult = {
   posterPath: string | null;
   year: string | undefined;
   rating: number;
-  addInput: TmdbAddInput | RawgAddInput;
+  addInput: TmdbAddInput | IgdbAddInput;
 };
 
 function toPodiumEntry({ item, avg }: { item: MediaItem; avg: number }): PodiumEntry {
@@ -96,9 +96,9 @@ function normalizeTv(t: TmdbTvResult): NormalizedResult {
   };
 }
 
-/** RAWG note sur 5 ; on la ramène sur 10 pour rester cohérent avec l'affichage TMDB ("X.X/10"). */
-function normalizeGame(g: RawgGameResult): NormalizedResult {
-  const rating = g.rating ? Math.round(g.rating * 2 * 10) / 10 : 0;
+/** IGDB renvoie déjà une note ramenée sur 10 côté Edge Function (source sur 100 à l'origine). */
+function normalizeGame(g: IgdbGameResult): NormalizedResult {
+  const rating = g.rating ?? 0;
   return {
     id: String(g.id),
     title: g.name,
@@ -135,14 +135,14 @@ export function MediaTypeSection({
 }) {
   const labels = MEDIA_TYPE_LABELS[type];
   const isJeu = type === "jeu";
-  const autoAvailable = isJeu ? isRawgConfigured() : isTmdbConfigured();
+  const autoAvailable = isJeu ? isIgdbConfigured() : isTmdbConfigured();
   const { data: items, isLoading } = useMediaItems(projectId, type);
   const { data: linkedPeople } = useProjectPeople(projectId);
   const itemIds = useMemo(() => (items ?? []).map((i) => i.id), [items]);
   const { data: watchers } = useMediaItemWatchers(projectId, itemIds);
   const { data: ratings } = useMediaItemRatings(projectId, itemIds);
   const addTmdb = useAddTmdbMedia(projectId, isJeu ? "film" : (type as "film" | "serie"));
-  const addRawg = useAddRawgMedia(projectId);
+  const addIgdb = useAddIgdbMedia(projectId);
   const addManual = useAddManualMedia(projectId);
   const toggleWatched = useToggleWatched(projectId);
   const updateItem = useUpdateMediaItem(projectId);
@@ -205,7 +205,7 @@ export function MediaTypeSection({
   const existingExternalIds = new Set((items ?? []).map((i) => i.external_id));
 
   async function handleAddResult(result: NormalizedResult, markWatched: boolean) {
-    if (isJeu) await addRawg.mutateAsync({ ...(result.addInput as RawgAddInput), watched: markWatched });
+    if (isJeu) await addIgdb.mutateAsync({ ...(result.addInput as IgdbAddInput), watched: markWatched });
     else await addTmdb.mutateAsync({ ...(result.addInput as TmdbAddInput), watched: markWatched });
     setQuery("");
     setResults([]);
@@ -388,7 +388,7 @@ export function MediaTypeSection({
         <TabsContent value="nouveautes" className="pt-3">
           {!autoAvailable ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Pas de source automatique de nouveautés pour les jeux vidéo sans clé RAWG configurée — ajoute-les depuis l'onglet "Ma
+              Pas de source automatique de nouveautés pour les jeux vidéo sans IGDB configuré — ajoute-les depuis l'onglet "Ma
               liste".
             </p>
           ) : trendingLoading ? (
@@ -492,7 +492,7 @@ export function MediaTypeSection({
         </p>
       )}
       {isJeu && autoAvailable && (
-        <p className="text-center text-[0.65rem] text-muted-foreground">Données jeux vidéo fournies par RAWG.io.</p>
+        <p className="text-center text-[0.65rem] text-muted-foreground">Données jeux vidéo fournies par IGDB.</p>
       )}
 
       <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
