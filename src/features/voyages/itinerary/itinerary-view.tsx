@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plane, TrainFront, Bus, Car, CarTaxiFront, Ship, MoveRight, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEtapes, useReorderEtapes, useDeleteEtape } from "@/features/voyages/use-etapes";
 import {
@@ -53,29 +53,19 @@ const COUNTRY_COLOR_CLASSES = [
   "bg-orange-500/10 border-l-4 border-l-orange-500",
 ];
 
-function transportIcon(mode: string | null) {
+/** Même emoji que la bibliothèque d'icônes partagée (EMOJI_CATEGORIES, catégorie "voyages") —
+ * pour que le pictogramme de mode de transport dans l'itinéraire soit visuellement cohérent avec
+ * le reste de l'application plutôt qu'une icône de trait différente. */
+function transportEmoji(mode: string | null): string | null {
   if (!mode) return null;
   const m = mode.toLowerCase();
-  if (m.includes("avion")) return Plane;
-  if (m.includes("train")) return TrainFront;
-  if (m.includes("bus")) return Bus;
-  if (m.includes("taxi") || m.includes("vtc")) return CarTaxiFront;
-  if (m.includes("voiture")) return Car;
-  if (m.includes("ferry") || m.includes("bateau")) return Ship;
-  return MoveRight;
-}
-
-/** Couleur distincte par mode de transport, pour retrouver le code couleur de la maquette. */
-function transportIconColorClass(mode: string | null): string {
-  if (!mode) return "text-muted-foreground";
-  const m = mode.toLowerCase();
-  if (m.includes("avion")) return "text-sky-600 dark:text-sky-400";
-  if (m.includes("train")) return "text-violet-600 dark:text-violet-400";
-  if (m.includes("bus")) return "text-amber-600 dark:text-amber-400";
-  if (m.includes("taxi") || m.includes("vtc")) return "text-rose-600 dark:text-rose-400";
-  if (m.includes("voiture")) return "text-slate-600 dark:text-slate-400";
-  if (m.includes("ferry") || m.includes("bateau")) return "text-cyan-600 dark:text-cyan-400";
-  return "text-muted-foreground";
+  if (m.includes("avion")) return "✈️";
+  if (m.includes("train")) return "🚆";
+  if (m.includes("bus")) return "🚌";
+  if (m.includes("taxi") || m.includes("vtc")) return "🚕";
+  if (m.includes("voiture")) return "🚗";
+  if (m.includes("ferry") || m.includes("bateau")) return "⛴️";
+  return "🧭";
 }
 
 export function ItineraryView({
@@ -623,7 +613,7 @@ function CityRow({
     }
   }
 
-  const TransportIcon = transportIcon(row.incomingMode);
+  const incomingEmoji = transportEmoji(row.incomingMode);
   const hasIncoming = row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode);
 
   function handleDeleteCity() {
@@ -658,7 +648,7 @@ function CityRow({
             title="Trajet depuis l'étape précédente"
           >
             <ArrowDownRight className="h-3 w-3 text-muted-foreground/70" />
-            {TransportIcon && <TransportIcon className={cn("h-3.5 w-3.5", transportIconColorClass(row.incomingMode))} />}
+            {incomingEmoji && <span className="text-sm leading-none">{incomingEmoji}</span>}
             {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km` : ""}
           </span>
         )}
