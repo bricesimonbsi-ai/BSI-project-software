@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useCategories, useCreateCategory, useUpdateCategory } from "@/features/portfolio/use-categories";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
-import { Plus } from "lucide-react";
+import { Plus, FolderOpen } from "lucide-react";
 import type { Category } from "@/types/database";
 
 export function CategoriesAdminPage() {
@@ -55,6 +56,11 @@ export function CategoriesAdminPage() {
                 <Badge variant={category.status === "active" ? "secondary" : "outline"}>
                   {category.status === "active" ? "Active" : "Archivée"}
                 </Badge>
+                <Button variant="ghost" size="sm" asChild title="Voir les projets de cette catégorie, même archivée">
+                  <Link to={`/categories/${category.id}`}>
+                    <FolderOpen className="mr-1.5 h-3.5 w-3.5" /> Projets
+                  </Link>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
