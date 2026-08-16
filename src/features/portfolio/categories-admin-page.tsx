@@ -48,8 +48,8 @@ export function CategoriesAdminPage() {
       <div className="space-y-2">
         {categories?.map((category) => (
           <Card key={category.id}>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="flex min-w-0 items-center gap-3">
                 <input
                   type="color"
                   value={category.color}
@@ -62,12 +62,12 @@ export function CategoriesAdminPage() {
                   onChange={(icon) => updateCategory.mutate({ id: category.id, icon })}
                   className="h-8 w-8 flex-shrink-0"
                 />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <CategoryNameInput category={category} updateCategory={updateCategory} />
                   {category.module_key && <p className="truncate text-xs text-muted-foreground">Module dédié : {category.module_key}</p>}
                 </div>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={category.status === "active" ? "secondary" : "outline"}>
                   {category.status === "active" ? "Active" : "Archivée"}
                 </Badge>
@@ -91,7 +91,7 @@ export function CategoriesAdminPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="ml-auto h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={() => handleDelete(category)}
                   title="Supprimer la catégorie"
                 >
@@ -130,7 +130,7 @@ function CategoryNameInput({ category, updateCategory }: { category: Category; u
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
-      className="h-8 w-full min-w-0 max-w-[12rem] border-transparent bg-transparent px-1.5 font-medium hover:border-border focus-visible:border-border"
+      className="h-8 w-full min-w-0 border-transparent bg-transparent px-1.5 font-medium hover:border-border focus-visible:border-border"
     />
   );
 }
