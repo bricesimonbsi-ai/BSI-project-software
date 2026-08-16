@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/hooks/use-toast";
 import { APP_URL } from "@/lib/app-url";
-import type { AgendaEvent, AgendaEventParticipant, AgendaCollaborator, Permission, Person, Profile } from "@/types/database";
+import type { AgendaEvent, AgendaEventParticipant, AgendaCollaborator, Permission, Person, Profile, RecurrenceFreq } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -48,6 +48,9 @@ export type AgendaEventInput = {
   end_at: string | null;
   all_day: boolean;
   participantPersonIds: string[];
+  recurrence_freq: RecurrenceFreq;
+  recurrence_interval: number;
+  recurrence_end_date: string | null;
 };
 
 export function useCreateAgendaEvent(ownerId: string) {
@@ -66,6 +69,9 @@ export function useCreateAgendaEvent(ownerId: string) {
           start_at: input.start_at,
           end_at: input.end_at,
           all_day: input.all_day,
+          recurrence_freq: input.recurrence_freq,
+          recurrence_interval: input.recurrence_interval,
+          recurrence_end_date: input.recurrence_end_date,
           created_by: session.user.id,
         })
         .select("*")
@@ -97,6 +103,9 @@ export function useUpdateAgendaEvent(ownerId: string) {
           start_at: input.start_at,
           end_at: input.end_at,
           all_day: input.all_day,
+          recurrence_freq: input.recurrence_freq,
+          recurrence_interval: input.recurrence_interval,
+          recurrence_end_date: input.recurrence_end_date,
           updated_at: new Date().toISOString(),
         })
         .eq("id", input.id);

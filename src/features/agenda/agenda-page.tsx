@@ -7,12 +7,13 @@ import { combinationDotColorClass, personColorIndex } from "@/features/agenda/pe
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { AgendaEventDialog } from "@/features/agenda/agenda-event-dialog";
 import { AgendaCollaboratorsPanel } from "@/features/agenda/agenda-collaborators-panel";
+import { expandEventOccurrences, type AgendaOccurrence } from "@/features/agenda/recurrence";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { formatDate, cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Plus, Share2, MapPin, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Share2, MapPin, CalendarDays, Repeat } from "lucide-react";
 import type { AgendaEvent, Person } from "@/types/database";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -63,26 +64,29 @@ function daysBetween(a: Date, b: Date): number {
 
 const MAX_WEEK_LANES = 3;
 
-type WeekBar = { event: AgendaEvent; startCol: number; endCol: number; lane: number };
+type WeekBar = { occurrence: AgendaOccurrence; startCol: number; endCol: number; lane: number };
 
 /**
- * Pour une semaine (7 jours) de la grille, calcule des barres continues par événement (colonne de
+ * Pour une semaine (7 jours) de la grille, calcule des barres continues par occurrence (colonne de
  * début → colonne de fin, clippées à la semaine) réparties sur des "voies" (lanes) pour éviter que
- * deux événements simultanés se chevauchent visuellement — comme un planning Gantt compact. Un
- * événement qui déborde le nombre max de voies affichées est compté dans `overflowByDay` (jour par
- * jour couvert) plutôt que dessiné, pour ne pas faire exploser la hauteur de la grille.
+ * deux occurrences simultanées se chevauchent visuellement — comme un planning Gantt compact. Une
+ * occurrence qui déborde le nombre max de voies affichées est comptée dans `overflowByDay` (jour
+ * par jour couvert) plutôt que dessinée, pour ne pas faire exploser la hauteur de la grille.
  */
-function layoutWeekBars(week: Date[], events: AgendaEvent[]): { bars: WeekBar[]; laneCount: number; overflowByDay: Map<string, number> } {
+function layoutWeekBars(
+  week: Date[],
+  occurrences: AgendaOccurrence[]
+): { bars: WeekBar[]; laneCount: number; overflowByDay: Map<string, number> } {
   const weekStart = week[0];
   const weekEnd = week[6];
-  const relevant = events
-    .map((e) => {
-      const s = startOfDay(new Date(e.start_at));
-      const en = startOfDay(new Date(e.end_at ?? e.start_at));
+  const relevant = occurrences
+    .map((o) => {
+      const s = startOfDay(new Date(o.start_at));
+      const en = startOfDay(new Date(o.end_at ?? o.start_at));
       if (en < weekStart || s > weekEnd) return null;
-      return { event: e, startCol: Math.max(0, daysBetween(weekStart, s)), endCol: Math.min(6, daysBetween(weekStart, en)) };
+      return { occurrence: o, startCol: Math.max(0, daysBetween(weekStart, s)), endCol: Math.min(6, daysBetween(weekStart, en)) };
     })
-    .filter((x): x is { event: AgendaEvent; startCol: number; endCol: number } => x !== null)
+    .filter((x): x is { occurrence: AgendaOccurrence; startCol: number; endCol: number } => x !== null)
     .sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
 
   const laneEnds: number[] = [];
@@ -165,25 +169,10 @@ export function AgendaPage() {
     return map;
   }, [participants]);
 
-  // Un événement qui dure plusieurs jours doit apparaître dans CHAQUE case qu'il couvre (pas
-  // seulement le jour de début) — on parcourt donc la plage start_at → end_at jour par jour.
-  // Plafond de sécurité à 366 jours pour ne jamais boucler indéfiniment sur une donnée aberrante.
-  const eventsByDay = useMemo(() => {
-    const map = new Map<string, AgendaEvent[]>();
-    for (const e of events ?? []) {
-      const startDay = startOfDay(new Date(e.start_at));
-      const endDay = startOfDay(new Date(e.end_at ?? e.start_at));
-      const cursor = new Date(startDay);
-      let guard = 0;
-      while (cursor.getTime() <= endDay.getTime() && guard < 366) {
-        const key = dateKey(cursor);
-        map.set(key, [...(map.get(key) ?? []), e]);
-        cursor.setDate(cursor.getDate() + 1);
-        guard += 1;
-      }
-    }
-    return map;
-  }, [events]);
+  // Pour retrouver la définition d'origine d'une occurrence (id partagé par toutes les
+  // occurrences d'une même série) quand on ouvre le dialogue d'édition — jamais les dates
+  // décalées de l'occurrence cliquée, toujours l'ancre de la série.
+  const eventsById = useMemo(() => new Map((events ?? []).map((e) => [e.id, e])), [events]);
 
   const grid = useMemo(() => buildMonthGrid(month), [month]);
   const weeks = useMemo(() => {
@@ -192,10 +181,41 @@ export function AgendaPage() {
     return chunks;
   }, [grid]);
 
+  // Occurrences (dérivées de la récurrence) qui recoupent la grille affichée — un événement
+  // récurrent (anniversaire, virement mensuel...) apparaît autant de fois que nécessaire, sans
+  // matérialiser une ligne par occurrence en base (voir features/agenda/recurrence.ts).
+  const visibleOccurrences = useMemo(() => {
+    const rangeStart = grid[0];
+    const rangeEnd = grid[grid.length - 1];
+    return (events ?? []).flatMap((e) => expandEventOccurrences(e, rangeStart, rangeEnd));
+  }, [events, grid]);
+
+  // Une occurrence qui dure plusieurs jours doit apparaître dans CHAQUE case qu'elle couvre (pas
+  // seulement le jour de début) — on parcourt donc la plage start_at → end_at jour par jour.
+  // Plafond de sécurité à 366 jours pour ne jamais boucler indéfiniment sur une donnée aberrante.
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, AgendaOccurrence[]>();
+    for (const o of visibleOccurrences) {
+      const startDay = startOfDay(new Date(o.start_at));
+      const endDay = startOfDay(new Date(o.end_at ?? o.start_at));
+      const cursor = new Date(startDay);
+      let guard = 0;
+      while (cursor.getTime() <= endDay.getTime() && guard < 366) {
+        const key = dateKey(cursor);
+        map.set(key, [...(map.get(key) ?? []), o]);
+        cursor.setDate(cursor.getDate() + 1);
+        guard += 1;
+      }
+    }
+    return map;
+  }, [visibleOccurrences]);
+
   const upcoming = useMemo(() => {
     const now = new Date();
+    const rangeEnd = new Date(now);
+    rangeEnd.setFullYear(rangeEnd.getFullYear() + 2);
     return (events ?? [])
-      .filter((e) => new Date(e.end_at ?? e.start_at) >= now)
+      .flatMap((e) => expandEventOccurrences(e, now, rangeEnd))
       .sort((a, b) => a.start_at.localeCompare(b.start_at))
       .slice(0, 8);
   }, [events]);
@@ -206,8 +226,11 @@ export function AgendaPage() {
     setDialogOpen(true);
   }
 
-  function openEditDialog(event: AgendaEvent) {
-    setEditingEvent({ ...event, participantIds: participantsByEvent.get(event.id) ?? [] });
+  // Reçoit potentiellement une occurrence (dates décalées) : on édite toujours la définition
+  // d'origine de la série, jamais les dates recalculées d'une occurrence précise.
+  function openEditDialog(occurrenceOrEvent: AgendaEvent) {
+    const original = eventsById.get(occurrenceOrEvent.id) ?? occurrenceOrEvent;
+    setEditingEvent({ ...original, participantIds: participantsByEvent.get(original.id) ?? [] });
     setDialogDefaultDate(null);
     setDialogOpen(true);
   }
@@ -278,7 +301,7 @@ export function AgendaPage() {
 
         <div className="space-y-1">
           {weeks.map((week, wi) => {
-            const { bars, laneCount, overflowByDay } = layoutWeekBars(week, events ?? []);
+            const { bars, laneCount, overflowByDay } = layoutWeekBars(week, visibleOccurrences);
             const cellMinHeight = 26 + Math.max(laneCount, 1) * 20;
             return (
               <div key={wi} className="relative">
@@ -311,23 +334,24 @@ export function AgendaPage() {
                     style={{ gridAutoRows: "20px" }}
                   >
                     {bars.map((b) => {
-                      const solidClass = combinationDotColorClass(participantsByEvent.get(b.event.id) ?? [], people ?? []);
+                      const solidClass = combinationDotColorClass(participantsByEvent.get(b.occurrence.id) ?? [], people ?? []);
                       return (
                         <button
-                          key={b.event.id}
+                          key={b.occurrence.occurrenceKey}
                           type="button"
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            openEditDialog(b.event);
+                            openEditDialog(b.occurrence);
                           }}
-                          title={b.event.title}
+                          title={b.occurrence.title}
                           className={cn(
-                            "pointer-events-auto flex items-center truncate rounded px-1.5 text-[0.65rem] font-semibold leading-tight text-white shadow-sm",
+                            "pointer-events-auto flex items-center gap-0.5 truncate rounded px-1.5 text-[0.65rem] font-semibold leading-tight text-white shadow-sm",
                             solidClass
                           )}
                           style={{ gridColumn: `${b.startCol + 1} / ${b.endCol + 2}`, gridRow: b.lane + 1 }}
                         >
-                          <span className="truncate">{b.event.title}</span>
+                          {b.occurrence.recurrence_freq !== "none" && <Repeat className="h-2.5 w-2.5 flex-shrink-0" />}
+                          <span className="truncate">{b.occurrence.title}</span>
                         </button>
                       );
                     })}
@@ -346,7 +370,13 @@ export function AgendaPage() {
         ) : (
           <div className="space-y-1.5">
             {upcoming.map((e) => (
-              <EventRow key={e.id} event={e} people={people ?? []} participantIds={participantsByEvent.get(e.id) ?? []} onOpen={() => openEditDialog(e)} />
+              <EventRow
+                key={e.occurrenceKey}
+                event={e}
+                people={people ?? []}
+                participantIds={participantsByEvent.get(e.id) ?? []}
+                onOpen={() => openEditDialog(e)}
+              />
             ))}
           </div>
         )}
@@ -369,7 +399,7 @@ export function AgendaPage() {
             ) : (
               selectedDayEvents.map((e) => (
                 <EventRow
-                  key={e.id}
+                  key={e.occurrenceKey}
                   event={e}
                   people={people ?? []}
                   participantIds={participantsByEvent.get(e.id) ?? []}
@@ -473,7 +503,10 @@ function EventRow({
         {!event.all_day && <span>{TIME_FORMATTER.format(start)}</span>}
       </div>
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="truncate text-sm font-medium">{event.title}</p>
+        <p className="flex items-center gap-1 truncate text-sm font-medium">
+          {event.recurrence_freq !== "none" && <Repeat className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+          <span className="truncate">{event.title}</span>
+        </p>
         {event.location && (
           <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
             <MapPin className="h-3 w-3 flex-shrink-0" /> {event.location}

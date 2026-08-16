@@ -5,17 +5,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { usePeople } from "@/features/people/use-people";
 import { personDotColorClass } from "@/features/agenda/person-color";
+import { RECURRENCE_FREQ_LABELS, RECURRENCE_UNIT_LABELS } from "@/features/agenda/recurrence";
 import {
   useCreateAgendaEvent,
   useUpdateAgendaEvent,
   useDeleteAgendaEvent,
   type AgendaEventInput,
 } from "@/features/agenda/use-agenda";
-import type { AgendaEvent } from "@/types/database";
+import type { AgendaEvent, RecurrenceFreq } from "@/types/database";
 import { Trash2 } from "lucide-react";
+
+const RECURRENCE_FREQS: RecurrenceFreq[] = ["none", "daily", "weekly", "monthly", "yearly"];
 
 function formatDateTimeLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -87,6 +91,9 @@ export function AgendaEventDialog({
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [participantIds, setParticipantIds] = useState<Set<string>>(new Set());
+  const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>("none");
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +105,9 @@ export function AgendaEventDialog({
       setStart(editingEvent.all_day ? toDateOnly(editingEvent.start_at) : toDateTimeLocal(editingEvent.start_at));
       setEnd(editingEvent.end_at ? (editingEvent.all_day ? toDateOnly(editingEvent.end_at) : toDateTimeLocal(editingEvent.end_at)) : "");
       setParticipantIds(new Set(editingEvent.participantIds));
+      setRecurrenceFreq(editingEvent.recurrence_freq);
+      setRecurrenceInterval(editingEvent.recurrence_interval);
+      setRecurrenceEndDate(editingEvent.recurrence_end_date ?? "");
     } else {
       const base = defaultDate ?? new Date();
       setTitle("");
@@ -107,6 +117,9 @@ export function AgendaEventDialog({
       setStart(toDateTimeLocal(base.toISOString()));
       setEnd("");
       setParticipantIds(new Set());
+      setRecurrenceFreq("none");
+      setRecurrenceInterval(1);
+      setRecurrenceEndDate("");
     }
   }, [open, editingEvent, defaultDate]);
 
@@ -135,6 +148,9 @@ export function AgendaEventDialog({
       end_at: end ? toIso(end, allDay) : null,
       all_day: allDay,
       participantPersonIds: [...participantIds],
+      recurrence_freq: recurrenceFreq,
+      recurrence_interval: recurrenceFreq === "none" ? 1 : Math.max(1, recurrenceInterval),
+      recurrence_end_date: recurrenceFreq === "none" ? null : recurrenceEndDate || null,
     };
     if (editingEvent) await updateEvent.mutateAsync({ id: editingEvent.id, ...input });
     else await createEvent.mutateAsync(input);
@@ -200,6 +216,50 @@ export function AgendaEventDialog({
           </div>
 
           <div className="space-y-2">
+            <Label>Répétition</Label>
+            <Select value={recurrenceFreq} onValueChange={(v) => setRecurrenceFreq(v as RecurrenceFreq)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RECURRENCE_FREQS.map((f) => (
+                  <SelectItem key={f} value={f}>
+                    {RECURRENCE_FREQ_LABELS[f]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {recurrenceFreq !== "none" && (
+              <div className="flex flex-wrap items-end gap-3 pt-1">
+                <div className="space-y-2">
+                  <Label htmlFor="agenda-recurrence-interval">Tous les</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="agenda-recurrence-interval"
+                      type="number"
+                      min={1}
+                      max={365}
+                      className="w-20"
+                      value={recurrenceInterval}
+                      onChange={(e) => setRecurrenceInterval(Math.max(1, Math.round(Number(e.target.value)) || 1))}
+                    />
+                    <span className="text-sm text-muted-foreground">{RECURRENCE_UNIT_LABELS[recurrenceFreq]}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agenda-recurrence-end">Jusqu'au (optionnel)</Label>
+                  <Input
+                    id="agenda-recurrence-end"
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="agenda-location">Lieu</Label>
             <Input id="agenda-location" value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
@@ -241,6 +301,11 @@ export function AgendaEventDialog({
             )}
           </div>
         </div>
+        {editingEvent && editingEvent.recurrence_freq !== "none" && (
+          <p className="text-xs text-muted-foreground">
+            Événement récurrent — modifier ou supprimer agit sur toute la série, pas seulement cette occurrence.
+          </p>
+        )}
         <DialogFooter className="flex-row items-center justify-between sm:justify-between">
           {editingEvent ? (
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={handleDelete}>

@@ -93,6 +93,8 @@ export type ProjectCollaborator = {
 
 /** Un événement de l'agenda partageable — libre, indépendant de tout projet, appartenant à un
  * compte (owner_id) plutôt qu'à un projet. */
+export type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly";
+
 export type AgendaEvent = {
   id: string;
   owner_id: string;
@@ -105,6 +107,10 @@ export type AgendaEvent = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  recurrence_freq: RecurrenceFreq;
+  recurrence_interval: number;
+  /** Bornée à ce jour inclus (date calendaire, indépendante de l'heure) — null = pas de fin. */
+  recurrence_end_date: string | null;
 };
 
 /** Une personne (répertoire "people") participant à un événement — plusieurs par événement. */
