@@ -173,15 +173,15 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
 
   const existingPlaceIds = new Set((items ?? []).map((i) => i.place_id));
 
-  async function handleAddResult(result: NormalizedResult) {
-    await addPlace.mutateAsync(result.addInput);
+  async function handleAddResult(result: NormalizedResult, markVisited: boolean) {
+    await addPlace.mutateAsync({ ...result.addInput, visited: markVisited });
     setQuery("");
     setResults([]);
   }
 
-  async function handleManualAdd() {
+  async function handleManualAdd(markVisited: boolean) {
     if (!manualName.trim()) return;
-    await addManual.mutateAsync({ name: manualName.trim(), address: manualAddress.trim() });
+    await addManual.mutateAsync({ name: manualName.trim(), address: manualAddress.trim(), visited: markVisited });
     setManualName("");
     setManualAddress("");
   }
@@ -256,57 +256,60 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
 
   // Réutilisé tel quel dans "Ma liste" ET dans l'onglet "Visités" — même moteur de
   // recherche/ajout, pour pouvoir ajouter directement un lieu déjà considéré comme visité sans
-  // changer d'onglet.
-  const addPanel = autoAvailable ? (
-    <Card>
-      <CardContent className="relative p-4">
-        <Input placeholder={`Rechercher un ${restaurantType ? RESTAURANT_TYPE_LABELS[restaurantType].singular.toLowerCase() : "bar/restaurant"} à ajouter...`} value={query} onChange={(e) => setQuery(e.target.value)} />
-        {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
-        {(results.length > 0 || searching) && (
-          <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
-            {searching && <p className="p-3 text-sm text-muted-foreground">Recherche...</p>}
-            {!searching &&
-              results.map((r) => {
-                const already = existingPlaceIds.has(r.id);
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    disabled={already}
-                    onClick={() => handleAddResult(r)}
-                    className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-secondary disabled:opacity-50"
-                  >
-                    {r.photoUrl ? (
-                      <img src={r.photoUrl} alt="" className="h-14 w-14 flex-shrink-0 rounded object-cover" />
-                    ) : (
-                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded bg-muted">
-                        <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+  // changer d'onglet ; markVisited fait la différence entre les deux, pour que l'ajout depuis
+  // "Visités" marque directement le lieu comme visité au lieu de le faire atterrir dans "Ma liste".
+  function renderAddPanel(markVisited: boolean) {
+    return autoAvailable ? (
+      <Card>
+        <CardContent className="relative p-4">
+          <Input placeholder={`Rechercher un ${restaurantType ? RESTAURANT_TYPE_LABELS[restaurantType].singular.toLowerCase() : "bar/restaurant"} à ajouter...`} value={query} onChange={(e) => setQuery(e.target.value)} />
+          {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
+          {(results.length > 0 || searching) && (
+            <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+              {searching && <p className="p-3 text-sm text-muted-foreground">Recherche...</p>}
+              {!searching &&
+                results.map((r) => {
+                  const already = existingPlaceIds.has(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      disabled={already}
+                      onClick={() => handleAddResult(r, markVisited)}
+                      className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-secondary disabled:opacity-50"
+                    >
+                      {r.photoUrl ? (
+                        <img src={r.photoUrl} alt="" className="h-14 w-14 flex-shrink-0 rounded object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded bg-muted">
+                          <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{r.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {r.address ?? "?"} {already && "· déjà dans la liste"}
+                        </p>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{r.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {r.address ?? "?"} {already && "· déjà dans la liste"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  ) : (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-        <Input placeholder="Nom du lieu" value={manualName} onChange={(e) => setManualName(e.target.value)} />
-        <Input placeholder="Adresse (optionnel)" value={manualAddress} onChange={(e) => setManualAddress(e.target.value)} />
-        <Button type="button" size="sm" onClick={handleManualAdd} disabled={!manualName.trim()}>
-          Ajouter
-        </Button>
-      </CardContent>
-    </Card>
-  );
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    ) : (
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <Input placeholder="Nom du lieu" value={manualName} onChange={(e) => setManualName(e.target.value)} />
+          <Input placeholder="Adresse (optionnel)" value={manualAddress} onChange={(e) => setManualAddress(e.target.value)} />
+          <Button type="button" size="sm" onClick={() => handleManualAdd(markVisited)} disabled={!manualName.trim()}>
+            Ajouter
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -345,7 +348,7 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
               {nearby
                 .filter((r) => !existingPlaceIds.has(r.id))
                 .map((r) => (
-                  <NearbyCard key={r.id} result={r} onAdd={() => handleAddResult(r)} />
+                  <NearbyCard key={r.id} result={r} onAdd={() => handleAddResult(r, false)} />
                 ))}
               {nearby.length === 0 && (
                 <p className="col-span-full py-6 text-center text-sm text-muted-foreground">Rien trouvé à proximité.</p>
@@ -355,7 +358,7 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
         </TabsContent>
 
         <TabsContent value="ma-liste" className="space-y-3 pt-3">
-          {addPanel}
+          {renderAddPanel(false)}
 
           {notVisited.length === 0 && !isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente.</p>
@@ -383,7 +386,7 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
         </TabsContent>
 
         <TabsContent value="visites" className="space-y-3 pt-3">
-          {addPanel}
+          {renderAddPanel(true)}
 
           {visitedByYear.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien pour l'instant.</p>

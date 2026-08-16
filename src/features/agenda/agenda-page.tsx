@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
 import { usePeople } from "@/features/people/use-people";
@@ -17,7 +17,12 @@ import type { AgendaEvent, Person } from "@/types/database";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+const MONTH_SHORT_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "short" });
 const TIME_FORMATTER = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+/** Seuil de déplacement horizontal (px) à partir duquel un geste tactile est traité comme un
+ * swipe de changement de mois plutôt qu'un simple défilement vertical de la page. */
+const SWIPE_THRESHOLD_PX = 50;
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -124,6 +129,26 @@ export function AgendaPage() {
   const [dialogDefaultDate, setDialogDefaultDate] = useState<Date | null>(null);
   const [editingEvent, setEditingEvent] = useState<(AgendaEvent & { participantIds: string[] }) | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    setMonth((m) => new Date(m.getFullYear(), m.getMonth() + (dx < 0 ? 1 : -1), 1));
+  }
 
   const participantsByEvent = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -215,12 +240,26 @@ export function AgendaPage() {
         )}
       </PageHeroCard>
 
-      <div className="space-y-3 rounded-lg border border-border bg-card p-3">
+      <div
+        className="space-y-3 rounded-lg border border-border bg-card p-3"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <p className="text-sm font-semibold capitalize">{MONTH_FORMATTER.format(month)}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setPickerYear(month.getFullYear());
+              setPickerOpen(true);
+            }}
+            className="rounded-md px-2 py-1 text-sm font-semibold capitalize transition-colors hover:bg-secondary"
+            title="Choisir un autre mois ou une autre année"
+          >
+            {MONTH_FORMATTER.format(month)}
+          </button>
           <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -356,6 +395,42 @@ export function AgendaPage() {
       {canWrite && (
         <AgendaEventDialog ownerId={ownerId} open={dialogOpen} editingEvent={editingEvent} defaultDate={dialogDefaultDate} onOpenChange={setDialogOpen} />
       )}
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Aller à un mois</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="icon" onClick={() => setPickerYear((y) => y - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <p className="text-sm font-semibold">{pickerYear}</p>
+            <Button variant="ghost" size="icon" onClick={() => setPickerYear((y) => y + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 12 }, (_, i) => i).map((monthIndex) => {
+              const isCurrent = pickerYear === month.getFullYear() && monthIndex === month.getMonth();
+              return (
+                <Button
+                  key={monthIndex}
+                  type="button"
+                  variant={isCurrent ? "default" : "outline"}
+                  className="capitalize"
+                  onClick={() => {
+                    setMonth(new Date(pickerYear, monthIndex, 1));
+                    setPickerOpen(false);
+                  }}
+                >
+                  {MONTH_SHORT_FORMATTER.format(new Date(pickerYear, monthIndex, 1))}
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="max-w-md">

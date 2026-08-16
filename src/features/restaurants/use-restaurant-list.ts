@@ -47,6 +47,9 @@ export type PlaceAddInput = {
   opening_hours: string[];
   latitude: number | null;
   longitude: number | null;
+  /** Ajout direct depuis l'onglet Visités (barre de recherche dupliquée là-bas) : le lieu doit
+   * apparaître coché d'emblée, pas repasser par "Ma liste" avant d'être marqué visité. */
+  visited?: boolean;
 };
 
 /** Ajoute un lieu trouvé via Google Places — tous les champs "où" sont déjà fournis par la
@@ -54,9 +57,15 @@ export type PlaceAddInput = {
 export function useAddPlaceRestaurant(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: PlaceAddInput) => {
+    mutationFn: async ({ visited, ...input }: PlaceAddInput) => {
       const position = await nextPosition(projectId);
-      const { error } = await supabase.from("restaurant_items").insert({ project_id: projectId, position, ...input });
+      const { error } = await supabase.from("restaurant_items").insert({
+        project_id: projectId,
+        position,
+        ...input,
+        visited: visited ?? false,
+        visited_at: visited ? new Date().toISOString() : null,
+      });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["restaurant-items", projectId] }),
@@ -69,13 +78,15 @@ export function useAddPlaceRestaurant(projectId: string) {
 export function useAddManualRestaurant(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; address: string }) => {
+    mutationFn: async (input: { name: string; address: string; visited?: boolean }) => {
       const position = await nextPosition(projectId);
       const { error } = await supabase.from("restaurant_items").insert({
         project_id: projectId,
         name: input.name,
         address: input.address || null,
         position,
+        visited: input.visited ?? false,
+        visited_at: input.visited ? new Date().toISOString() : null,
       });
       if (error) throw error;
     },

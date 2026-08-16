@@ -36,6 +36,32 @@ function toIso(dateValue: string, allDay: boolean): string {
   return allDay ? new Date(`${dateValue}T00:00:00`).toISOString() : new Date(dateValue).toISOString();
 }
 
+function parseFormValue(value: string, allDay: boolean): Date {
+  return new Date(allDay ? `${value}T00:00:00` : value);
+}
+
+function startOfCalendarDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Nombre de jours couverts par l'événement (1 = un seul jour), dérivé de Début/Fin — pas un état
+ * séparé à synchroniser, juste une lecture pratique des deux champs existants. */
+function computeDurationDays(start: string, end: string, allDay: boolean): number {
+  if (!start) return 1;
+  const s = parseFormValue(start, allDay);
+  const e = end ? parseFormValue(end, allDay) : s;
+  const diff = Math.round((startOfCalendarDay(e).getTime() - startOfCalendarDay(s).getTime()) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
+/** Recalcule Fin à partir de Début + un nombre de jours (1 = même jour, donc pas de Fin
+ * explicite) — conserve l'heure de Début pour un événement non "Toute la journée". */
+function applyDurationDays(start: string, allDay: boolean, days: number): string {
+  const s = parseFormValue(start, allDay);
+  s.setDate(s.getDate() + Math.max(1, days) - 1);
+  return allDay ? formatDateTimeLocal(s).slice(0, 10) : formatDateTimeLocal(s);
+}
+
 export function AgendaEventDialog({
   ownerId,
   open,
@@ -83,6 +109,12 @@ export function AgendaEventDialog({
       setParticipantIds(new Set());
     }
   }, [open, editingEvent, defaultDate]);
+
+  function handleDurationChange(value: string) {
+    if (!start) return;
+    const days = Math.max(1, Math.min(365, Math.round(Number(value)) || 1));
+    setEnd(days <= 1 ? "" : applyDurationDays(start, allDay, days));
+  }
 
   function toggleParticipant(personId: string) {
     setParticipantIds((prev) => {
@@ -151,6 +183,20 @@ export function AgendaEventDialog({
               <Label htmlFor="agenda-end">Fin (optionnel)</Label>
               <Input id="agenda-end" type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.target.value)} />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="agenda-duration">Durée (jours)</Label>
+            <Input
+              id="agenda-duration"
+              type="number"
+              min={1}
+              max={365}
+              className="w-24"
+              value={computeDurationDays(start, end, allDay)}
+              onChange={(e) => handleDurationChange(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Ajuste automatiquement la date de fin.</p>
           </div>
 
           <div className="space-y-2">

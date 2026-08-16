@@ -45,6 +45,9 @@ export type TmdbAddInput = {
   synopsis: string | null;
   release_date: string | null;
   external_rating: number | null;
+  /** Ajout direct depuis l'onglet Vu/Joué (barre de recherche dupliquée là-bas) : l'item doit
+   * apparaître coché d'emblée, pas repasser par "Ma liste" avant d'être marqué vu. */
+  watched?: boolean;
 };
 
 /** Ajoute un film ou une série trouvé(e) via TMDB — "où le voir" est récupéré automatiquement
@@ -68,6 +71,8 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
         external_rating: input.external_rating,
         platforms,
         position,
+        watched: input.watched ?? false,
+        watched_at: input.watched ? new Date().toISOString() : null,
       });
       if (error) throw error;
     },
@@ -83,6 +88,8 @@ export type RawgAddInput = {
   release_date: string | null;
   external_rating: number | null;
   platforms: string[];
+  /** Ajout direct depuis l'onglet Vu/Joué — voir TmdbAddInput.watched. */
+  watched?: boolean;
 };
 
 /** Ajoute un jeu vidéo trouvé via RAWG — les plateformes viennent directement du résultat de
@@ -104,6 +111,8 @@ export function useAddRawgMedia(projectId: string) {
         external_rating: input.external_rating,
         platforms: input.platforms,
         position,
+        watched: input.watched ?? false,
+        watched_at: input.watched ? new Date().toISOString() : null,
       });
       if (error) throw error;
     },
@@ -117,7 +126,7 @@ export function useAddRawgMedia(projectId: string) {
 export function useAddManualMedia(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { title: string; platforms: string[] }) => {
+    mutationFn: async (input: { title: string; platforms: string[]; watched?: boolean }) => {
       const position = await nextPosition(projectId, "jeu");
       const { error } = await supabase.from("media_items").insert({
         project_id: projectId,
@@ -125,6 +134,8 @@ export function useAddManualMedia(projectId: string) {
         title: input.title,
         platforms: input.platforms,
         position,
+        watched: input.watched ?? false,
+        watched_at: input.watched ? new Date().toISOString() : null,
       });
       if (error) throw error;
     },
