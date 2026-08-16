@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { differenceInCalendarDays, isFuture, isPast, parseISO } from "date-fns";
+import { useAuth } from "@/app/providers/auth-provider";
 import { useCategories } from "@/features/portfolio/use-categories";
 import { useProjects, type ProjectWithCategory } from "@/features/projects/use-projects";
 import { useThemeStore } from "@/features/theme/theme-store";
@@ -19,11 +20,24 @@ interface CategoryStat {
 }
 
 export function PortfolioHome() {
+  const { profile } = useAuth();
   const { data: categories, isLoading: loadingCategories } = useCategories();
   const { data: projects, isLoading: loadingProjects } = useProjects();
   const categoryLayout = useThemeStore((s) => s.categoryLayout);
 
-  const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.status === "active"), [categories]);
+  // Les catégories sont visibles par tout compte authentifié (liste globale gérée par
+  // l'administrateur), mais un collaborateur invité sur un seul projet ne doit voir sur son
+  // accueil que les catégories où il a effectivement accès à au moins un projet — pas la liste
+  // complète, qui révélerait l'existence de catégories/projets auxquels il n'a pas accès.
+  // `projects` est déjà filtré côté RLS aux projets accessibles par le compte courant, donc pour
+  // l'admin (propriétaire du portefeuille) on garde toutes les catégories actives, y compris
+  // celles sans projet pour l'instant.
+  const activeCategories = useMemo(() => {
+    const active = (categories ?? []).filter((c) => c.status === "active");
+    if (profile?.is_admin) return active;
+    const accessibleCategoryIds = new Set((projects ?? []).map((p) => p.category_id));
+    return active.filter((c) => accessibleCategoryIds.has(c.id));
+  }, [categories, projects, profile?.is_admin]);
 
   // Met en avant un projet EN COURS en priorité (sinon il disparaîtrait du bandeau dès sa date
   // de début passée, alors que c'est justement le moment où il est le plus utile de le retrouver
