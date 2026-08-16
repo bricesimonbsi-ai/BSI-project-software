@@ -42,7 +42,7 @@ export function useCreatePerson() {
 export function useUpdatePerson() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<Pick<Person, "name" | "avatar_emoji" | "avatar_config">> & { id: string }) => {
+    mutationFn: async ({ id, ...patch }: Partial<Pick<Person, "name" | "avatar_emoji" | "avatar_config" | "color_index">> & { id: string }) => {
       const { error } = await supabase.from("people").update(patch).eq("id", id);
       if (error) throw error;
     },

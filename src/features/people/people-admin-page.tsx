@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { usePeople, useCreatePerson, useDeletePerson } from "@/features/people/use-people";
-import { PersonAvatarBadge, PERSON_EMOJI_SUGGESTIONS } from "@/features/people/person-avatar";
+import { usePeople, useCreatePerson, useDeletePerson, useUpdatePerson } from "@/features/people/use-people";
+import { PersonAvatarBadge, PERSON_EMOJI_SUGGESTIONS, AVATAR_DOT_CLASSES } from "@/features/people/person-avatar";
 import { AvatarPickerDialog } from "@/features/people/avatar-picker-dialog";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ export function PeopleAdminPage() {
   const { data: people, isLoading } = usePeople();
   const createPerson = useCreatePerson();
   const deletePerson = useDeletePerson();
+  const updatePerson = useUpdatePerson();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
@@ -28,9 +30,11 @@ export function PeopleAdminPage() {
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Personnes</h1>
+        <h1 className="text-2xl font-bold">Personnes et avatars</h1>
         <p className="text-sm text-muted-foreground">
-          Une liste de personnes réutilisable sur tous tes projets (ex. les voyageurs d'un voyage).
+          Une liste de personnes réutilisable sur tous tes projets (ex. les voyageurs d'un voyage). La couleur associée à
+          chaque personne (avatar, agenda...) peut être choisie manuellement ci-dessous, sinon elle est attribuée
+          automatiquement.
         </p>
       </div>
 
@@ -68,7 +72,7 @@ export function PeopleAdminPage() {
           {isLoading && <p className="text-sm text-muted-foreground">Chargement...</p>}
           <ul className="divide-y divide-border">
             {(people ?? []).map((p, i) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -76,21 +80,45 @@ export function PeopleAdminPage() {
                     className="rounded-full transition hover:ring-2 hover:ring-accent/40"
                     title="Personnaliser l'avatar"
                   >
-                    <PersonAvatarBadge name={p.name} avatarEmoji={p.avatar_emoji} avatarConfig={p.avatar_config} personId={p.id} index={i} />
+                    <PersonAvatarBadge
+                      name={p.name}
+                      avatarEmoji={p.avatar_emoji}
+                      avatarConfig={p.avatar_config}
+                      personId={p.id}
+                      index={i}
+                      colorIndex={p.color_index}
+                    />
                   </button>
                   <span className="text-sm">{p.name}</span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    if (window.confirm(`Retirer "${p.name}" de la liste des personnes ? Elle sera aussi retirée de tous les projets.`)) {
-                      deletePerson.mutate(p.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1" title="Couleur">
+                    {AVATAR_DOT_CLASSES.map((dotClass, colorIdx) => (
+                      <button
+                        key={colorIdx}
+                        type="button"
+                        onClick={() => updatePerson.mutate({ id: p.id, color_index: p.color_index === colorIdx ? null : colorIdx })}
+                        className={cn(
+                          "h-4 w-4 flex-shrink-0 rounded-full transition",
+                          dotClass,
+                          p.color_index === colorIdx ? "ring-2 ring-offset-2 ring-offset-card ring-foreground" : "opacity-50 hover:opacity-100"
+                        )}
+                        title={p.color_index === colorIdx ? "Revenir à la couleur automatique" : "Choisir cette couleur"}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (window.confirm(`Retirer "${p.name}" de la liste des personnes ? Elle sera aussi retirée de tous les projets.`)) {
+                        deletePerson.mutate(p.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </li>
             ))}
             {(people ?? []).length === 0 && !isLoading && (

@@ -70,6 +70,7 @@ function FeaturedVoyageStats({ projectId }: { projectId: string }) {
                 avatarConfig={l.people.avatar_config}
                 personId={l.people.id}
                 index={i}
+                colorIndex={l.people.color_index}
                 className="h-6 w-6 text-xs"
               />
               <span className="text-xs font-medium">{l.people.name}</span>

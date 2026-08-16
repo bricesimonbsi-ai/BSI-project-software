@@ -1,10 +1,13 @@
 import { AVATAR_COLOR_CLASSES, AVATAR_DOT_CLASSES } from "@/features/people/person-avatar";
 import type { Person } from "@/types/database";
 
-/** Position stable d'une personne dans le répertoire (trié par order_index, comme usePeople()) —
- * pour une couleur identique partout dans l'agenda (légende, sélecteur, puces du calendrier),
- * contrairement à PersonAvatarBadge dont l'index est positionnel au contexte d'affichage. */
+/** Couleur d'une personne : sa couleur manuelle (Person.color_index) si elle en a choisi une,
+ * sinon sa position stable dans le répertoire (trié par order_index, comme usePeople()) — dans
+ * les deux cas, identique partout dans l'agenda (légende, sélecteur, puces du calendrier),
+ * contrairement à PersonAvatarBadge dont l'index par défaut est positionnel à l'affichage. */
 export function personColorIndex(personId: string, allPeople: Person[]): number {
+  const person = allPeople.find((p) => p.id === personId);
+  if (person?.color_index != null) return person.color_index;
   const i = allPeople.findIndex((p) => p.id === personId);
   return i < 0 ? 0 : i % AVATAR_COLOR_CLASSES.length;
 }

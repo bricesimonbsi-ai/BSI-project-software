@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
 import { usePeople } from "@/features/people/use-people";
 import { useAgendaEvents, useAgendaEventParticipants, useSharedAgendas } from "@/features/agenda/use-agenda";
-import { personDotColorClass, combinationDotColorClass } from "@/features/agenda/person-color";
+import { combinationDotColorClass, personColorIndex } from "@/features/agenda/person-color";
+import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { AgendaEventDialog } from "@/features/agenda/agenda-event-dialog";
 import { AgendaCollaboratorsPanel } from "@/features/agenda/agenda-collaborators-panel";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,54 @@ function buildMonthGrid(monthDate: Date): Date[] {
     d.setDate(gridStart.getDate() + i);
     return d;
   });
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000);
+}
+
+const MAX_WEEK_LANES = 3;
+
+type WeekBar = { event: AgendaEvent; startCol: number; endCol: number; lane: number };
+
+/**
+ * Pour une semaine (7 jours) de la grille, calcule des barres continues par événement (colonne de
+ * début → colonne de fin, clippées à la semaine) réparties sur des "voies" (lanes) pour éviter que
+ * deux événements simultanés se chevauchent visuellement — comme un planning Gantt compact. Un
+ * événement qui déborde le nombre max de voies affichées est compté dans `overflowByDay` (jour par
+ * jour couvert) plutôt que dessiné, pour ne pas faire exploser la hauteur de la grille.
+ */
+function layoutWeekBars(week: Date[], events: AgendaEvent[]): { bars: WeekBar[]; laneCount: number; overflowByDay: Map<string, number> } {
+  const weekStart = week[0];
+  const weekEnd = week[6];
+  const relevant = events
+    .map((e) => {
+      const s = startOfDay(new Date(e.start_at));
+      const en = startOfDay(new Date(e.end_at ?? e.start_at));
+      if (en < weekStart || s > weekEnd) return null;
+      return { event: e, startCol: Math.max(0, daysBetween(weekStart, s)), endCol: Math.min(6, daysBetween(weekStart, en)) };
+    })
+    .filter((x): x is { event: AgendaEvent; startCol: number; endCol: number } => x !== null)
+    .sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
+
+  const laneEnds: number[] = [];
+  const bars: WeekBar[] = [];
+  const overflowByDay = new Map<string, number>();
+  for (const item of relevant) {
+    let lane = laneEnds.findIndex((end) => end < item.startCol);
+    if (lane === -1) lane = laneEnds.length;
+    if (lane >= MAX_WEEK_LANES) {
+      for (let col = item.startCol; col <= item.endCol; col++) {
+        const key = dateKey(week[col]);
+        overflowByDay.set(key, (overflowByDay.get(key) ?? 0) + 1);
+      }
+      continue;
+    }
+    laneEnds[lane] = item.endCol;
+    bars.push({ ...item, lane });
+  }
+  const laneCount = bars.reduce((max, b) => Math.max(max, b.lane + 1), 0);
+  return { bars, laneCount, overflowByDay };
 }
 
 /**
@@ -107,6 +156,11 @@ export function AgendaPage() {
   }, [events]);
 
   const grid = useMemo(() => buildMonthGrid(month), [month]);
+  const weeks = useMemo(() => {
+    const chunks: Date[][] = [];
+    for (let i = 0; i < grid.length; i += 7) chunks.push(grid.slice(i, i + 7));
+    return chunks;
+  }, [grid]);
 
   const upcoming = useMemo(() => {
     const now = new Date();
@@ -178,40 +232,64 @@ export function AgendaPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
-          {grid.map((day) => {
-            const dayEvents = eventsByDay.get(dateKey(day)) ?? [];
-            const inMonth = day.getMonth() === month.getMonth();
-            const today = isSameDay(day, new Date());
+        <div className="space-y-1">
+          {weeks.map((week, wi) => {
+            const { bars, laneCount, overflowByDay } = layoutWeekBars(week, events ?? []);
+            const cellMinHeight = 26 + Math.max(laneCount, 1) * 20;
             return (
-              <button
-                key={day.toISOString()}
-                type="button"
-                onClick={() => setSelectedDay(day)}
-                className={cn(
-                  "flex min-h-20 flex-col items-start gap-0.5 rounded-md border p-1 text-left transition-colors",
-                  inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30 text-muted-foreground",
-                  today && "border-accent"
-                )}
-              >
-                <span className={cn("text-xs", today && "font-bold text-accent")}>{day.getDate()}</span>
-                <div className="flex w-full flex-col gap-0.5">
-                  {dayEvents.slice(0, 2).map((e) => {
-                    const dotClass = combinationDotColorClass(participantsByEvent.get(e.id) ?? [], people ?? []);
+              <div key={wi} className="relative">
+                <div className="grid grid-cols-7 gap-1">
+                  {week.map((day) => {
+                    const inMonth = day.getMonth() === month.getMonth();
+                    const today = isSameDay(day, new Date());
+                    const overflow = overflowByDay.get(dateKey(day)) ?? 0;
                     return (
-                      <span
-                        key={e.id}
-                        title={e.title}
-                        className="flex items-center gap-1 truncate rounded bg-secondary px-1 py-0.5 text-[0.6rem] leading-tight"
+                      <button
+                        key={day.toISOString()}
+                        type="button"
+                        onClick={() => setSelectedDay(day)}
+                        style={{ minHeight: `${cellMinHeight}px` }}
+                        className={cn(
+                          "flex flex-col items-start rounded-md border p-1 text-left transition-colors",
+                          inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30 text-muted-foreground",
+                          today && "border-accent"
+                        )}
                       >
-                        <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", dotClass)} />
-                        <span className="truncate">{e.title}</span>
-                      </span>
+                        <span className={cn("text-xs", today && "font-bold text-accent")}>{day.getDate()}</span>
+                        {overflow > 0 && <span className="mt-auto text-[0.6rem] font-medium text-muted-foreground">+{overflow}</span>}
+                      </button>
                     );
                   })}
-                  {dayEvents.length > 2 && <span className="text-[0.6rem] text-muted-foreground">+{dayEvents.length - 2}</span>}
                 </div>
-              </button>
+                {bars.length > 0 && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-7 gap-1 pt-[22px]"
+                    style={{ gridAutoRows: "20px" }}
+                  >
+                    {bars.map((b) => {
+                      const solidClass = combinationDotColorClass(participantsByEvent.get(b.event.id) ?? [], people ?? []);
+                      return (
+                        <button
+                          key={b.event.id}
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            openEditDialog(b.event);
+                          }}
+                          title={b.event.title}
+                          className={cn(
+                            "pointer-events-auto flex items-center truncate rounded px-1.5 text-[0.65rem] font-semibold leading-tight text-white shadow-sm",
+                            solidClass
+                          )}
+                          style={{ gridColumn: `${b.startCol + 1} / ${b.endCol + 2}`, gridRow: b.lane + 1 }}
+                        >
+                          <span className="truncate">{b.event.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -303,7 +381,7 @@ function EventRow({
   onOpen: () => void;
 }) {
   const start = new Date(event.start_at);
-  const namesById = new Map(people.map((p) => [p.id, p.name]));
+  const peopleById = new Map(people.map((p) => [p.id, p]));
   return (
     <button
       type="button"
@@ -323,14 +401,28 @@ function EventRow({
         )}
       </div>
       {participantIds.length > 0 && (
-        <div className="flex flex-shrink-0 -space-x-1">
-          {participantIds.slice(0, 4).map((pid) => (
-            <span
-              key={pid}
-              className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-card ${personDotColorClass(pid, people)}`}
-              title={namesById.get(pid)}
-            />
-          ))}
+        <div className="flex flex-shrink-0 -space-x-2">
+          {participantIds.slice(0, 4).map((pid, i) => {
+            const person = peopleById.get(pid);
+            if (!person) return null;
+            return (
+              <PersonAvatarBadge
+                key={pid}
+                name={person.name}
+                avatarEmoji={person.avatar_emoji}
+                avatarConfig={person.avatar_config}
+                personId={person.id}
+                index={i}
+                colorIndex={personColorIndex(person.id, people)}
+                className="h-6 w-6 flex-shrink-0 border-2 border-card text-xs"
+              />
+            );
+          })}
+          {participantIds.length > 4 && (
+            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-card bg-muted text-[0.6rem] font-medium text-muted-foreground">
+              +{participantIds.length - 4}
+            </span>
+          )}
         </div>
       )}
     </button>

@@ -57,6 +57,7 @@ export function MediaPeoplePanel({ projectId }: { projectId: string }) {
                 avatarConfig={l.people.avatar_config}
                 personId={l.people.id}
                 index={i}
+                colorIndex={l.people.color_index}
               />
               <span className="text-sm">{l.people.name}</span>
               <button

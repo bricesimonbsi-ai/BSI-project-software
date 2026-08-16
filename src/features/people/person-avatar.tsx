@@ -37,6 +37,7 @@ export function PersonAvatarBadge({
   avatarConfig,
   personId,
   index,
+  colorIndex,
   className,
 }: {
   name: string;
@@ -44,9 +45,13 @@ export function PersonAvatarBadge({
   avatarConfig?: PersonAvatarConfig | null;
   personId?: string;
   index: number;
+  /** Couleur manuelle (Person.color_index) — prioritaire sur `index` quand fournie et non nulle,
+   * pour que la couleur d'une personne reste la même partout, pas seulement dérivée de sa
+   * position dans la liste affichée à cet endroit précis. */
+  colorIndex?: number | null;
   className?: string;
 }) {
-  const colorClass = AVATAR_COLOR_CLASSES[index % AVATAR_COLOR_CLASSES.length];
+  const colorClass = AVATAR_COLOR_CLASSES[(colorIndex ?? index) % AVATAR_COLOR_CLASSES.length];
   const dataUri = useMemo(() => {
     if (!avatarConfig) return null;
     return generateAvatarDataUri(personId ?? name, avatarConfig);

@@ -423,6 +423,9 @@ export type Person = {
   name: string;
   avatar_emoji: string | null;
   avatar_config: PersonAvatarConfig | null;
+  /** Couleur manuelle (index 0-5 dans AVATAR_COLOR_CLASSES) ; null = couleur positionnelle
+   * automatique (comportement historique, dérivée de la place dans la liste). */
+  color_index: number | null;
   order_index: number;
   created_at: string;
   updated_at: string;

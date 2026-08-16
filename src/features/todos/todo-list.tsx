@@ -95,6 +95,7 @@ function AssigneeAvatars({ todo, allPeople, assignablePeople }: { todo: Todo; al
             avatarConfig={p.avatar_config}
             personId={p.id}
             index={i}
+            colorIndex={p.color_index}
             className="h-4 w-4 text-[8px]"
           />
         ))}
@@ -116,6 +117,7 @@ function AssigneeAvatars({ todo, allPeople, assignablePeople }: { todo: Todo; al
         avatarConfig={p.avatar_config}
         personId={p.id}
         index={0}
+        colorIndex={p.color_index}
         className="h-4 w-4 text-[8px]"
       />
     );

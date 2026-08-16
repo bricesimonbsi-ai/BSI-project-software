@@ -288,6 +288,87 @@ export function MediaTypeSection({
 
   const Icon = TYPE_ICON[type];
 
+  function ratingSummary(itemId: string): string {
+    const list = ratingsByItemId.get(itemId) ?? [];
+    if (list.length === 0) return "Non noté";
+    const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
+    return `${avg.toFixed(1)}/10 (${list.length})`;
+  }
+
+  // Réutilisé tel quel dans "Ma liste" ET dans l'onglet Vu/Joué — même moteur de recherche/ajout,
+  // pour pouvoir ajouter directement du contenu déjà considéré comme vu sans changer d'onglet.
+  const addPanel = autoAvailable ? (
+    <Card>
+      <CardContent className="relative p-4">
+        <Input
+          placeholder={`Rechercher un(e) ${labels.singular.toLowerCase()} à ajouter...`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
+        {(results.length > 0 || searching) && (
+          <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+            {searching && <p className="p-3 text-sm text-muted-foreground">Recherche...</p>}
+            {!searching &&
+              results.map((r) => {
+                const already = existingExternalIds.has(r.id);
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    disabled={already}
+                    onClick={() => handleAddResult(r)}
+                    className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-secondary disabled:opacity-50"
+                  >
+                    {r.posterPath ? (
+                      <img src={r.posterPath} alt="" className="h-14 w-10 flex-shrink-0 rounded object-cover" />
+                    ) : (
+                      <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded bg-muted">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{r.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {r.year ?? "?"} {already && "· déjà dans la liste"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  ) : (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <Input placeholder="Titre du jeu" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} />
+        <div className="flex flex-wrap gap-2">
+          {CONSOLES.map((c) => (
+            <label key={c} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs">
+              <Checkbox
+                checked={manualConsoles.has(c)}
+                onCheckedChange={(checked) =>
+                  setManualConsoles((prev) => {
+                    const next = new Set(prev);
+                    if (checked) next.add(c);
+                    else next.delete(c);
+                    return next;
+                  })
+                }
+              />
+              {c}
+            </label>
+          ))}
+        </div>
+        <Button type="button" size="sm" onClick={handleManualAdd} disabled={!manualTitle.trim()}>
+          Ajouter
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-4">
       <Tabs defaultValue="nouveautes">
@@ -320,77 +401,7 @@ export function MediaTypeSection({
         </TabsContent>
 
         <TabsContent value="ma-liste" className="space-y-3 pt-3">
-          {autoAvailable ? (
-            <Card>
-              <CardContent className="relative p-4">
-                <Input
-                  placeholder={`Rechercher un(e) ${labels.singular.toLowerCase()} à ajouter...`}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {searchError && <p className="mt-2 text-xs text-destructive">{searchError}</p>}
-                {(results.length > 0 || searching) && (
-                  <div className="absolute inset-x-4 top-[calc(100%-0.5rem)] z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
-                    {searching && <p className="p-3 text-sm text-muted-foreground">Recherche...</p>}
-                    {!searching &&
-                      results.map((r) => {
-                        const already = existingExternalIds.has(r.id);
-                        return (
-                          <button
-                            key={r.id}
-                            type="button"
-                            disabled={already}
-                            onClick={() => handleAddResult(r)}
-                            className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-secondary disabled:opacity-50"
-                          >
-                            {r.posterPath ? (
-                              <img src={r.posterPath} alt="" className="h-14 w-10 flex-shrink-0 rounded object-cover" />
-                            ) : (
-                              <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded bg-muted">
-                                <Icon className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{r.title}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {r.year ?? "?"} {already && "· déjà dans la liste"}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="space-y-3 p-4">
-                <Input placeholder="Titre du jeu" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} />
-                <div className="flex flex-wrap gap-2">
-                  {CONSOLES.map((c) => (
-                    <label key={c} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs">
-                      <Checkbox
-                        checked={manualConsoles.has(c)}
-                        onCheckedChange={(checked) =>
-                          setManualConsoles((prev) => {
-                            const next = new Set(prev);
-                            if (checked) next.add(c);
-                            else next.delete(c);
-                            return next;
-                          })
-                        }
-                      />
-                      {c}
-                    </label>
-                  ))}
-                </div>
-                <Button type="button" size="sm" onClick={handleManualAdd} disabled={!manualTitle.trim()}>
-                  Ajouter
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          {addPanel}
 
           {notWatched.length === 0 && !isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente.</p>
@@ -412,7 +423,9 @@ export function MediaTypeSection({
           )}
         </TabsContent>
 
-        <TabsContent value="vu" className="space-y-5 pt-3">
+        <TabsContent value="vu" className="space-y-3 pt-3">
+          {addPanel}
+
           {watchedByYear.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien pour l'instant.</p>
           ) : (
@@ -427,6 +440,7 @@ export function MediaTypeSection({
                     item={item}
                     type={type}
                     watcherNames={watcherNamesByItem.get(item.id) ?? []}
+                    ratingText={ratingSummary(item.id)}
                     onToggle={(c) => requestToggle(item, c)}
                     onEditConsoles={() => setConsolesTarget(item)}
                     onDelete={() => deleteItem.mutate(item.id)}
@@ -442,9 +456,19 @@ export function MediaTypeSection({
           <MediaShareCard projectId={projectId} shareToken={mediaShareToken} />
           <div className="grid gap-6 sm:grid-cols-2">
             <PodiumBoard title={`Mieux noté(e)s en ${currentYear}`} entries={bestThisYear.map(toPodiumEntry)} tone="best" />
-            <PodiumBoard title={`Moins bien noté(e)s en ${currentYear}`} entries={worstThisYear.map(toPodiumEntry)} tone="worst" />
+            <PodiumBoard
+              title={`Moins bien noté(e)s en ${currentYear}`}
+              entries={worstThisYear.map(toPodiumEntry)}
+              tone="worst"
+              totalCount={ratedThisYear.length}
+            />
             <PodiumBoard title="Mieux noté(e)s de tous les temps" entries={bestAllTime.map(toPodiumEntry)} tone="best" />
-            <PodiumBoard title="Moins bien noté(e)s de tous les temps" entries={worstAllTime.map(toPodiumEntry)} tone="worst" />
+            <PodiumBoard
+              title="Moins bien noté(e)s de tous les temps"
+              entries={worstAllTime.map(toPodiumEntry)}
+              tone="worst"
+              totalCount={ratedEntries.length}
+            />
           </div>
           <PersonRankingPanels
             people={linkedPeople ?? []}
@@ -529,6 +553,7 @@ export function MediaTypeSection({
                     avatarConfig={l.people.avatar_config}
                     personId={l.people.id}
                     index={i}
+                    colorIndex={l.people.color_index}
                     className="h-6 w-6 text-xs"
                   />
                   {l.people.name}
@@ -576,6 +601,7 @@ function MediaRow({
   item,
   type,
   watcherNames,
+  ratingText,
   onToggle,
   onEditConsoles,
   onDelete,
@@ -584,6 +610,7 @@ function MediaRow({
   item: MediaItem;
   type: MediaType;
   watcherNames: string[];
+  ratingText?: string;
   onToggle: (watched: boolean) => void;
   onEditConsoles: () => void;
   onDelete: () => void;
@@ -625,6 +652,11 @@ function MediaRow({
           {item.watched && watcherNames.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {type === "jeu" ? "Joué par" : "Vu par"} {watcherNames.join(", ")}
+            </p>
+          )}
+          {ratingText && (
+            <p className={cn("flex items-center gap-1 text-xs font-medium", ratingText === "Non noté" ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
+              <Star className={cn("h-3 w-3", ratingText !== "Non noté" && "fill-amber-400 text-amber-400")} /> {ratingText}
             </p>
           )}
         </div>
@@ -781,6 +813,7 @@ function RatingsSection({
                   avatarConfig={l.people.avatar_config}
                   personId={l.people.id}
                   index={0}
+                  colorIndex={l.people.color_index}
                   className="h-6 w-6 text-xs"
                 />
                 <span className="text-sm font-medium">{l.people.name}</span>

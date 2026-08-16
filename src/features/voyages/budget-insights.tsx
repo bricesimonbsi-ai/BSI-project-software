@@ -311,6 +311,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
                             avatarConfig={l.people.avatar_config}
                             personId={l.people.id}
                             index={i}
+                            colorIndex={l.people.color_index}
                             className="h-8 w-8 text-sm"
                           />
                           <div>

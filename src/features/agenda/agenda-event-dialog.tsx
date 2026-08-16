@@ -16,7 +16,6 @@ import {
 } from "@/features/agenda/use-agenda";
 import type { AgendaEvent } from "@/types/database";
 import { Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 function formatDateTimeLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -36,35 +35,6 @@ function toDateOnly(iso: string): string {
 function toIso(dateValue: string, allDay: boolean): string {
   return allDay ? new Date(`${dateValue}T00:00:00`).toISOString() : new Date(dateValue).toISOString();
 }
-
-/** Puces de durée rapide, plus lisibles/visuelles qu'un second champ de date pour définir la fin
- * d'un événement (retour utilisateur) — "Personnaliser" reste disponible pour un besoin précis. */
-const TIMED_DURATION_PRESETS: { key: string; label: string; compute: (start: string) => string }[] = [
-  { key: "30m", label: "30 min", compute: (s) => formatDateTimeLocal(new Date(new Date(s).getTime() + 30 * 60000)) },
-  { key: "1h", label: "1 h", compute: (s) => formatDateTimeLocal(new Date(new Date(s).getTime() + 60 * 60000)) },
-  { key: "2h", label: "2 h", compute: (s) => formatDateTimeLocal(new Date(new Date(s).getTime() + 120 * 60000)) },
-  { key: "3h", label: "3 h", compute: (s) => formatDateTimeLocal(new Date(new Date(s).getTime() + 180 * 60000)) },
-  {
-    key: "evening",
-    label: "Soirée",
-    compute: (s) => {
-      const d = new Date(s);
-      d.setHours(23, 59, 0, 0);
-      return formatDateTimeLocal(d);
-    },
-  },
-];
-
-const ALL_DAY_DURATION_PRESETS: { key: string; label: string; compute: (start: string) => string }[] = [1, 2, 3, 7].map((days) => ({
-  key: `${days}d`,
-  label: days === 1 ? "1 jour" : days === 7 ? "1 semaine" : `${days} jours`,
-  compute: (s: string) => {
-    const d = new Date(`${s}T00:00:00`);
-    d.setDate(d.getDate() + (days - 1));
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  },
-}));
 
 export function AgendaEventDialog({
   ownerId,
@@ -90,8 +60,6 @@ export function AgendaEventDialog({
   const [allDay, setAllDay] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
-  const [durationKey, setDurationKey] = useState<string | null>(null);
-  const [customEndVisible, setCustomEndVisible] = useState(false);
   const [participantIds, setParticipantIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -103,8 +71,6 @@ export function AgendaEventDialog({
       setAllDay(editingEvent.all_day);
       setStart(editingEvent.all_day ? toDateOnly(editingEvent.start_at) : toDateTimeLocal(editingEvent.start_at));
       setEnd(editingEvent.end_at ? (editingEvent.all_day ? toDateOnly(editingEvent.end_at) : toDateTimeLocal(editingEvent.end_at)) : "");
-      setDurationKey(null);
-      setCustomEndVisible(!!editingEvent.end_at);
       setParticipantIds(new Set(editingEvent.participantIds));
     } else {
       const base = defaultDate ?? new Date();
@@ -114,8 +80,6 @@ export function AgendaEventDialog({
       setAllDay(false);
       setStart(toDateTimeLocal(base.toISOString()));
       setEnd("");
-      setDurationKey(null);
-      setCustomEndVisible(false);
       setParticipantIds(new Set());
     }
   }, [open, editingEvent, defaultDate]);
@@ -172,90 +136,21 @@ export function AgendaEventDialog({
                 const next = !!c;
                 setAllDay(next);
                 setStart((s) => (s ? (next ? s.slice(0, 10) : `${s.slice(0, 10)}T09:00`) : s));
-                setEnd("");
-                setDurationKey(null);
-                setCustomEndVisible(false);
+                setEnd((s) => (s ? (next ? s.slice(0, 10) : `${s.slice(0, 10)}T10:00`) : s));
               }}
             />
             Toute la journée
           </label>
 
-          <div className="space-y-2">
-            <Label htmlFor="agenda-start">Début</Label>
-            <Input
-              id="agenda-start"
-              type={allDay ? "date" : "datetime-local"}
-              value={start}
-              onChange={(e) => {
-                setStart(e.target.value);
-                // Un préréglage actif se recalcule avec le nouveau début (ex. "1h" reste "1h"
-                // après le début) ; une fin personnalisée n'est jamais touchée automatiquement.
-                if (durationKey) {
-                  const preset = (allDay ? ALL_DAY_DURATION_PRESETS : TIMED_DURATION_PRESETS).find((p) => p.key === durationKey);
-                  if (preset) setEnd(preset.compute(e.target.value));
-                }
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Durée (optionnel)</Label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(allDay ? ALL_DAY_DURATION_PRESETS : TIMED_DURATION_PRESETS).map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  disabled={!start}
-                  onClick={() => {
-                    setEnd(preset.compute(start));
-                    setDurationKey(preset.key);
-                    setCustomEndVisible(false);
-                  }}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40",
-                    durationKey === preset.key ? "border-accent bg-accent/10 font-medium" : "border-border hover:bg-secondary"
-                  )}
-                >
-                  {preset.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomEndVisible(true);
-                  setDurationKey(null);
-                }}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  customEndVisible ? "border-accent bg-accent/10 font-medium" : "border-border hover:bg-secondary"
-                )}
-              >
-                Personnaliser
-              </button>
-              {end && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEnd("");
-                    setDurationKey(null);
-                    setCustomEndVisible(false);
-                  }}
-                  className="text-xs text-muted-foreground hover:underline"
-                >
-                  Retirer
-                </button>
-              )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="agenda-start">Début</Label>
+              <Input id="agenda-start" type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
             </div>
-            {customEndVisible && (
-              <Input
-                type={allDay ? "date" : "datetime-local"}
-                value={end}
-                onChange={(e) => {
-                  setEnd(e.target.value);
-                  setDurationKey(null);
-                }}
-              />
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="agenda-end">Fin (optionnel)</Label>
+              <Input id="agenda-end" type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.target.value)} />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -289,6 +184,7 @@ export function AgendaEventDialog({
                       avatarConfig={p.avatar_config}
                       personId={p.id}
                       index={i}
+                      colorIndex={p.color_index}
                       className="h-5 w-5 text-[0.65rem]"
                     />
                     <span className={`h-2 w-2 flex-shrink-0 rounded-full ${personDotColorClass(p.id, people ?? [])}`} />

@@ -106,49 +106,28 @@ export function SettingsPage() {
 
       <BiometricLockSetting />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Personnes</CardTitle>
-          <CardDescription>
-            Une liste de personnes réutilisable sur tous tes projets (ex. les voyageurs d'un voyage).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link to="/people">
-            <Button variant="outline">
-              <Users className="mr-2 h-4 w-4" /> Gérer les personnes
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Collaborateurs</CardTitle>
-          <CardDescription>
-            Toutes les personnes ayant accès à tes projets ou à ton agenda, en un seul endroit — plus besoin d'ouvrir
-            chaque projet séparément.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link to="/collaborators">
-            <Button variant="outline">
-              <UserCog className="mr-2 h-4 w-4" /> Gérer les accès
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
       {profile?.is_admin && (
         <Card>
           <CardHeader>
             <CardTitle>Administration</CardTitle>
-            <CardDescription>Gestion des catégories de projets du portefeuille et des notifications reçues.</CardDescription>
+            <CardDescription>
+              Gestion des catégories de projets, des personnes et de leurs accès, et des notifications reçues.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Link to="/categories">
               <Button variant="outline">
                 <Shapes className="mr-2 h-4 w-4" /> Gérer les catégories
+              </Button>
+            </Link>
+            <Link to="/people">
+              <Button variant="outline">
+                <Users className="mr-2 h-4 w-4" /> Gérer les personnes et avatars
+              </Button>
+            </Link>
+            <Link to="/collaborators">
+              <Button variant="outline">
+                <UserCog className="mr-2 h-4 w-4" /> Gérer les accès
               </Button>
             </Link>
             <Link to="/settings/notifications">

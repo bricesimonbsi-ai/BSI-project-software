@@ -88,6 +88,7 @@ export function ProjectPeoplePicker({ projectId }: { projectId: string }) {
               avatarConfig={l.people.avatar_config}
               personId={l.people.id}
               index={i}
+              colorIndex={l.people.color_index}
             />
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
