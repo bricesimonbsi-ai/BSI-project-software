@@ -41,3 +41,18 @@ export function useUpdateCategory() {
     onError: onMutationError,
   });
 }
+
+/** Suppression définitive (active ou archivée) — la contrainte `on delete restrict` sur
+ * `projects.category_id` bloque la suppression tant que des projets y sont encore rattachés.
+ * Pas de toast générique ici : l'erreur Postgres brute ("violates foreign key constraint") n'est
+ * pas parlante, l'appelant (categories-admin-page.tsx) affiche un message adapté à ce cas précis. */
+export function useDeleteCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
+  });
+}

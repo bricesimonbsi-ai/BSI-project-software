@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
-import { useCategories, useCreateCategory, useUpdateCategory } from "@/features/portfolio/use-categories";
+import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from "@/features/portfolio/use-categories";
+import { toast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,13 +10,27 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
-import { Plus, FolderOpen } from "lucide-react";
+import { Plus, FolderOpen, Trash2 } from "lucide-react";
 import type { Category } from "@/types/database";
 
 export function CategoriesAdminPage() {
   const { profile } = useAuth();
   const { data: categories, isLoading } = useCategories();
   const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
+
+  async function handleDelete(category: Category) {
+    if (!window.confirm(`Supprimer définitivement la catégorie "${category.name}" ? Cette action est irréversible.`)) return;
+    try {
+      await deleteCategory.mutateAsync(category.id);
+    } catch {
+      toast({
+        title: "Suppression impossible",
+        description: `Cette catégorie contient encore des projets — déplace-les ou supprime-les d'abord (bouton "Projets" ci-dessus).`,
+        variant: "destructive",
+      });
+    }
+  }
 
   if (!profile?.is_admin) {
     return <p className="text-muted-foreground">Seul l'administrateur peut gérer les catégories.</p>;
@@ -72,6 +87,15 @@ export function CategoriesAdminPage() {
                   }
                 >
                   {category.status === "active" ? "Archiver" : "Réactiver"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => handleDelete(category)}
+                  title="Supprimer la catégorie"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </CardContent>
