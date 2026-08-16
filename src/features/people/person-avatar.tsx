@@ -27,7 +27,39 @@ export const AVATAR_DOT_CLASSES = [
 ];
 
 /** Émojis suggérés pour un avatar de personne, sans forcer une saisie. */
-export const PERSON_EMOJI_SUGGESTIONS = ["🧑", "👩", "👨", "🧒", "👵", "👴", "🧑‍🦱", "👩‍🦰", "🧔", "👶"];
+export const PERSON_EMOJI_SUGGESTIONS = [
+  "🧑",
+  "👩",
+  "👨",
+  "🧒",
+  "👵",
+  "👴",
+  "👶",
+  "🧑‍🦱",
+  "👩‍🦰",
+  "🧑‍🦰",
+  "👩‍🦱",
+  "🧑‍🦳",
+  "👩‍🦳",
+  "🧑‍🦲",
+  "🧔",
+  "🧔‍♀️",
+  "👩‍🦽",
+  "🧑‍🦽",
+  "👓",
+  "🕶️",
+  "😄",
+  "😎",
+  "🥳",
+  "🤓",
+  "🧑‍🎨",
+  "🧑‍🍳",
+  "🧑‍💻",
+  "🧑‍⚕️",
+  "🧑‍🏫",
+  "🧑‍🌾",
+  "🧑‍🚀",
+];
 
 /** Avatar rond : avatar personnalisé (DiceBear) si configuré, sinon émoji choisi, sinon
  * l'initiale du nom sur un fond coloré cyclique. */
