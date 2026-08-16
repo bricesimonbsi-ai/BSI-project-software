@@ -31,7 +31,12 @@ function startOfDay(d: Date): Date {
 }
 
 function dateKey(d: Date): string {
-  return startOfDay(d).toISOString().slice(0, 10);
+  // Construit la clé à partir des composants locaux (pas toISOString, qui convertit en UTC et
+  // décale d'un jour en arrière pour tout fuseau en avance sur UTC, ex. la France l'été).
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
