@@ -24,7 +24,7 @@ function daysInMonth(year: number, monthIndex0: number): number {
  * jour sur le dernier jour du mois cible s'il déborde (ex. 31 janvier + 1 mois → 28/29 février,
  * jamais mars) plutôt que de laisser Date rouler naturellement sur le mois suivant. */
 export function addRecurrenceInterval(date: Date, freq: RecurrenceFreq, interval: number): Date {
-  const n = Math.max(1, interval);
+  const n = Math.max(1, Number.isFinite(interval) ? interval : 1);
   const d = new Date(date);
   switch (freq) {
     case "daily":
@@ -60,10 +60,16 @@ export type AgendaOccurrence = AgendaEvent & { occurrenceKey: string };
 
 const MAX_OCCURRENCES = 5000;
 
+const VALID_FREQS = new Set<RecurrenceFreq>(["daily", "weekly", "monthly", "yearly"]);
+
 /** Dérive les occurrences d'un événement qui recoupent [rangeStart, rangeEnd]. Pour un événement
- * non récurrent, c'est juste l'événement lui-même (0 ou 1 résultat). */
+ * non récurrent, c'est juste l'événement lui-même (0 ou 1 résultat). Toute valeur de
+ * recurrence_freq non reconnue (colonne pas encore migrée en base → undefined/null côté client,
+ * ou donnée invalide) est traitée comme "none" plutôt que de partir dans la branche récurrente —
+ * sinon addRecurrenceInterval ne fait rien sur une fréquence inconnue et la boucle pousse des
+ * milliers de fois la même occurrence (événements "démultipliés" à l'affichage). */
 export function expandEventOccurrences(event: AgendaEvent, rangeStart: Date, rangeEnd: Date): AgendaOccurrence[] {
-  if (event.recurrence_freq === "none") {
+  if (!VALID_FREQS.has(event.recurrence_freq)) {
     const s = new Date(event.start_at);
     const e = new Date(event.end_at ?? event.start_at);
     if (e < rangeStart || s > rangeEnd) return [];
@@ -89,7 +95,9 @@ export function expandEventOccurrences(event: AgendaEvent, rangeStart: Date, ran
         occurrenceKey: `${event.id}::${occStart.toISOString()}`,
       });
     }
-    occStart = addRecurrenceInterval(occStart, event.recurrence_freq, event.recurrence_interval);
+    const next = addRecurrenceInterval(occStart, event.recurrence_freq, event.recurrence_interval);
+    if (next.getTime() <= occStart.getTime()) break; // garde-fou : la date n'avance plus
+    occStart = next;
   }
   return occurrences;
 }
