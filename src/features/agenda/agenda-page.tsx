@@ -514,28 +514,34 @@ function EventRow({
         )}
       </div>
       {participantIds.length > 0 && (
-        <div className="flex flex-shrink-0 -space-x-2">
-          {participantIds.slice(0, 4).map((pid, i) => {
-            const person = peopleById.get(pid);
-            if (!person) return null;
-            return (
-              <PersonAvatarBadge
-                key={pid}
-                name={person.name}
-                avatarEmoji={person.avatar_emoji}
-                avatarConfig={person.avatar_config}
-                personId={person.id}
-                index={i}
-                colorIndex={personColorIndex(person.id, people)}
-                className="h-6 w-6 flex-shrink-0 border-2 border-card text-xs"
-              />
-            );
-          })}
-          {participantIds.length > 4 && (
-            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-card bg-muted text-[0.6rem] font-medium text-muted-foreground">
-              +{participantIds.length - 4}
-            </span>
-          )}
+        <div className="flex flex-shrink-0 flex-col items-center gap-1">
+          <div className="flex -space-x-2">
+            {participantIds.slice(0, 4).map((pid, i) => {
+              const person = peopleById.get(pid);
+              if (!person) return null;
+              return (
+                <PersonAvatarBadge
+                  key={pid}
+                  name={person.name}
+                  avatarEmoji={person.avatar_emoji}
+                  avatarConfig={person.avatar_config}
+                  personId={person.id}
+                  index={i}
+                  colorIndex={personColorIndex(person.id, people)}
+                  className="h-6 w-6 flex-shrink-0 border-2 border-card text-xs"
+                />
+              );
+            })}
+            {participantIds.length > 4 && (
+              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-card bg-muted text-[0.6rem] font-medium text-muted-foreground">
+                +{participantIds.length - 4}
+              </span>
+            )}
+          </div>
+          {/* Même couleur que la barre de cet événement dans le calendrier (combinaison de
+           * participants, pas juste le premier) — pour reconnaître d'un coup d'œil quel
+           * événement de la grille correspond à cette ligne. */}
+          <span className={cn("h-2 w-2 rounded-full", combinationDotColorClass(participantIds, people))} />
         </div>
       )}
     </button>
