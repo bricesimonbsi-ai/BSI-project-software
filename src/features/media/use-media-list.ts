@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { fetchWatchProviders } from "@/features/media/tmdb";
+import { fetchWatchProviders, fetchTvSeasonEpisodeCount } from "@/features/media/tmdb";
 import { fetchGameDescription } from "@/features/media/igdb";
 import type { MediaItem, MediaItemWatcher, MediaItemRating, MediaType, Person } from "@/types/database";
 
@@ -56,9 +56,10 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: TmdbAddInput) => {
-      const [position, platforms] = await Promise.all([
+      const [position, platforms, seasonEpisode] = await Promise.all([
         nextPosition(projectId, type),
         fetchWatchProviders(type === "film" ? "movie" : "tv", input.external_id),
+        type === "serie" ? fetchTvSeasonEpisodeCount(input.external_id) : Promise.resolve({ seasons: null, episodes: null }),
       ]);
       const { error } = await supabase.from("media_items").insert({
         project_id: projectId,
@@ -70,6 +71,8 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
         release_date: input.release_date,
         external_rating: input.external_rating,
         platforms,
+        season_count: seasonEpisode.seasons,
+        episode_count: seasonEpisode.episodes,
         position,
         watched: input.watched ?? false,
         watched_at: input.watched ? new Date().toISOString() : null,

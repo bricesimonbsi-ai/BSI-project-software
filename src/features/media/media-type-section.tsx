@@ -643,6 +643,12 @@ function MediaRow({
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {item.external_rating.toFixed(1)}
               </span>
             )}
+            {type === "serie" && item.season_count != null && (
+              <span>
+                {item.season_count} saison{item.season_count > 1 ? "s" : ""}
+                {item.episode_count != null && ` · ${item.episode_count} épisode${item.episode_count > 1 ? "s" : ""}`}
+              </span>
+            )}
           </div>
           {item.platforms.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -739,6 +745,12 @@ function ExpandedMediaDetails({
           {item.external_rating != null && (
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {item.external_rating.toFixed(1)}/10
+            </p>
+          )}
+          {type === "serie" && item.season_count != null && (
+            <p className="text-xs text-muted-foreground">
+              {item.season_count} saison{item.season_count > 1 ? "s" : ""}
+              {item.episode_count != null && ` · ${item.episode_count} épisode${item.episode_count > 1 ? "s" : ""}`}
             </p>
           )}
           {item.platforms.length > 0 && (

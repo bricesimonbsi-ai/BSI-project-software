@@ -68,6 +68,18 @@ export async function trendingTvShows(): Promise<TmdbTvResult[]> {
   return (data.results ?? []) as TmdbTvResult[];
 }
 
+/** Nombre de saisons/épisodes d'une série — absent de /search/tv, nécessite un appel détaillé
+ * (/tv/{id}), fait une seule fois au moment de l'ajout à la liste. Best-effort : null en cas
+ * d'échec plutôt que de bloquer l'ajout. */
+export async function fetchTvSeasonEpisodeCount(externalId: string): Promise<{ seasons: number | null; episodes: number | null }> {
+  try {
+    const data = await tmdbGet(`/tv/${externalId}`);
+    return { seasons: data.number_of_seasons ?? null, episodes: data.number_of_episodes ?? null };
+  } catch {
+    return { seasons: null, episodes: null };
+  }
+}
+
 /** Plateformes de streaming où regarder un film/série en France (abonnement, sinon location/achat
  * à défaut) — renvoie une liste de noms lisibles ("Netflix", "Canal+"...), vide si non disponible
  * (ou données absentes pour la région). Alimente automatiquement le champ "Où le voir". */

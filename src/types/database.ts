@@ -294,6 +294,10 @@ export type MediaItem = {
   /** Où le voir (streaming, auto-récupéré via TMDB pour film/série) ou sur quelle console y jouer
    * (jeu, sélection manuelle) — plusieurs valeurs possibles. */
   platforms: string[];
+  /** Nombre de saisons/épisodes (séries uniquement, via TMDB) — null pour films/jeux ou si TMDB
+   * ne renvoie pas l'info. */
+  season_count: number | null;
+  episode_count: number | null;
   watched: boolean;
   watched_at: string | null;
   position: number;
