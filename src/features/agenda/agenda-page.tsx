@@ -324,7 +324,7 @@ export function AgendaPage() {
             <div className="space-y-1">
               {weeks.map((week, wi) => {
                 const { bars, laneCount, overflowByDay } = layoutWeekBars(week, visibleOccurrences);
-                const cellMinHeight = 26 + Math.max(laneCount, 1) * 18;
+                const cellMinHeight = 26 + Math.max(laneCount, 1) * 30;
                 return (
                   <div key={wi} className="relative">
                     <div className="grid grid-cols-7 gap-1">
@@ -343,7 +343,7 @@ export function AgendaPage() {
                     {bars.length > 0 && (
                       <div
                         className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-7 gap-1 pt-[22px]"
-                        style={{ gridAutoRows: "18px" }}
+                        style={{ gridAutoRows: "30px" }}
                       >
                         {bars.map((b) => (
                           <EventBar
@@ -366,7 +366,7 @@ export function AgendaPage() {
               {activeOccurrence && (
                 <div
                   className={cn(
-                    "flex max-w-[8rem] items-center gap-0.5 truncate rounded px-1.5 py-0.5 text-[0.6rem] font-semibold leading-tight text-white shadow-lg",
+                    "flex max-w-[8rem] items-center gap-0.5 truncate rounded px-1.5 py-0.5 text-[0.65rem] font-semibold leading-tight text-white shadow-lg",
                     combinationDotColorClass(participantsByEvent.get(activeOccurrence.id) ?? [], people ?? [])
                   )}
                 >
@@ -565,7 +565,7 @@ function EventBar({
       }}
       title={occurrence.title}
       className={cn(
-        "pointer-events-auto flex items-center gap-0.5 truncate rounded px-1.5 text-[0.6rem] font-semibold leading-tight text-white shadow-sm",
+        "pointer-events-auto flex items-start gap-0.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[0.65rem] font-semibold leading-snug text-white shadow-sm",
         solidClass,
         isDragging && "opacity-30",
         draggable && "cursor-grab touch-none active:cursor-grabbing"
@@ -574,8 +574,8 @@ function EventBar({
       {...attributes}
       {...listeners}
     >
-      {occurrence.recurrence_freq !== "none" && <Repeat className="h-2.5 w-2.5 flex-shrink-0" />}
-      <span className="truncate">{occurrence.title}</span>
+      {occurrence.recurrence_freq !== "none" && <Repeat className="mt-0.5 h-2.5 w-2.5 flex-shrink-0" />}
+      <span className="line-clamp-2 break-words">{occurrence.title}</span>
     </button>
   );
 }
@@ -593,6 +593,11 @@ function EventRow({
 }) {
   const start = new Date(event.start_at);
   const peopleById = new Map(people.map((p) => [p.id, p]));
+  // Minuit pile est traité comme "heure non renseignée" (valeur par défaut d'un ajout rapide
+  // depuis une case du calendrier) plutôt qu'une heure volontairement choisie — la distinction
+  // n'existe pas en base, mais un événement réellement prévu à minuit pile est en pratique
+  // inexistant pour un agenda personnel.
+  const hasTime = !event.all_day && (start.getHours() !== 0 || start.getMinutes() !== 0);
   return (
     <button
       type="button"
@@ -601,7 +606,7 @@ function EventRow({
     >
       <div className="flex w-14 flex-shrink-0 flex-col items-center text-xs text-muted-foreground">
         <span>{formatDate(dateKey(start))}</span>
-        {!event.all_day && <span>{TIME_FORMATTER.format(start)}</span>}
+        {hasTime && <span>{TIME_FORMATTER.format(start)}</span>}
       </div>
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="flex items-center gap-1 truncate text-sm font-medium">

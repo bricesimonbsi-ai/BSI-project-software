@@ -51,11 +51,26 @@ export function AcceptInvitePage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Masqué visuellement (pas display:none, pour rester détectable par les gestionnaires
+             * de mots de passe) : associe le nouveau mot de passe au bon compte, cette page n'ayant
+             * pas de champ email visible (l'adresse est déjà connue via la session). */}
+            <input
+              type="email"
+              name="username"
+              autoComplete="username"
+              value={session.user.email ?? ""}
+              readOnly
+              className="absolute h-0 w-0 overflow-hidden opacity-0"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
               <Input
                 id="password"
                 type="password"
+                name="new-password"
+                autoComplete="new-password"
                 required
                 minLength={6}
                 value={password}
