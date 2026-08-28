@@ -10,6 +10,7 @@ import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { usePeople } from "@/features/people/use-people";
 import { personDotColorClass } from "@/features/agenda/person-color";
 import { RECURRENCE_FREQ_LABELS, RECURRENCE_UNIT_LABELS } from "@/features/agenda/recurrence";
+import { DatePickerButton } from "@/features/agenda/date-picker-button";
 import {
   useCreateAgendaEvent,
   useUpdateAgendaEvent,
@@ -17,7 +18,7 @@ import {
   type AgendaEventInput,
 } from "@/features/agenda/use-agenda";
 import type { AgendaEvent, RecurrenceFreq } from "@/types/database";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 
 const RECURRENCE_FREQS: RecurrenceFreq[] = ["none", "daily", "weekly", "monthly", "yearly"];
 
@@ -46,6 +47,26 @@ function parseFormValue(value: string, allDay: boolean): Date {
 
 function startOfCalendarDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Découpe la valeur combinée (date seule, ou "date+heure" au format datetime-local) en ses deux
+ * parties — le DatePickerButton et le champ Heure les éditent séparément, mais l'état interne
+ * reste la même chaîne combinée qu'avant (aucun changement dans toIso/computeDurationDays). */
+function datePart(v: string): string {
+  return v.slice(0, 10);
+}
+
+function timePart(v: string): string {
+  return v.length > 10 ? v.slice(11, 16) : "09:00";
+}
+
+function withDatePart(v: string, date: string, allDay: boolean): string {
+  return allDay ? date : `${date}T${v ? timePart(v) : "09:00"}`;
+}
+
+function withTimePart(v: string, time: string): string {
+  const date = v ? datePart(v) : formatDateTimeLocal(new Date()).slice(0, 10);
+  return `${date}T${time}`;
 }
 
 /** Nombre de jours couverts par l'événement (1 = un seul jour), dérivé de Début/Fin — pas un état
@@ -192,12 +213,40 @@ export function AgendaEventDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="agenda-start">Début</Label>
-              <Input id="agenda-start" type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
+              <Label>Début</Label>
+              <DatePickerButton value={datePart(start)} onChange={(d) => setStart(withDatePart(start, d, allDay))} />
+              {!allDay && (
+                <Input
+                  type="time"
+                  aria-label="Heure de début"
+                  value={timePart(start)}
+                  onChange={(e) => setStart(withTimePart(start, e.target.value))}
+                />
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="agenda-end">Fin (optionnel)</Label>
-              <Input id="agenda-end" type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.target.value)} />
+              <Label>Fin (optionnel)</Label>
+              <div className="flex gap-1">
+                <DatePickerButton
+                  value={end ? datePart(end) : ""}
+                  onChange={(d) => setEnd(withDatePart(end, d, allDay))}
+                  placeholder="Aucune"
+                  className="flex-1"
+                />
+                {end && (
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0" onClick={() => setEnd("")}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {!allDay && end && (
+                <Input
+                  type="time"
+                  aria-label="Heure de fin"
+                  value={timePart(end)}
+                  onChange={(e) => setEnd(withTimePart(end, e.target.value))}
+                />
+              )}
             </div>
           </div>
 
@@ -246,14 +295,9 @@ export function AgendaEventDialog({
                     <span className="text-sm text-muted-foreground">{RECURRENCE_UNIT_LABELS[recurrenceFreq]}</span>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="agenda-recurrence-end">Jusqu'au (optionnel)</Label>
-                  <Input
-                    id="agenda-recurrence-end"
-                    type="date"
-                    value={recurrenceEndDate}
-                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                  />
+                <div className="min-w-[9rem] space-y-2">
+                  <Label>Jusqu'au (optionnel)</Label>
+                  <DatePickerButton value={recurrenceEndDate} onChange={setRecurrenceEndDate} placeholder="Sans fin" />
                 </div>
               </div>
             )}

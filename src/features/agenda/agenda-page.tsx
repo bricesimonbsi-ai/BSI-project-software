@@ -1,13 +1,26 @@
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { useAuth } from "@/app/providers/auth-provider";
 import { usePeople } from "@/features/people/use-people";
-import { useAgendaEvents, useAgendaEventParticipants, useSharedAgendas } from "@/features/agenda/use-agenda";
+import { useAgendaEvents, useAgendaEventParticipants, useSharedAgendas, useUpdateAgendaEvent } from "@/features/agenda/use-agenda";
 import { combinationDotColorClass, personColorIndex } from "@/features/agenda/person-color";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
 import { AgendaEventDialog } from "@/features/agenda/agenda-event-dialog";
 import { AgendaCollaboratorsPanel } from "@/features/agenda/agenda-collaborators-panel";
 import { expandEventOccurrences, type AgendaOccurrence } from "@/features/agenda/recurrence";
+import { WEEKDAY_LABELS, MONTH_FORMATTER, MONTH_SHORT_FORMATTER, startOfDay, dateKey, isSameDay, buildMonthGrid, daysBetween } from "@/features/agenda/calendar-utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,51 +29,11 @@ import { formatDate, cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, Share2, MapPin, CalendarDays, Repeat } from "lucide-react";
 import type { AgendaEvent, Person } from "@/types/database";
 
-const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
-const MONTH_SHORT_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "short" });
 const TIME_FORMATTER = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 /** Seuil de déplacement horizontal (px) à partir duquel un geste tactile est traité comme un
  * swipe de changement de mois plutôt qu'un simple défilement vertical de la page. */
 const SWIPE_THRESHOLD_PX = 50;
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function dateKey(d: Date): string {
-  // Construit la clé à partir des composants locaux (pas toISOString, qui convertit en UTC et
-  // décale d'un jour en arrière pour tout fuseau en avance sur UTC, ex. la France l'été).
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return dateKey(a) === dateKey(b);
-}
-
-/** 42 jours (6 semaines, lundi en première colonne) couvrant le mois affiché, avec le
- * "débordement" des mois précédent/suivant pour compléter la grille. */
-function buildMonthGrid(monthDate: Date): Date[] {
-  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const mondayOffset = (first.getDay() + 6) % 7;
-  const gridStart = new Date(first);
-  gridStart.setDate(first.getDate() - mondayOffset);
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    return d;
-  });
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000);
-}
 
 const MAX_WEEK_LANES = 3;
 
@@ -131,6 +104,7 @@ export function AgendaPage() {
   const { data: events } = useAgendaEvents(ownerId);
   const eventIds = useMemo(() => (events ?? []).map((e) => e.id), [events]);
   const { data: participants } = useAgendaEventParticipants(ownerId, eventIds);
+  const updateEvent = useUpdateAgendaEvent(ownerId);
 
   const [month, setMonth] = useState(() => startOfDay(new Date()));
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -140,8 +114,13 @@ export function AgendaPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const [activeOccurrence, setActiveOccurrence] = useState<AgendaOccurrence | null>(null);
 
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
 
   function handleTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
@@ -151,12 +130,53 @@ export function AgendaPage() {
   function handleTouchEnd(e: React.TouchEvent) {
     const start = touchStart.current;
     touchStart.current = null;
-    if (!start) return;
+    // Un glisser-déposer d'événement en cours utilise le même geste tactile qu'un swipe de
+    // changement de mois (voir handleDragStart/handleDragEnd) : ne pas changer de mois en plus.
+    if (!start || activeOccurrence) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
     if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     setMonth((m) => new Date(m.getFullYear(), m.getMonth() + (dx < 0 ? 1 : -1), 1));
+  }
+
+  // Déplace un événement (ou toute une série récurrente, voir recurrence.ts) d'un jour à l'autre
+  // par glisser-déposer — conserve l'heure et la durée, ne fait que décaler les deux dates du même
+  // nombre de jours. Fonctionne à la souris (PointerSensor) comme au doigt (TouchSensor).
+  function handleDragStart(e: DragStartEvent) {
+    const occurrence = visibleOccurrences.find((o) => o.occurrenceKey === String(e.active.id)) ?? null;
+    setActiveOccurrence(occurrence);
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveOccurrence(null);
+    const overId = e.over?.id;
+    if (!overId) return;
+    const sourceDayKey = e.active.data.current?.dayKey as string | undefined;
+    const targetDayKey = String(overId);
+    if (!sourceDayKey || sourceDayKey === targetDayKey) return;
+    const eventId = String(e.active.id).split("::")[0];
+    const original = eventsById.get(eventId);
+    if (!original) return;
+    const delta = daysBetween(new Date(`${sourceDayKey}T00:00:00`), new Date(`${targetDayKey}T00:00:00`));
+    const shift = (iso: string) => {
+      const d = new Date(iso);
+      d.setDate(d.getDate() + delta);
+      return d.toISOString();
+    };
+    updateEvent.mutate({
+      id: original.id,
+      title: original.title,
+      description: original.description,
+      location: original.location,
+      start_at: shift(original.start_at),
+      end_at: original.end_at ? shift(original.end_at) : null,
+      all_day: original.all_day,
+      participantPersonIds: participantsByEvent.get(original.id) ?? [],
+      recurrence_freq: original.recurrence_freq,
+      recurrence_interval: original.recurrence_interval,
+      recurrence_end_date: original.recurrence_end_date,
+    });
   }
 
   const participantsByEvent = useMemo(() => {
@@ -238,7 +258,7 @@ export function AgendaPage() {
   const selectedDayEvents = selectedDay ? eventsByDay.get(dateKey(selectedDay)) ?? [] : [];
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-7xl space-y-6">
       <PageHeroCard>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -268,118 +288,114 @@ export function AgendaPage() {
         )}
       </PageHeroCard>
 
-      <div
-        className="space-y-3 rounded-lg border border-border bg-card p-3"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <button
-            type="button"
-            onClick={() => {
-              setPickerYear(month.getFullYear());
-              setPickerOpen(true);
-            }}
-            className="rounded-md px-2 py-1 text-sm font-semibold capitalize transition-colors hover:bg-secondary"
-            title="Choisir un autre mois ou une autre année"
-          >
-            {MONTH_FORMATTER.format(month)}
-          </button>
-          <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <div
+          className="space-y-3 rounded-lg border border-border bg-card p-3"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setPickerYear(month.getFullYear());
+                setPickerOpen(true);
+              }}
+              className="rounded-md px-2 py-1 text-sm font-semibold capitalize transition-colors hover:bg-secondary"
+              title="Choisir un autre mois ou une autre année"
+            >
+              {MONTH_FORMATTER.format(month)}
+            </button>
+            <Button variant="ghost" size="icon" onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
-        <div className="grid grid-cols-7 gap-1 text-center text-[0.65rem] font-semibold text-muted-foreground">
-          {WEEKDAY_LABELS.map((w) => (
-            <span key={w}>{w}</span>
-          ))}
-        </div>
-
-        <div className="space-y-1">
-          {weeks.map((week, wi) => {
-            const { bars, laneCount, overflowByDay } = layoutWeekBars(week, visibleOccurrences);
-            const cellMinHeight = 26 + Math.max(laneCount, 1) * 20;
-            return (
-              <div key={wi} className="relative">
-                <div className="grid grid-cols-7 gap-1">
-                  {week.map((day) => {
-                    const inMonth = day.getMonth() === month.getMonth();
-                    const today = isSameDay(day, new Date());
-                    const overflow = overflowByDay.get(dateKey(day)) ?? 0;
-                    return (
-                      <button
-                        key={day.toISOString()}
-                        type="button"
-                        onClick={() => setSelectedDay(day)}
-                        style={{ minHeight: `${cellMinHeight}px` }}
-                        className={cn(
-                          "flex flex-col items-start rounded-md border p-1 text-left transition-colors",
-                          inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30 text-muted-foreground",
-                          today && "border-accent"
-                        )}
-                      >
-                        <span className={cn("text-xs", today && "font-bold text-accent")}>{day.getDate()}</span>
-                        {overflow > 0 && <span className="mt-auto text-[0.6rem] font-medium text-muted-foreground">+{overflow}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                {bars.length > 0 && (
-                  <div
-                    className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-7 gap-1 pt-[22px]"
-                    style={{ gridAutoRows: "20px" }}
-                  >
-                    {bars.map((b) => {
-                      const solidClass = combinationDotColorClass(participantsByEvent.get(b.occurrence.id) ?? [], people ?? []);
-                      return (
-                        <button
-                          key={b.occurrence.occurrenceKey}
-                          type="button"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            openEditDialog(b.occurrence);
-                          }}
-                          title={b.occurrence.title}
-                          className={cn(
-                            "pointer-events-auto flex items-center gap-0.5 truncate rounded px-1.5 text-[0.65rem] font-semibold leading-tight text-white shadow-sm",
-                            solidClass
-                          )}
-                          style={{ gridColumn: `${b.startCol + 1} / ${b.endCol + 2}`, gridRow: b.lane + 1 }}
-                        >
-                          {b.occurrence.recurrence_freq !== "none" && <Repeat className="h-2.5 w-2.5 flex-shrink-0" />}
-                          <span className="truncate">{b.occurrence.title}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">Prochains événements</p>
-        {upcoming.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Rien de prévu pour l'instant.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {upcoming.map((e) => (
-              <EventRow
-                key={e.occurrenceKey}
-                event={e}
-                people={people ?? []}
-                participantIds={participantsByEvent.get(e.id) ?? []}
-                onOpen={() => openEditDialog(e)}
-              />
+          <div className="grid grid-cols-7 gap-1 text-center text-[0.65rem] font-semibold text-muted-foreground">
+            {WEEKDAY_LABELS.map((w) => (
+              <span key={w}>{w}</span>
             ))}
           </div>
-        )}
+
+          <DndContext sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="space-y-1">
+              {weeks.map((week, wi) => {
+                const { bars, laneCount, overflowByDay } = layoutWeekBars(week, visibleOccurrences);
+                const cellMinHeight = 26 + Math.max(laneCount, 1) * 18;
+                return (
+                  <div key={wi} className="relative">
+                    <div className="grid grid-cols-7 gap-1">
+                      {week.map((day) => (
+                        <DayCell
+                          key={day.toISOString()}
+                          day={day}
+                          inMonth={day.getMonth() === month.getMonth()}
+                          isToday={isSameDay(day, new Date())}
+                          overflow={overflowByDay.get(dateKey(day)) ?? 0}
+                          minHeight={cellMinHeight}
+                          onClick={() => setSelectedDay(day)}
+                        />
+                      ))}
+                    </div>
+                    {bars.length > 0 && (
+                      <div
+                        className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-7 gap-1 pt-[22px]"
+                        style={{ gridAutoRows: "18px" }}
+                      >
+                        {bars.map((b) => (
+                          <EventBar
+                            key={b.occurrence.occurrenceKey}
+                            occurrence={b.occurrence}
+                            solidClass={combinationDotColorClass(participantsByEvent.get(b.occurrence.id) ?? [], people ?? [])}
+                            gridColumn={`${b.startCol + 1} / ${b.endCol + 2}`}
+                            gridRow={b.lane + 1}
+                            draggable={canWrite}
+                            onOpen={() => openEditDialog(b.occurrence)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <DragOverlay>
+              {activeOccurrence && (
+                <div
+                  className={cn(
+                    "flex max-w-[8rem] items-center gap-0.5 truncate rounded px-1.5 py-0.5 text-[0.6rem] font-semibold leading-tight text-white shadow-lg",
+                    combinationDotColorClass(participantsByEvent.get(activeOccurrence.id) ?? [], people ?? [])
+                  )}
+                >
+                  {activeOccurrence.recurrence_freq !== "none" && <Repeat className="h-2.5 w-2.5 flex-shrink-0" />}
+                  <span className="truncate">{activeOccurrence.title}</span>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Prochains événements</p>
+          {upcoming.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Rien de prévu pour l'instant.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {upcoming.map((e) => (
+                <EventRow
+                  key={e.occurrenceKey}
+                  event={e}
+                  people={people ?? []}
+                  participantIds={participantsByEvent.get(e.id) ?? []}
+                  onOpen={() => openEditDialog(e)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {canWrite && (
@@ -476,6 +492,91 @@ export function AgendaPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Case d'un jour de la grille — zone "droppable" (dnd-kit) pour y déposer un événement glissé
+ * depuis un autre jour, en plus d'ouvrir la liste du jour au clic. */
+function DayCell({
+  day,
+  inMonth,
+  isToday,
+  overflow,
+  minHeight,
+  onClick,
+}: {
+  day: Date;
+  inMonth: boolean;
+  isToday: boolean;
+  overflow: number;
+  minHeight: number;
+  onClick: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: dateKey(day) });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={onClick}
+      style={{ minHeight: `${minHeight}px` }}
+      className={cn(
+        "flex flex-col items-start rounded-md border p-1 text-left transition-colors",
+        inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30 text-muted-foreground",
+        isToday && "border-accent",
+        isOver && "border-accent bg-accent/10 ring-2 ring-accent"
+      )}
+    >
+      <span className={cn("text-xs", isToday && "font-bold text-accent")}>{day.getDate()}</span>
+      {overflow > 0 && <span className="mt-auto text-[0.6rem] font-medium text-muted-foreground">+{overflow}</span>}
+    </button>
+  );
+}
+
+/** Barre d'une occurrence dans la grille — "draggable" (dnd-kit) pour la déplacer d'un jour à
+ * l'autre à la souris comme au doigt (voir sensors dans AgendaPage). Le clic (sans glisser) ouvre
+ * toujours l'édition, grâce au seuil de déplacement des sensors (distance/delay). */
+function EventBar({
+  occurrence,
+  solidClass,
+  gridColumn,
+  gridRow,
+  draggable,
+  onOpen,
+}: {
+  occurrence: AgendaOccurrence;
+  solidClass: string;
+  gridColumn: string;
+  gridRow: number;
+  draggable: boolean;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: occurrence.occurrenceKey,
+    data: { dayKey: dateKey(new Date(occurrence.start_at)) },
+    disabled: !draggable,
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={(ev) => {
+        ev.stopPropagation();
+        onOpen();
+      }}
+      title={occurrence.title}
+      className={cn(
+        "pointer-events-auto flex items-center gap-0.5 truncate rounded px-1.5 text-[0.6rem] font-semibold leading-tight text-white shadow-sm",
+        solidClass,
+        isDragging && "opacity-30",
+        draggable && "cursor-grab touch-none active:cursor-grabbing"
+      )}
+      style={{ gridColumn, gridRow }}
+      {...attributes}
+      {...listeners}
+    >
+      {occurrence.recurrence_freq !== "none" && <Repeat className="h-2.5 w-2.5 flex-shrink-0" />}
+      <span className="truncate">{occurrence.title}</span>
+    </button>
   );
 }
 
