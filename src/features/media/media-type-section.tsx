@@ -6,10 +6,11 @@ import {
   trendingTvShows,
   tmdbPosterUrl,
   isTmdbConfigured,
+  fetchTvSeasonEpisodeCount,
   type TmdbMovieResult,
   type TmdbTvResult,
 } from "@/features/media/tmdb";
-import { searchGames, trendingGames, isIgdbConfigured, type IgdbGameResult } from "@/features/media/igdb";
+import { searchGames, trendingGames, isIgdbConfigured, fetchGameDescription, type IgdbGameResult } from "@/features/media/igdb";
 import {
   useMediaItems,
   useAddTmdbMedia,
@@ -157,6 +158,7 @@ export function MediaTypeSection({
   const [trending, setTrending] = useState<NormalizedResult[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [expanded, setExpanded] = useState<MediaItem | null>(null);
+  const [previewResult, setPreviewResult] = useState<NormalizedResult | null>(null);
   const [consolesTarget, setConsolesTarget] = useState<MediaItem | null>(null);
   const [manualTitle, setManualTitle] = useState("");
   const [manualConsoles, setManualConsoles] = useState<Set<string>>(new Set());
@@ -398,7 +400,13 @@ export function MediaTypeSection({
               {trending
                 .filter((r) => !existingExternalIds.has(r.id))
                 .map((r) => (
-                  <TrendingCard key={r.id} result={r} type={type} onAdd={() => handleAddResult(r, false)} />
+                  <TrendingCard
+                    key={r.id}
+                    result={r}
+                    type={type}
+                    onAdd={() => handleAddResult(r, false)}
+                    onPreview={() => setPreviewResult(r)}
+                  />
                 ))}
             </div>
           )}
@@ -495,6 +503,21 @@ export function MediaTypeSection({
         <p className="text-center text-[0.65rem] text-muted-foreground">Données jeux vidéo fournies par IGDB.</p>
       )}
 
+      <Dialog open={!!previewResult} onOpenChange={(open) => !open && setPreviewResult(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          {previewResult && (
+            <ResultPreviewDetails
+              result={previewResult}
+              type={type}
+              onAdd={() => {
+                handleAddResult(previewResult, false);
+                setPreviewResult(null);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           {expanded && (
@@ -574,18 +597,30 @@ export function MediaTypeSection({
   );
 }
 
-function TrendingCard({ result, type, onAdd }: { result: NormalizedResult; type: MediaType; onAdd: () => void }) {
+function TrendingCard({
+  result,
+  type,
+  onAdd,
+  onPreview,
+}: {
+  result: NormalizedResult;
+  type: MediaType;
+  onAdd: () => void;
+  onPreview: () => void;
+}) {
   const Icon = TYPE_ICON[type];
   return (
     <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-2">
-      {result.posterPath ? (
-        <img src={result.posterPath} alt="" className="aspect-[2/3] w-full rounded object-cover" />
-      ) : (
-        <div className="flex aspect-[2/3] w-full items-center justify-center rounded bg-muted">
-          <Icon className="h-5 w-5 text-muted-foreground" />
-        </div>
-      )}
-      <p className="truncate text-xs font-medium">{result.title}</p>
+      <button type="button" onClick={onPreview} className="block w-full text-left">
+        {result.posterPath ? (
+          <img src={result.posterPath} alt="" className="aspect-[2/3] w-full rounded object-cover" />
+        ) : (
+          <div className="flex aspect-[2/3] w-full items-center justify-center rounded bg-muted">
+            <Icon className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
+        <p className="mt-1.5 truncate text-xs font-medium">{result.title}</p>
+      </button>
       <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground">
         <span>{result.year ?? "?"}</span>
         {result.rating > 0 && (
@@ -596,6 +631,88 @@ function TrendingCard({ result, type, onAdd }: { result: NormalizedResult; type:
       </div>
       <Button type="button" size="sm" variant="outline" className="h-7 w-full text-xs" onClick={onAdd}>
         Ajouter
+      </Button>
+    </div>
+  );
+}
+
+/** Fiche détaillée d'un résultat pas encore ajouté (aperçu depuis "Nouveautés") — synopsis
+ * immédiatement disponible pour film/série (déjà dans le résultat de recherche TMDB), mais le
+ * nombre de saisons/épisodes et la description d'un jeu nécessitent un appel séparé (absents des
+ * résultats de recherche/tendances), fait ici à l'ouverture plutôt qu'en base pour ne pas
+ * multiplier les appels sur des contenus jamais consultés. */
+function ResultPreviewDetails({ result, type, onAdd }: { result: NormalizedResult; type: MediaType; onAdd: () => void }) {
+  const Icon = TYPE_ICON[type];
+  const staticSynopsis = "synopsis" in result.addInput ? result.addInput.synopsis : null;
+  const [synopsis, setSynopsis] = useState<string | null>(staticSynopsis);
+  const [seasonEpisode, setSeasonEpisode] = useState<{ seasons: number | null; episodes: number | null } | null>(null);
+  const [loadingExtra, setLoadingExtra] = useState(type === "serie" || type === "jeu");
+
+  useEffect(() => {
+    let cancelled = false;
+    setSynopsis(staticSynopsis);
+    setSeasonEpisode(null);
+    if (type === "serie") {
+      setLoadingExtra(true);
+      fetchTvSeasonEpisodeCount(result.id).then((r) => {
+        if (cancelled) return;
+        setSeasonEpisode(r);
+        setLoadingExtra(false);
+      });
+    } else if (type === "jeu") {
+      setLoadingExtra(true);
+      fetchGameDescription(result.id).then((d) => {
+        if (cancelled) return;
+        setSynopsis(d);
+        setLoadingExtra(false);
+      });
+    } else {
+      setLoadingExtra(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result.id, type]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-3">
+        {result.posterPath ? (
+          <img src={result.posterPath} alt="" className="h-36 w-24 flex-shrink-0 rounded object-cover" />
+        ) : (
+          <div className="flex h-36 w-24 flex-shrink-0 items-center justify-center rounded bg-muted">
+            <Icon className="h-6 w-6 text-muted-foreground" />
+          </div>
+        )}
+        <div className="space-y-1">
+          <h3 className="font-semibold leading-tight">{result.title}</h3>
+          {result.year && <p className="text-xs text-muted-foreground">{result.year}</p>}
+          {result.rating > 0 && (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {result.rating.toFixed(1)}/10
+            </p>
+          )}
+          {type === "serie" && (
+            <p className="text-xs text-muted-foreground">
+              {seasonEpisode?.seasons != null
+                ? `${seasonEpisode.seasons} saison${seasonEpisode.seasons > 1 ? "s" : ""}${
+                    seasonEpisode.episodes != null ? ` · ${seasonEpisode.episodes} épisode${seasonEpisode.episodes > 1 ? "s" : ""}` : ""
+                  }`
+                : loadingExtra
+                  ? "Chargement..."
+                  : null}
+            </p>
+          )}
+        </div>
+      </div>
+      {type === "jeu" && loadingExtra ? (
+        <p className="text-sm text-muted-foreground">Chargement du synopsis...</p>
+      ) : (
+        synopsis && <p className="text-sm text-muted-foreground">{synopsis}</p>
+      )}
+      <Button className="w-full" onClick={onAdd}>
+        Ajouter à ma liste
       </Button>
     </div>
   );
