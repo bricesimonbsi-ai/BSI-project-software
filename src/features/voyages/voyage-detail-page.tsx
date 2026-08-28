@@ -117,7 +117,7 @@ export function VoyageDetailPage({ projectId }: { projectId: string }) {
   const travelerCount = linkedPeople?.length || 1;
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-7xl space-y-6">
       <PageHeroCard>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Breadcrumb

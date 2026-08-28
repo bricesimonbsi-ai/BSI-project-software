@@ -344,7 +344,7 @@ export function RestaurantSection({ projectId, restaurantType }: { projectId: st
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {nearby
                 .filter((r) => !existingPlaceIds.has(r.id))
                 .map((r) => (
