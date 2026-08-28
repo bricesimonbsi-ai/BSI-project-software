@@ -396,7 +396,7 @@ export function MediaTypeSection({
           ) : trendingLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Chargement...</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {trending
                 .filter((r) => !existingExternalIds.has(r.id))
                 .map((r) => (
