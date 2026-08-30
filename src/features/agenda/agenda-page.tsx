@@ -580,7 +580,7 @@ function EventBar({
   );
 }
 
-function EventRow({
+export function EventRow({
   event,
   people,
   participantIds,

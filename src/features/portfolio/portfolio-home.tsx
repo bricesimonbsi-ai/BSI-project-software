@@ -7,6 +7,7 @@ import { useProjects, type ProjectWithCategory } from "@/features/projects/use-p
 import { useThemeStore } from "@/features/theme/theme-store";
 import { FeaturedProjectPanel } from "@/features/portfolio/featured-project-panel";
 import { CategoryOrbitalLayout, orbitalNodeColor } from "@/features/portfolio/category-orbital-layout";
+import { AgendaPreview } from "@/features/portfolio/agenda-preview";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatDate } from "@/lib/utils";
@@ -48,20 +49,30 @@ export function PortfolioHome() {
     const withDates = (projects ?? []).filter((p) => p.start_date && p.end_date);
     const ongoing = withDates.find((p) => !isFuture(parseISO(p.start_date!)) && !isPast(parseISO(p.end_date!)));
     if (ongoing) return { project: ongoing, status: "ongoing" as const };
+    // Repli sur le statut saisi manuellement (project.status) quand aucune date n'est renseignée —
+    // beaucoup de projets non-Voyage (Cadeaux, Courses, Santé & bien-être...) n'ont pas de
+    // start_date/end_date du tout, et ne remonteraient sinon jamais ici malgré un statut "actif".
+    const activeNoDate = (projects ?? []).find((p) => p.status === "active");
+    if (activeNoDate) return { project: activeNoDate, status: "ongoing" as const };
     const upcoming = (projects ?? [])
       .filter((p) => p.start_date && isFuture(parseISO(p.start_date)))
       .sort((a, b) => parseISO(a.start_date!).getTime() - parseISO(b.start_date!).getTime())[0];
     if (upcoming) return { project: upcoming, status: "upcoming" as const };
+    const upcomingNoDate = (projects ?? []).find((p) => p.status === "upcoming");
+    if (upcomingNoDate) return { project: upcomingNoDate, status: "upcoming" as const };
     return null;
   }, [projects]);
 
   // Les prochains départs/débuts, hors celui déjà mis en avant ci-dessus — occupe l'espace
-  // libéré par les anciens indicateurs génériques avec quelque chose de plus actionnable.
+  // libéré par les anciens indicateurs génériques avec quelque chose de plus actionnable. Repli sur
+  // le statut manuel si aucun projet restant n'a de date de début renseignée (même raison que
+  // featuredProject ci-dessus).
   const upcomingProjects = useMemo(() => {
-    return (projects ?? [])
+    const dated = (projects ?? [])
       .filter((p) => p.id !== featuredProject?.project.id && p.start_date && isFuture(parseISO(p.start_date)))
-      .sort((a, b) => parseISO(a.start_date!).getTime() - parseISO(b.start_date!).getTime())
-      .slice(0, 6);
+      .sort((a, b) => parseISO(a.start_date!).getTime() - parseISO(b.start_date!).getTime());
+    if (dated.length > 0) return dated.slice(0, 6);
+    return (projects ?? []).filter((p) => p.id !== featuredProject?.project.id && p.status === "upcoming").slice(0, 6);
   }, [projects, featuredProject]);
 
   const categoryStats: CategoryStat[] = useMemo(() => {
@@ -93,55 +104,70 @@ export function PortfolioHome() {
     return <p className="text-muted-foreground">Chargement du portefeuille...</p>;
   }
 
+  const featuredSection = featuredProject && (
+    <FeaturedProjectPanel project={featuredProject.project} status={featuredProject.status} />
+  );
+
+  const upcomingSection = upcomingProjects.length > 0 && (
+    <div>
+      <h2 className="mb-3 text-lg font-semibold">Prochainement</h2>
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        {upcomingProjects.map((p) => {
+          const idx = orbitalCategoryIndex.get(p.category_id);
+          const orbitalColor =
+            categoryLayout === "orbital" && idx !== undefined
+              ? orbitalNodeColor(idx, activeCategories.length, orbitalAccent)
+              : null;
+          return (
+            <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
+              <Card
+                className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25"
+                style={orbitalColor ? { borderLeft: `3px solid ${orbitalColor}` } : undefined}
+              >
+                <CardContent className="space-y-1 p-4">
+                  <p className="flex items-center gap-1.5 truncate font-semibold">
+                    {p.icon && <span>{p.icon}</span>}
+                    {p.title}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{p.categories?.name}</p>
+                  {p.start_date && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(p.start_date)} · dans {differenceInCalendarDays(parseISO(p.start_date), new Date())} j
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {categoryLayout === "orbital" && (
-        <CategoryOrbitalLayout stats={categoryStats} accentStyle={orbitalAccent} greetingName={profile?.display_name} />
-      )}
-
-      {featuredProject && <FeaturedProjectPanel project={featuredProject.project} status={featuredProject.status} />}
-
-      {upcomingProjects.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-lg font-semibold">Prochainement</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {upcomingProjects.map((p) => {
-              const idx = orbitalCategoryIndex.get(p.category_id);
-              const orbitalColor =
-                categoryLayout === "orbital" && idx !== undefined
-                  ? orbitalNodeColor(idx, activeCategories.length, orbitalAccent)
-                  : null;
-              return (
-                <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
-                  <Card
-                    className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25"
-                    style={orbitalColor ? { borderLeft: `3px solid ${orbitalColor}` } : undefined}
-                  >
-                    <CardContent className="space-y-1 p-4">
-                      <p className="flex items-center gap-1.5 truncate font-semibold">
-                        {p.icon && <span>{p.icon}</span>}
-                        {p.title}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">{p.categories?.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(p.start_date)} · dans {differenceInCalendarDays(parseISO(p.start_date!), new Date())} j
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
+      {categoryLayout === "orbital" ? (
+        // Contrairement aux 3 autres dispositions (naturellement remplies de haut en bas), l'anneau
+        // Orbital laisse un grand vide en dessous quand peu de contenu suit — on centre verticalement
+        // tout le bloc dans l'espace disponible plutôt que de le laisser collé en haut de l'écran.
+        <div className="flex min-h-[65vh] flex-col justify-center gap-6">
+          <CategoryOrbitalLayout stats={categoryStats} accentStyle={orbitalAccent} greetingName={profile?.display_name} />
+          {featuredSection}
+          {upcomingSection}
+          <AgendaPreview />
+        </div>
+      ) : (
+        <>
+          {featuredSection}
+          {upcomingSection}
+          <AgendaPreview />
+          <div>
+            <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
+            {categoryLayout === "list" && <CategoryListLayout stats={categoryStats} />}
+            {categoryLayout === "grid" && <CategoryGridLayout stats={categoryStats} />}
+            {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
           </div>
-        </div>
-      )}
-
-      {categoryLayout !== "orbital" && (
-        <div>
-          <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
-          {categoryLayout === "list" && <CategoryListLayout stats={categoryStats} />}
-          {categoryLayout === "grid" && <CategoryGridLayout stats={categoryStats} />}
-          {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
-        </div>
+        </>
       )}
     </div>
   );

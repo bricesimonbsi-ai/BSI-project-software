@@ -17,6 +17,17 @@ import type { ProjectWithCategory } from "@/features/projects/use-projects";
  * projet générique, les quelques champs budget/dates déjà saisis. */
 export function FeaturedProjectPanel({ project, status }: { project: ProjectWithCategory; status: "ongoing" | "upcoming" }) {
   const isVoyage = project.categories?.module_key === "voyages";
+  // Un projet marqué "actif"/"à venir" manuellement (project.status) sans dates renseignées est un
+  // repli valide (cf. portfolio-home.tsx) — pas de ligne de dates dans ce cas plutôt que planter
+  // sur un parseISO(null).
+  const dateLabel =
+    status === "ongoing"
+      ? project.start_date && project.end_date
+        ? `${formatDate(project.start_date)} → ${formatDate(project.end_date)}`
+        : null
+      : project.start_date
+        ? `${formatDate(project.start_date)} · dans ${differenceInCalendarDays(parseISO(project.start_date), new Date())} jours`
+        : null;
 
   return (
     <Card className="overflow-hidden border-accent/40 bg-gradient-to-br from-accent/15 to-transparent">
@@ -32,11 +43,7 @@ export function FeaturedProjectPanel({ project, status }: { project: ProjectWith
               )}
               {project.title}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {status === "ongoing"
-                ? `${formatDate(project.start_date)} → ${formatDate(project.end_date)}`
-                : `${formatDate(project.start_date)} · dans ${differenceInCalendarDays(parseISO(project.start_date!), new Date())} jours`}
-            </p>
+            {dateLabel && <p className="text-sm text-muted-foreground">{dateLabel}</p>}
           </div>
           <Link to={`/projects/${project.id}`}>
             <Badge variant="accent" className="flex items-center gap-1 px-3 py-1.5 text-sm">
