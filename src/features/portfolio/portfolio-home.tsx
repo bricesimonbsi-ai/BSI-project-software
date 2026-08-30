@@ -6,13 +6,14 @@ import { useCategories } from "@/features/portfolio/use-categories";
 import { useProjects, type ProjectWithCategory } from "@/features/projects/use-projects";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { FeaturedProjectPanel } from "@/features/portfolio/featured-project-panel";
+import { CategoryOrbitalLayout, orbitalNodeColor } from "@/features/portfolio/category-orbital-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatDate } from "@/lib/utils";
 import { ChevronRight, Shapes } from "lucide-react";
 import type { Category } from "@/types/database";
 
-interface CategoryStat {
+export interface CategoryStat {
   category: Category;
   projects: ProjectWithCategory[];
   activeCount: number;
@@ -24,6 +25,7 @@ export function PortfolioHome() {
   const { data: categories, isLoading: loadingCategories } = useCategories();
   const { data: projects, isLoading: loadingProjects } = useProjects();
   const categoryLayout = useThemeStore((s) => s.categoryLayout);
+  const orbitalAccent = useThemeStore((s) => s.orbitalAccent);
 
   // Les catégories sont visibles par tout compte authentifié (liste globale gérée par
   // l'administrateur), mais un collaborateur invité sur un seul projet ne doit voir sur son
@@ -80,44 +82,67 @@ export function PortfolioHome() {
     });
   }, [activeCategories, projects]);
 
+  // Pour teinter les tickets "Prochainement" en cohérence avec les nœuds de la disposition
+  // Orbital (même index de catégorie → même couleur), sans effet sur les 3 autres dispositions.
+  const orbitalCategoryIndex = useMemo(
+    () => new Map(activeCategories.map((c, i) => [c.id, i])),
+    [activeCategories]
+  );
+
   if (loadingCategories || loadingProjects) {
     return <p className="text-muted-foreground">Chargement du portefeuille...</p>;
   }
 
   return (
     <div className="space-y-6">
+      {categoryLayout === "orbital" && (
+        <CategoryOrbitalLayout stats={categoryStats} accentStyle={orbitalAccent} greetingName={profile?.display_name} />
+      )}
+
       {featuredProject && <FeaturedProjectPanel project={featuredProject.project} status={featuredProject.status} />}
 
       {upcomingProjects.length > 0 && (
         <div>
           <h2 className="mb-3 text-lg font-semibold">Prochainement</h2>
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {upcomingProjects.map((p) => (
-              <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
-                <Card className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25">
-                  <CardContent className="space-y-1 p-4">
-                    <p className="flex items-center gap-1.5 truncate font-semibold">
-                      {p.icon && <span>{p.icon}</span>}
-                      {p.title}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">{p.categories?.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(p.start_date)} · dans {differenceInCalendarDays(parseISO(p.start_date!), new Date())} j
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+            {upcomingProjects.map((p) => {
+              const idx = orbitalCategoryIndex.get(p.category_id);
+              const orbitalColor =
+                categoryLayout === "orbital" && idx !== undefined
+                  ? orbitalNodeColor(idx, activeCategories.length, orbitalAccent)
+                  : null;
+              return (
+                <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
+                  <Card
+                    className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25"
+                    style={orbitalColor ? { borderLeft: `3px solid ${orbitalColor}` } : undefined}
+                  >
+                    <CardContent className="space-y-1 p-4">
+                      <p className="flex items-center gap-1.5 truncate font-semibold">
+                        {p.icon && <span>{p.icon}</span>}
+                        {p.title}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{p.categories?.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(p.start_date)} · dans {differenceInCalendarDays(parseISO(p.start_date!), new Date())} j
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
 
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
-        {categoryLayout === "list" && <CategoryListLayout stats={categoryStats} />}
-        {categoryLayout === "grid" && <CategoryGridLayout stats={categoryStats} />}
-        {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
-      </div>
+      {categoryLayout !== "orbital" && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Catégories de projets</h2>
+          {categoryLayout === "list" && <CategoryListLayout stats={categoryStats} />}
+          {categoryLayout === "grid" && <CategoryGridLayout stats={categoryStats} />}
+          {categoryLayout === "circle" && <CategoryCircleLayout stats={categoryStats} />}
+        </div>
+      )}
     </div>
   );
 }

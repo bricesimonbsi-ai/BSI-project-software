@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/providers/auth-provider";
-import { useThemeStore, type ThemeMode, type CategoryLayout } from "@/features/theme/theme-store";
+import { useThemeStore, type ThemeMode, type CategoryLayout, type OrbitalAccent } from "@/features/theme/theme-store";
 import { THEME_PRESETS } from "@/features/theme/theme-presets";
 import { isBiometricAvailable, isBiometricLockEnabled, enableBiometricLock, disableBiometricLock } from "@/features/auth/biometric-lock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { Sun, Moon, Monitor, Shapes, Users, UserCog, Check, List, LayoutGrid, Circle, Fingerprint, Bell } from "lucide-react";
+import { Sun, Moon, Monitor, Shapes, Users, UserCog, Check, List, LayoutGrid, Circle, Orbit, Fingerprint, Bell } from "lucide-react";
 
 const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Clair", icon: Sun },
@@ -20,6 +20,12 @@ const categoryLayouts: { value: CategoryLayout; label: string; icon: typeof List
   { value: "list", label: "Liste", icon: List },
   { value: "grid", label: "Grille", icon: LayoutGrid },
   { value: "circle", label: "Cercles", icon: Circle },
+  { value: "orbital", label: "Orbital", icon: Orbit },
+];
+
+const orbitalAccents: { value: OrbitalAccent; label: string }[] = [
+  { value: "mono", label: "Mono violet" },
+  { value: "duo", label: "Duo froid" },
 ];
 
 export function SettingsPage() {
@@ -30,6 +36,8 @@ export function SettingsPage() {
   const setThemePreset = useThemeStore((s) => s.setThemePreset);
   const categoryLayout = useThemeStore((s) => s.categoryLayout);
   const setCategoryLayout = useThemeStore((s) => s.setCategoryLayout);
+  const orbitalAccent = useThemeStore((s) => s.orbitalAccent);
+  const setOrbitalAccent = useThemeStore((s) => s.setOrbitalAccent);
 
   return (
     <div className="max-w-xl space-y-6">
@@ -90,7 +98,7 @@ export function SettingsPage() {
           <CardTitle>Disposition des catégories</CardTitle>
           <CardDescription>La façon dont la liste des catégories de projets s'affiche sur la page d'accueil.</CardDescription>
         </CardHeader>
-        <CardContent className="flex gap-2">
+        <CardContent className="flex flex-wrap gap-2">
           {categoryLayouts.map((l) => (
             <Button
               key={l.value}
@@ -102,6 +110,20 @@ export function SettingsPage() {
             </Button>
           ))}
         </CardContent>
+        {categoryLayout === "orbital" && (
+          <CardContent className="flex gap-2 border-t pt-4">
+            {orbitalAccents.map((a) => (
+              <Button
+                key={a.value}
+                variant={orbitalAccent === a.value ? "default" : "outline"}
+                onClick={() => setOrbitalAccent(a.value)}
+                className="flex-1"
+              >
+                {a.label}
+              </Button>
+            ))}
+          </CardContent>
+        )}
       </Card>
 
       <BiometricLockSetting />
