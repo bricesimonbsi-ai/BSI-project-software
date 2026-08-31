@@ -217,11 +217,21 @@ function BiometricLockSetting() {
             <Fingerprint className="mr-2 h-4 w-4" /> {enabled ? "Désactiver" : "Activer"}
           </Button>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Non disponible : cet appareil ou ce navigateur ne propose pas d'authentification biométrique (Face ID, Touch
-            ID, empreinte). Ce n'est pas une restriction liée à ton compte — chacun le configure depuis un appareil qui
-            le permet.
-          </p>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Non détecté sur cet appareil/navigateur — pas une restriction liée au compte. Sur un iPhone compatible
+              Face ID/Touch ID, deux causes fréquentes :
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Le lien a été ouvert dans le navigateur intégré d'une autre app (Messages, Mail, WhatsApp...) plutôt que
+                dans Safari — ces navigateurs intégrés ne donnent souvent pas accès à Face ID/Touch ID. Ouvrir
+                projeko.fr directement dans Safari (ou depuis l'icône ajoutée à l'écran d'accueil) résout la plupart des
+                cas.
+              </li>
+              <li>Face ID/Touch ID n'est pas activé sur l'appareil (Réglages iOS → Face ID et code).</li>
+            </ul>
+          </div>
         )}
       </CardContent>
     </Card>
