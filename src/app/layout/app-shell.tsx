@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Briefcase, ListChecks, CalendarDays, Settings, LogOut, Bell, Sun, Moon, Monitor } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { useNotifications } from "@/features/notifications/use-notifications";
+import { useSharedAgendas } from "@/features/agenda/use-agenda";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { NotificationRow } from "@/types/database";
 
-const navItems = [
+const ALL_NAV_ITEMS = [
   { to: "/", label: "Accueil", icon: Briefcase, end: true },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/todos", label: "Tâches", icon: ListChecks },
@@ -30,7 +31,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const mode = useThemeStore((s) => s.mode);
   const setMode = useThemeStore((s) => s.setMode);
   const { data: notifications, unreadCount, markRead } = useNotifications();
+  const { data: sharedAgendas } = useSharedAgendas();
   const navigate = useNavigate();
+
+  // Un invité (non-admin) n'a pas d'agenda personnel : le lien n'apparaît que si un agenda lui a
+  // été explicitement partagé (cf. AgendaPage, qui applique la même règle en garde de repli).
+  const canAccessAgenda = !!profile?.is_admin || (sharedAgendas?.length ?? 0) > 0;
+  const navItems = useMemo(
+    () => ALL_NAV_ITEMS.filter((item) => item.to !== "/agenda" || canAccessAgenda),
+    [canAccessAgenda]
+  );
 
   const modeIcon = mode === "dark" ? Moon : mode === "light" ? Sun : Monitor;
   const ModeIcon = modeIcon;

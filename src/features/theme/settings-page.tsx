@@ -181,7 +181,7 @@ function BiometricLockSetting() {
     if (session) setEnabled(isBiometricLockEnabled(session.user.id));
   }, [session]);
 
-  if (!available || !session) return null;
+  if (!session) return null;
 
   async function handleToggle(next: boolean) {
     if (!session) return;
@@ -212,9 +212,17 @@ function BiometricLockSetting() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Button variant={enabled ? "outline" : "default"} onClick={() => handleToggle(!enabled)} disabled={busy}>
-          <Fingerprint className="mr-2 h-4 w-4" /> {enabled ? "Désactiver" : "Activer"}
-        </Button>
+        {available ? (
+          <Button variant={enabled ? "outline" : "default"} onClick={() => handleToggle(!enabled)} disabled={busy}>
+            <Fingerprint className="mr-2 h-4 w-4" /> {enabled ? "Désactiver" : "Activer"}
+          </Button>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Non disponible : cet appareil ou ce navigateur ne propose pas d'authentification biométrique (Face ID, Touch
+            ID, empreinte). Ce n'est pas une restriction liée à ton compte — chacun le configure depuis un appareil qui
+            le permet.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

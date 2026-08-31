@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -90,13 +90,31 @@ function layoutWeekBars(
  * collaborateur (useSharedAgendas).
  */
 export function AgendaPage() {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const myId = session?.user.id ?? "";
-  const ownerId = searchParams.get("owner") || myId;
+
+  const { data: sharedAgendas, isLoading: loadingSharedAgendas } = useSharedAgendas();
+  // Un invité (non-admin) n'a pas d'agenda personnel à lui : il ne voit l'Agenda que si on la lui a
+  // explicitement partagée, et dans ce cas uniquement l'agenda partagé — jamais "Mon agenda", qui
+  // serait le sien (vide, sans utilité). L'admin garde toujours accès à son propre agenda.
+  const isAdmin = !!profile?.is_admin;
+  const hasSharedAccess = (sharedAgendas?.length ?? 0) > 0;
+  const canAccessAgenda = isAdmin || hasSharedAccess;
+
+  const requestedOwner = searchParams.get("owner");
+  const defaultOwnerId = isAdmin ? myId : (sharedAgendas?.[0]?.ownerId ?? myId);
+  const ownerId = requestedOwner || defaultOwnerId;
   const isOwner = ownerId === myId;
 
-  const { data: sharedAgendas } = useSharedAgendas();
+  // "Mon agenda" n'a de sens que pour l'admin — un invité n'a que les agendas partagés avec lui.
+  const ownerOptions = useMemo(
+    () => [
+      ...(isAdmin ? [{ ownerId: myId, label: "Mon agenda" }] : []),
+      ...(sharedAgendas ?? []).map((a) => ({ ownerId: a.ownerId, label: `Agenda de ${a.ownerName}` })),
+    ],
+    [isAdmin, myId, sharedAgendas]
+  );
   const myPermission = sharedAgendas?.find((a) => a.ownerId === ownerId)?.permission;
   const canWrite = isOwner || myPermission === "write";
 
@@ -257,6 +275,13 @@ export function AgendaPage() {
 
   const selectedDayEvents = selectedDay ? eventsByDay.get(dateKey(selectedDay)) ?? [] : [];
 
+  // Garde de repli si un invité sans partage accède à /agenda directement (le lien de nav est déjà
+  // masqué dans ce cas) — attend la fin du chargement pour ne pas rediriger avant de savoir si un
+  // agenda a été partagé.
+  if (!loadingSharedAgendas && !canAccessAgenda) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="max-w-7xl space-y-6">
       <PageHeroCard>
@@ -271,16 +296,15 @@ export function AgendaPage() {
             </Button>
           )}
         </div>
-        {sharedAgendas && sharedAgendas.length > 0 && (
+        {ownerOptions.length > 1 && (
           <Select value={ownerId} onValueChange={(v) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), owner: v }))}>
             <SelectTrigger className="w-full sm:w-64">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={myId}>Mon agenda</SelectItem>
-              {sharedAgendas.map((a) => (
-                <SelectItem key={a.ownerId} value={a.ownerId}>
-                  Agenda de {a.ownerName}
+              {ownerOptions.map((o) => (
+                <SelectItem key={o.ownerId} value={o.ownerId}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>

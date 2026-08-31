@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Shapes } from "lucide-react";
+import { Shapes, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import type { OrbitalAccent } from "@/features/theme/theme-store";
 import type { CategoryStat } from "@/features/portfolio/portfolio-home";
 
@@ -121,6 +122,17 @@ interface CategoryOrbitalLayoutProps {
 }
 
 export function CategoryOrbitalLayout({ stats, accentStyle, greetingName }: CategoryOrbitalLayoutProps) {
+  // Cliquer un nœud ne navigue plus directement : il ouvre une "branche" qui prolonge visuellement
+  // l'anneau (le tronc) jusqu'à un panneau listant les sous-projets de cette catégorie, sans
+  // quitter l'accueil. Le nom de catégorie et chaque projet, à l'intérieur, restent des liens.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const expandedIndex = stats.findIndex((s) => s.category.id === expandedId);
+  const expandedStat = expandedIndex >= 0 ? stats[expandedIndex] : null;
+  const branchColor = expandedIndex >= 0 ? orbitalNodeColor(expandedIndex, stats.length, accentStyle) : null;
+  const branchAngle = expandedIndex >= 0 ? (Math.PI * 2 * expandedIndex) / stats.length - Math.PI / 2 : 0;
+  const branchX = 50 + 42 * Math.cos(branchAngle);
+  const branchY = 50 + 42 * Math.sin(branchAngle);
+
   return (
     <div className="flex flex-col items-center gap-2 py-2">
       <div className="relative aspect-square w-full max-w-[420px]">
@@ -136,19 +148,38 @@ export function CategoryOrbitalLayout({ stats, accentStyle, greetingName }: Cate
             {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
+        {branchColor && (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path
+              d={`M ${branchX} ${branchY} C ${branchX} ${(branchY + 100) / 2}, 50 ${(branchY + 100) / 2}, 50 100`}
+              fill="none"
+              stroke={branchColor}
+              strokeWidth="0.6"
+              strokeLinecap="round"
+              opacity="0.75"
+            />
+          </svg>
+        )}
         {stats.map((stat, i) => {
           const angle = (Math.PI * 2 * i) / stats.length - Math.PI / 2;
           const c = orbitalNodeColor(i, stats.length, accentStyle);
+          const isExpanded = stat.category.id === expandedId;
           return (
-            <Link
+            <button
               key={stat.category.id}
-              to={`/categories/${stat.category.id}`}
+              type="button"
+              onClick={() => setExpandedId(isExpanded ? null : stat.category.id)}
+              aria-expanded={isExpanded}
               className="group absolute flex w-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-center"
               style={{ left: `${50 + 42 * Math.cos(angle)}%`, top: `${50 + 42 * Math.sin(angle)}%` }}
             >
               <span
                 className="flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-sm transition-transform group-hover:scale-105"
-                style={{ backgroundColor: `${c}22`, border: `1.5px solid ${c}99`, boxShadow: `0 0 0 6px ${c}14` }}
+                style={{
+                  backgroundColor: `${c}22`,
+                  border: `1.5px solid ${c}${isExpanded ? "ff" : "99"}`,
+                  boxShadow: isExpanded ? `0 0 0 6px ${c}28` : `0 0 0 6px ${c}14`,
+                }}
               >
                 {stat.category.icon ?? <Shapes className="h-5 w-5" style={{ color: c }} />}
               </span>
@@ -157,10 +188,57 @@ export function CategoryOrbitalLayout({ stats, accentStyle, greetingName }: Cate
                 {stat.projects.length} projet{stat.projects.length !== 1 ? "s" : ""}
                 {stat.activeCount > 0 ? ` · ${stat.activeCount} en cours` : ""}
               </p>
-            </Link>
+            </button>
           );
         })}
       </div>
+
+      {expandedStat && branchColor && (
+        <div
+          className="w-full max-w-sm rounded-2xl border bg-card p-4 shadow-sm"
+          style={{ borderColor: `${branchColor}55` }}
+        >
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            <Link to={`/categories/${expandedStat.category.id}`} className="truncate text-sm font-semibold hover:underline">
+              {expandedStat.category.name}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setExpandedId(null)}
+              aria-label="Fermer"
+              className="flex-shrink-0 rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {expandedStat.projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun projet pour l'instant.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {expandedStat.projects.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}`}
+                  className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm hover:bg-secondary"
+                >
+                  {p.icon && <span className="flex-shrink-0">{p.icon}</span>}
+                  <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                  {p.status === "active" && (
+                    <Badge variant="secondary" className="flex-shrink-0 text-[10px]">
+                      actif
+                    </Badge>
+                  )}
+                  {p.status === "upcoming" && (
+                    <Badge variant="outline" className="flex-shrink-0 text-[10px]">
+                      à venir
+                    </Badge>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
