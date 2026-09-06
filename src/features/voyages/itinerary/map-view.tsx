@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { estimateCo2Kg, type CountryGroup, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
+import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
 import { Button } from "@/components/ui/button";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -179,9 +180,17 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
           </Button>
         </div>
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+          {/* Fond de carte CARTO Voyager plutôt que les tuiles OSM brutes : cartographie plus
+              soignée (couleurs, labels) et tuiles retina (`{r}` = "@2x" sur écran haute densité,
+              via detectRetina) — la carte précédente avait l'air moins nette une fois agrandie en
+              plein écran, faute de tuiles adaptées aux écrans de téléphone modernes. Gratuit, sans
+              clé, même logique "pas de dépendance à un service payant" que le reste du module. */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            subdomains="abcd"
+            maxZoom={20}
+            detectRetina
           />
           {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
@@ -218,7 +227,7 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
                   <StepCard
                     row={row}
                     isActive={i === clampedIndex}
-                    photoUrl={photoBySousEtape.get(row.sousEtape.id)}
+                    journalPhotoUrl={photoBySousEtape.get(row.sousEtape.id)}
                     onClick={() => setActiveIndex(i)}
                     cardRef={(el) => (cardRefs.current[i] = el)}
                   />
@@ -233,8 +242,9 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
   );
 }
 
-/** Carte "étape" du bandeau du bas — photo (première du Journal pour cette ville si publiée,
- * dégradé sinon), numéro, ville, dates. Cliquer dessus recentre la carte sur cette étape (voir
+/** Carte "étape" du bandeau du bas — photo (priorité à la première photo du Journal pour cette
+ * ville si publiée, sinon un paysage représentatif tiré de Wikipédia, dégradé en tout dernier
+ * recours), numéro, ville, dates. Cliquer dessus recentre la carte sur cette étape (voir
  * FlyToStep) : c'est la seule façon de naviguer entre les étapes depuis ce bandeau (avec le clic
  * sur un point de la carte), volontairement en défilement horizontal façon "story" — la
  * comparaison avec l'app de référence l'a explicitement demandé pour cet écran, à la différence
@@ -242,16 +252,18 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
 function StepCard({
   row,
   isActive,
-  photoUrl,
+  journalPhotoUrl,
   onClick,
   cardRef,
 }: {
   row: FlatRow;
   isActive: boolean;
-  photoUrl: string | undefined;
+  journalPhotoUrl: string | undefined;
   onClick: () => void;
   cardRef: (el: HTMLButtonElement | null) => void;
 }) {
+  const { data: fallbackPhoto } = useCityPhoto(journalPhotoUrl ? null : row.sousEtape.city);
+  const photoUrl = journalPhotoUrl ?? fallbackPhoto ?? undefined;
   return (
     <button
       ref={cardRef}
