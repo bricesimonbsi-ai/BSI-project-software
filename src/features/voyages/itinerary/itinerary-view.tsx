@@ -34,6 +34,7 @@ import {
 import { MapView } from "@/features/voyages/itinerary/map-view";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { CarbonDashboard } from "@/features/voyages/itinerary/carbon-dashboard";
+import { ItineraryExportButton, ItineraryImportButton } from "@/features/voyages/itinerary/itinerary-csv-controls";
 import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -183,14 +184,18 @@ export function ItineraryView({
             <TabsTrigger value="carbone">Bilan carbone</TabsTrigger>
           </TabsList>
         </Tabs>
-        {(tab === "climat" || tab === "dates") && (
-          <Button
-            size="sm"
-            onClick={() => setCreatingCountryAt(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
-          >
-            <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ItineraryExportButton flat={flat} />
+          <ItineraryImportButton voyageId={voyageId} />
+          {(tab === "climat" || tab === "dates") && (
+            <Button
+              size="sm"
+              onClick={() => setCreatingCountryAt(groups.length > 0 ? groups[groups.length - 1].etape.order_index + 1 : 0)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> Nouveau pays
+            </Button>
+          )}
+        </div>
       </div>
 
       <EtapeDialog
