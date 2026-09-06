@@ -51,6 +51,12 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Filet de sécurité : certaines vues (ex. la carte plein écran de l'itinéraire) sortent
+       volontairement du conteneur centré via un `100vw` pour occuper toute la largeur — sur
+       certains navigateurs, 100vw inclut la largeur de la barre de défilement verticale et peut
+       faire déborder la page de quelques pixels. Ne doit jamais se traduire par un défilement
+       horizontal, même minime. */
+    overflow-x: hidden;
   }
 }
 
