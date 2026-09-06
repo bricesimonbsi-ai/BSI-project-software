@@ -62,6 +62,58 @@ export function cityColumnAmount(col: CityColumn, cityRows: VoyageAllExpense[], 
   return row ? row.amount * row.manual_rate_to_reference : 0;
 }
 
+/** Valeur de chaque colonne pour UNE ville côté Prévisionnel — factorisé pour être identique entre
+ * la cellule de tableau (desktop) et la carte mobile équivalente, jamais recalculé deux fois avec
+ * un risque de diverger. */
+export function computePlannedColumnValues(
+  rows: VoyageAllExpense[],
+  locked: CityLockedCosts | undefined,
+  estimateFor: Record<string, number>
+): { col: CityColumn; amount: number }[] {
+  return CITY_COLUMNS.map((c) => {
+    const existingRow = rows.find((e) => matchesColumn(e, c));
+    const amount = c.locked
+      ? cityColumnAmount(c, rows, locked)
+      : existingRow
+        ? existingRow.amount * existingRow.manual_rate_to_reference
+        : (estimateFor[c.key] ?? 0);
+    return { col: c, amount };
+  });
+}
+
+/** Même principe côté Réel : une case résume ici TOUTES les lignes correspondantes (pas une
+ * seule), donc factorisable directement sans distinction verrouillée/estimée. */
+export function computeActualColumnValues(rows: VoyageAllExpense[]): { col: CityColumn; amount: number; pending: boolean }[] {
+  return CITY_COLUMNS.map((c) => {
+    const matching = rows.filter((e) => matchesColumn(e, c));
+    return { col: c, amount: sumAmount(matching), pending: matching.some((e) => e.needs_review) };
+  });
+}
+
+/** Total par colonne pour TOUTES les villes d'un pays — factorisé (utilisé par la ligne pays du
+ * tableau desktop et par la carte pays équivalente en mobile). Côté Prévisionnel, la somme de ce
+ * qui est AFFICHÉ dans chaque ville (cityColumnAmount), jamais une somme indépendante de toutes
+ * les lignes en base ; côté Réel, les cases résument déjà toutes les lignes correspondantes. */
+export function computeCountryColumnAmounts(
+  cities: VoyageSousEtape[],
+  expenses: VoyageAllExpense[],
+  view: "planned" | "actual",
+  lockedByCity: Record<string, CityLockedCosts>
+): number[] {
+  return CITY_COLUMNS.map((c) => {
+    if (view === "planned") {
+      return cities.reduce((sum, city) => {
+        const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && e.planned);
+        return sum + cityColumnAmount(c, cityRows, lockedByCity[city.id]);
+      }, 0);
+    }
+    return cities.reduce((sum, city) => {
+      const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && !e.planned);
+      return sum + sumAmount(cityRows.filter((e) => matchesColumn(e, c)));
+    }, 0);
+  });
+}
+
 export const CITY_COLUMNS: CityColumn[] = [
   { key: "transport", label: "Transport vers l'étape suivante", category: "transport", excludeSubCategories: ["sur_place"] },
   { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true, lockedField: "localTransport" },
@@ -161,18 +213,7 @@ export function BudgetOverviewTable({
   // base), volontairement sans équipement ni administratif & santé (transverses, hors tableau).
   const allCities = allSousEtapes ?? [];
   const grandTotalNights = allCities.reduce((sum, c) => sum + (c.duration_days ?? 0), 0);
-  const grandTotalColumns = CITY_COLUMNS.map((c) => {
-    if (view === "planned") {
-      return allCities.reduce((sum, city) => {
-        const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && e.planned);
-        return sum + cityColumnAmount(c, cityRows, lockedByCity[city.id]);
-      }, 0);
-    }
-    return allCities.reduce((sum, city) => {
-      const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && !e.planned);
-      return sum + sumAmount(cityRows.filter((e) => matchesColumn(e, c)));
-    }, 0);
-  });
+  const grandTotalColumns = computeCountryColumnAmounts(allCities, expenses, view, lockedByCity);
   const grandTotal = grandTotalColumns.reduce((a, b) => a + b, 0);
 
   if (!etapes) return null;
@@ -188,7 +229,31 @@ export function BudgetOverviewTable({
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-border">
+      {/* Cartes empilées sur mobile (jamais de tableau à faire défiler horizontalement pour lire
+          un montant) ; le tableau, plus dense et déjà éprouvé, reste la vue desktop. */}
+      <div className="space-y-3 sm:hidden">
+        {etapes.map((etape) => (
+          <CountrySectionMobile
+            key={etape.id}
+            etape={etape}
+            cities={citiesByEtape.get(etape.id) ?? []}
+            expenses={expenses}
+            view={view}
+            travelerCount={travelerCount}
+            referenceCurrency={referenceCurrency}
+            flat={flat}
+            lockedByCity={lockedByCity}
+            updateSousEtape={updateSousEtape}
+            onSelectCell={setSelectedCell}
+          />
+        ))}
+        <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-bold">
+          <span>Total ({grandTotalNights} nuits)</span>
+          <span>{formatCurrency(grandTotal, referenceCurrency)}</span>
+        </div>
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-center text-xs uppercase tracking-wide text-muted-foreground">
@@ -396,24 +461,7 @@ function CountrySection({
   onSelectCell: (cell: SelectedCell) => void;
 }) {
   const totalNights = cities.reduce((sum, c) => sum + (c.duration_days ?? 0), 0);
-
-  // Côté Prévisionnel, le total par colonne d'un pays est la somme de ce qui est AFFICHÉ dans
-  // chaque ville (cityColumnAmount) — jamais une somme indépendante de toutes les lignes en
-  // base, qui pourrait diverger si d'anciennes lignes en double traînent encore. Côté Réel, les
-  // cases sont déjà des boutons qui résument TOUTES les lignes correspondantes (voir
-  // CityActualRow), donc sommer par ligne correspondante reste cohérent.
-  const columnAmounts = CITY_COLUMNS.map((c) => {
-    if (view === "planned") {
-      return cities.reduce((sum, city) => {
-        const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && e.planned);
-        return sum + cityColumnAmount(c, cityRows, lockedByCity[city.id]);
-      }, 0);
-    }
-    return cities.reduce((sum, city) => {
-      const cityRows = expenses.filter((e) => e.sous_etape_id === city.id && !e.planned);
-      return sum + sumAmount(cityRows.filter((e) => matchesColumn(e, c)));
-    }, 0);
-  });
+  const columnAmounts = computeCountryColumnAmounts(cities, expenses, view, lockedByCity);
   const countryTotal = columnAmounts.reduce((a, b) => a + b, 0);
 
   return (
@@ -458,6 +506,77 @@ function CountrySection({
         )
       )}
     </>
+  );
+}
+
+/** Équivalent carte (empilée verticalement) de CountrySection, pour la vue mobile. */
+function CountrySectionMobile({
+  etape,
+  cities,
+  expenses,
+  view,
+  travelerCount,
+  referenceCurrency,
+  flat,
+  lockedByCity,
+  updateSousEtape,
+  onSelectCell,
+}: {
+  etape: VoyageEtape;
+  cities: VoyageSousEtape[];
+  expenses: VoyageAllExpense[];
+  view: "planned" | "actual";
+  travelerCount: number;
+  referenceCurrency: string;
+  flat: FlatRow[];
+  lockedByCity: Record<string, CityLockedCosts>;
+  updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
+  const totalNights = cities.reduce((sum, c) => sum + (c.duration_days ?? 0), 0);
+  const columnAmounts = computeCountryColumnAmounts(cities, expenses, view, lockedByCity);
+  const countryTotal = columnAmounts.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2.5">
+        <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
+          <CountryFlag name={etape.country_region} className="flex-shrink-0" />
+          <span className="truncate">{etape.country_region}</span>
+        </span>
+        <span className="flex-shrink-0 text-xs text-muted-foreground">{totalNights} nuits</span>
+      </div>
+      <div className="divide-y divide-border">
+        {cities.map((se) =>
+          view === "planned" ? (
+            <CityPlannedCardMobile
+              key={se.id}
+              se={se}
+              rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
+              travelerCount={travelerCount}
+              referenceCurrency={referenceCurrency}
+              flat={flat}
+              locked={lockedByCity[se.id]}
+              updateSousEtape={updateSousEtape}
+            />
+          ) : (
+            <CityActualCardMobile
+              key={se.id}
+              se={se}
+              rows={expenses.filter((e) => e.sous_etape_id === se.id && !e.planned)}
+              referenceCurrency={referenceCurrency}
+              flat={flat}
+              updateSousEtape={updateSousEtape}
+              onSelectCell={onSelectCell}
+            />
+          )
+        )}
+      </div>
+      <div className="flex items-center justify-between border-t border-border bg-muted/20 px-3 py-2 text-sm font-semibold">
+        <span>Total {etape.country_region}</span>
+        <span>{formatCurrency(countryTotal, referenceCurrency)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -536,6 +655,12 @@ function CityPlannedRow({
     transport: transportEstimate,
     activites: 0,
   };
+  // Transport (vers la suivante) et Activités restent modifiables, mais uniquement dans la
+  // fenêtre de modification de la ville (voir SousEtapeDialog) — ici, en lecture seule, pour que
+  // ce tableau reste une vue d'ensemble sans double point de saisie pour le même montant. Si
+  // aucune ligne n'existe encore (ville jamais ouverte), on affiche l'estimation en direct plutôt
+  // que 0, pour rester cohérent avec ce que la fenêtre de modification créerait.
+  const values = computePlannedColumnValues(rows, locked, estimateFor);
 
   const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
 
@@ -545,22 +670,64 @@ function CityPlannedRow({
       <td className="px-2 py-1.5 text-center">
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
-      {CITY_COLUMNS.map((c) => {
-        // Transport (vers la suivante) et Activités restent modifiables, mais uniquement dans la
-        // fenêtre de modification de la ville (voir SousEtapeDialog) — ici, en lecture seule, pour
-        // que ce tableau reste une vue d'ensemble sans double point de saisie pour le même montant.
-        // Si aucune ligne n'existe encore (ville jamais ouverte), on affiche l'estimation en direct
-        // plutôt que 0, pour rester cohérent avec ce que la fenêtre de modification créerait.
-        const existingRow = rows.find((e) => matchesColumn(e, c));
-        const amount = c.locked ? cityColumnAmount(c, rows, locked) : existingRow ? existingRow.amount * existingRow.manual_rate_to_reference : estimateFor[c.key] ?? 0;
-        return (
-          <td key={c.key} className="px-2 py-1.5 text-center">
-            <ComputedCostAmount amount={amount} className="mx-auto w-20 text-center" />
-          </td>
-        );
-      })}
+      {values.map(({ col, amount }) => (
+        <td key={col.key} className="px-2 py-1.5 text-center">
+          <ComputedCostAmount amount={amount} className="mx-auto w-20 text-center" />
+        </td>
+      ))}
       <td className="border-l border-border bg-muted/10 px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
     </tr>
+  );
+}
+
+/** Équivalent carte (empilée verticalement) de CityPlannedRow, pour la vue mobile — mêmes
+ * valeurs (computePlannedColumnValues, partagé), juste un rendu en <div>. */
+function CityPlannedCardMobile({
+  se,
+  rows,
+  travelerCount,
+  referenceCurrency,
+  flat,
+  locked,
+  updateSousEtape,
+}: {
+  se: VoyageSousEtape;
+  rows: VoyageAllExpense[];
+  travelerCount: number;
+  referenceCurrency: string;
+  flat: FlatRow[];
+  locked: CityLockedCosts | undefined;
+  updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
+}) {
+  const currentRow = flat.find((r) => r.sousEtape.id === se.id);
+  const nextRow = currentRow ? flat.find((r) => r.globalIndex === currentRow.globalIndex + 1) : undefined;
+  const liveDistanceKm =
+    se.latitude != null && se.longitude != null && nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
+      ? haversineDistanceKm(se.latitude, se.longitude, nextRow.sousEtape.latitude, nextRow.sousEtape.longitude)
+      : se.distance_km;
+  const transportEstimate = estimateTransportLegCost(liveDistanceKm, se.transport_next_mode, travelerCount);
+  const values = computePlannedColumnValues(rows, locked, { transport: transportEstimate, activites: 0 });
+  const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
+
+  return (
+    <div className="space-y-2 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{se.city}</span>
+        <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
+      </div>
+      <div className="space-y-1.5">
+        {values.map(({ col, amount }) => (
+          <div key={col.key} className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{col.label}</span>
+            <ComputedCostAmount amount={amount} className="w-20 flex-shrink-0 text-right" />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between border-t border-border pt-1.5 text-sm font-semibold">
+        <span>Total ville</span>
+        <span>{formatCurrency(total, referenceCurrency)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -579,32 +746,80 @@ function CityActualRow({
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
   onSelectCell: (cell: SelectedCell) => void;
 }) {
-  const total = CITY_COLUMNS.reduce((sum, c) => sum + sumAmount(rows.filter((e) => matchesColumn(e, c))), 0);
+  const values = computeActualColumnValues(rows);
+  const total = values.reduce((sum, v) => sum + v.amount, 0);
   return (
     <tr className="border-b border-border last:border-0">
       <td className="whitespace-nowrap px-3 py-1.5 pl-8 text-muted-foreground">{se.city}</td>
       <td className="px-2 py-1.5 text-center">
         <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
       </td>
-      {CITY_COLUMNS.map((c) => {
-        const matching = rows.filter((e) => matchesColumn(e, c));
-        const sum = sumAmount(matching);
-        const pending = matching.some((e) => e.needs_review);
-        return (
-          <td key={c.key} className="px-2 py-1.5 text-center">
-            <button
-              type="button"
-              className="relative mx-auto w-20 rounded px-1.5 py-1 text-center text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
-              onClick={() => onSelectCell({ sousEtapeId: se.id, category: c.category, subCategory: c.subCategory ?? null, label: `${se.city} · ${c.label}` })}
-              title={pending ? "Contient une dépense importée à valider" : undefined}
-            >
-              {pending && <span className="absolute -top-0.5 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />}
-              {formatCurrency(sum, referenceCurrency)}
-            </button>
-          </td>
-        );
-      })}
+      {values.map(({ col, amount, pending }) => (
+        <td key={col.key} className="px-2 py-1.5 text-center">
+          <button
+            type="button"
+            className="relative mx-auto w-20 rounded px-1.5 py-1 text-center text-sm underline decoration-dotted underline-offset-2 hover:bg-muted"
+            onClick={() => onSelectCell({ sousEtapeId: se.id, category: col.category, subCategory: col.subCategory ?? null, label: `${se.city} · ${col.label}` })}
+            title={pending ? "Contient une dépense importée à valider" : undefined}
+          >
+            {pending && <span className="absolute -top-0.5 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />}
+            {formatCurrency(amount, referenceCurrency)}
+          </button>
+        </td>
+      ))}
       <td className="border-l border-border bg-muted/10 px-3 py-1.5 text-right font-medium">{formatCurrency(total, referenceCurrency)}</td>
     </tr>
+  );
+}
+
+/** Équivalent carte (empilée verticalement) de CityActualRow pour la vue mobile — mêmes valeurs
+ * (computeActualColumnValues, partagé), mêmes cases cliquables ouvrant le même détail. */
+function CityActualCardMobile({
+  se,
+  rows,
+  referenceCurrency,
+  flat,
+  updateSousEtape,
+  onSelectCell,
+}: {
+  se: VoyageSousEtape;
+  rows: VoyageAllExpense[];
+  referenceCurrency: string;
+  flat: FlatRow[];
+  updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
+  const values = computeActualColumnValues(rows);
+  const total = values.reduce((sum, v) => sum + v.amount, 0);
+  return (
+    <div className="space-y-2 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{se.city}</span>
+        <NightsStepper se={se} flat={flat} updateSousEtape={updateSousEtape} />
+      </div>
+      <div className="space-y-1.5">
+        {values.map(({ col, amount, pending }) => (
+          <button
+            key={col.key}
+            type="button"
+            className="relative flex w-full items-center justify-between gap-2 rounded px-1.5 py-1 text-left hover:bg-muted"
+            onClick={() => onSelectCell({ sousEtapeId: se.id, category: col.category, subCategory: col.subCategory ?? null, label: `${se.city} · ${col.label}` })}
+            title={pending ? "Contient une dépense importée à valider" : undefined}
+          >
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {pending && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle" />}
+              {col.label}
+            </span>
+            <span className="flex-shrink-0 text-sm underline decoration-dotted underline-offset-2">
+              {formatCurrency(amount, referenceCurrency)}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center justify-between border-t border-border pt-1.5 text-sm font-semibold">
+        <span>Total ville</span>
+        <span>{formatCurrency(total, referenceCurrency)}</span>
+      </div>
+    </div>
   );
 }
