@@ -211,7 +211,45 @@ export function ItineraryView({
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
 
       {(tab === "climat" || tab === "dates") && (
-        <div className="relative overflow-x-auto rounded-md border border-border pl-9">
+        <div className="space-y-3 sm:hidden">
+          {flat.length === 0 && groups.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setCreatingCountryAt(0)}
+              className="w-full rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:text-foreground"
+            >
+              + Ajouter un pays
+            </button>
+          )}
+          <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
+            <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
+              {groups.map((group) => (
+                <CountryCardMobile
+                  key={group.etape.id}
+                  group={group}
+                  tab={tab}
+                  projectId={projectId}
+                  onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
+                  allFlat={flat}
+                  travelStyle={travelStyle}
+                  travelerCount={travelerCount}
+                  lodgingCount={lodgingCount}
+                  referenceCurrency={referenceCurrency}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+          {tab === "dates" && flat.length > 0 && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-bold">
+              <span>{flat.length} étapes</span>
+              <span>{flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0)} nuits</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(tab === "climat" || tab === "dates") && (
+        <div className="relative hidden overflow-x-auto rounded-md border border-border pl-9 sm:block">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -732,6 +770,363 @@ function CityRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Équivalents cartes (empilées verticalement, jamais de défilement horizontal) de CountryBlock/
+ * CityRow ci-dessus, affichés uniquement en dessous du point de rupture `sm` — le tableau reste
+ * la vue desktop. Même logique de glisser-déposer, insertion, édition et suppression que la
+ * version tableau (dnd-kit ne dépend pas d'une structure <table>), juste un rendu en <div>.
+ */
+function CountryCardMobile({
+  group,
+  tab,
+  referenceCurrency,
+  projectId,
+  onInsertCountryAfter,
+  allFlat,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
+}: {
+  group: CountryGroup;
+  tab: Tab;
+  referenceCurrency: string;
+  projectId: string;
+  onInsertCountryAfter: () => void;
+  allFlat: FlatRow[];
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
+}) {
+  const [creatingCityAt, setCreatingCityAt] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const reorderCities = useReorderSousEtapes(group.etape.id);
+  const updateSousEtapeForReorder = useUpdateSousEtape(group.etape.id);
+  const deleteEtape = useDeleteEtape(group.etape.voyage_id);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.etape.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = group.rows.map((r) => r.sousEtape.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = [...ids];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+    reorderCities.mutate(reordered);
+
+    const idsInGroup = new Set(ids);
+    const newFlat: FlatRow[] = [];
+    let inserted = false;
+    for (const r of allFlat) {
+      if (idsInGroup.has(r.sousEtape.id)) {
+        if (!inserted) {
+          for (const id of reordered) {
+            const match = group.rows.find((gr) => gr.sousEtape.id === id);
+            if (match) newFlat.push(match);
+          }
+          inserted = true;
+        }
+      } else {
+        newFlat.push(r);
+      }
+    }
+    const anchor = allFlat.find((r) => r.globalIndex === 1)?.sousEtape.start_date ?? undefined;
+    for (const u of buildReorderUpdates(newFlat, anchor)) {
+      updateSousEtapeForReorder.mutate(u);
+    }
+  }
+
+  function handleDeleteCountry() {
+    if (!window.confirm(`Supprimer le pays "${group.etape.country_region}" et toutes ses villes ? Cette action est irréversible.`)) return;
+    deleteEtape.mutate(group.etape.id);
+  }
+
+  const hasBadges =
+    group.etape.visa_needed ||
+    group.etape.vaccines ||
+    group.etape.intl_permit_needed ||
+    group.totalKm > 0 ||
+    (tab === "dates" && group.totalNights > 0);
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn("overflow-hidden rounded-lg border border-border", isDragging && "opacity-50")}>
+      <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2.5">
+        <button {...attributes} {...listeners} className="touch-none cursor-grab text-muted-foreground" title="Glisser pour réordonner le pays">
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="text-muted-foreground hover:text-foreground"
+          title={collapsed ? "Déplier les villes" : "Replier les villes"}
+        >
+          <ChevronRight className={cn("h-4 w-4 transition-transform", !collapsed && "rotate-90")} />
+        </button>
+        <CountryFlag name={group.etape.country_region} className="flex-shrink-0 text-base shadow-sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.etape.country_region}</span>
+        <Badge variant="secondary" className="flex-shrink-0 whitespace-nowrap text-xs">
+          {group.stepRangeLabel}
+        </Badge>
+        <EtapeDialog
+          voyageId={group.etape.voyage_id}
+          nextOrder={0}
+          existing={group.etape}
+          lockCountry={group.rows.length > 0}
+          travelStyle={travelStyle}
+          travelerCount={travelerCount}
+          trigger={<Pencil className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+        />
+        <button type="button" onClick={handleDeleteCountry} title="Supprimer ce pays" className="flex-shrink-0 text-muted-foreground hover:text-destructive">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {hasBadges && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
+          {group.totalKm > 0 && (
+            <span className="text-xs text-muted-foreground">{Math.round(group.totalKm).toLocaleString("fr-FR")} km</span>
+          )}
+          {tab === "dates" && group.totalNights > 0 && <Badge variant="outline" className="text-xs">{group.totalNights} nuits</Badge>}
+          {group.etape.visa_needed && (
+            <Badge className="gap-1 border-blue-500/30 bg-blue-500/15 text-xs text-blue-700 dark:text-blue-300">
+              <Stamp className="h-3 w-3" /> Visa
+            </Badge>
+          )}
+          {group.etape.vaccines && (
+            <Badge className="gap-1 border-emerald-500/30 bg-emerald-500/15 text-xs text-emerald-700 dark:text-emerald-300">
+              <Syringe className="h-3 w-3" /> {group.etape.vaccines}
+            </Badge>
+          )}
+          {group.etape.intl_permit_needed && (
+            <Badge className="gap-1 border-violet-500/30 bg-violet-500/15 text-xs text-violet-700 dark:text-violet-300">
+              <IdCard className="h-3 w-3" /> Permis intl.
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {!collapsed && group.rows.length === 0 && (
+        <button
+          type="button"
+          onClick={() => setCreatingCityAt(0)}
+          className="w-full px-3 py-2.5 text-left text-xs text-muted-foreground hover:text-foreground"
+        >
+          + Ajouter une ville
+        </button>
+      )}
+
+      {!collapsed && group.rows.length > 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
+            <div className="divide-y divide-border">
+              {group.rows.map((row) => (
+                <CityCardMobile
+                  key={row.sousEtape.id}
+                  row={row}
+                  tab={tab}
+                  referenceCurrency={referenceCurrency}
+                  projectId={projectId}
+                  etapeId={group.etape.id}
+                  allFlat={allFlat}
+                  onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
+                  travelStyle={travelStyle}
+                  travelerCount={travelerCount}
+                  lodgingCount={lodgingCount}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      <button
+        type="button"
+        onClick={onInsertCountryAfter}
+        className="w-full border-t border-dashed border-border py-1.5 text-center text-xs text-muted-foreground hover:text-foreground"
+      >
+        + Nouveau pays ici
+      </button>
+
+      <SousEtapeDialog
+        etapeId={group.etape.id}
+        etape={group.etape}
+        nextOrder={0}
+        trigger={null}
+        open={creatingCityAt !== null}
+        onOpenChange={(o) => !o && setCreatingCityAt(null)}
+        insertAtIndex={creatingCityAt ?? 0}
+        previousPoint={
+          creatingCityAt !== null && creatingCityAt > 0
+            ? (() => {
+                const prev = group.rows[creatingCityAt - 1]?.sousEtape;
+                return prev?.latitude != null && prev?.longitude != null ? { lat: prev.latitude, lng: prev.longitude } : null;
+              })()
+            : null
+        }
+        previousRowId={creatingCityAt !== null && creatingCityAt > 0 ? group.rows[creatingCityAt - 1]?.sousEtape.id : undefined}
+        isFirstOverall={group.etape.order_index === 0 && creatingCityAt === 0}
+        projectId={projectId}
+        referenceCurrency={referenceCurrency}
+        travelStyle={travelStyle}
+        travelerCount={travelerCount}
+        lodgingCount={lodgingCount}
+      />
+    </div>
+  );
+}
+
+function CityCardMobile({
+  row,
+  tab,
+  referenceCurrency,
+  projectId,
+  etapeId,
+  allFlat,
+  onInsertAfter,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
+}: {
+  row: FlatRow;
+  tab: Tab;
+  referenceCurrency: string;
+  projectId: string;
+  etapeId: string;
+  allFlat: FlatRow[];
+  onInsertAfter: () => void;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
+  const updateSousEtape = useUpdateSousEtape(etapeId);
+  const deleteSousEtape = useDeleteSousEtape(etapeId);
+  const se = row.sousEtape;
+  const previousRow = allFlat.find((r) => r.globalIndex === row.globalIndex - 1);
+  const previousPoint =
+    previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
+      ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
+      : null;
+  const nextRow = allFlat.find((r) => r.globalIndex === row.globalIndex + 1);
+  const nextPoint =
+    nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
+      ? { lat: nextRow.sousEtape.latitude, lng: nextRow.sousEtape.longitude }
+      : null;
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  async function handleNightsChange(delta: number) {
+    const newDuration = Math.max(0, (se.duration_days ?? 0) + delta);
+    const updates = cascadeDatesFrom(allFlat, se.id, { duration_days: newDuration });
+    for (const u of updates) {
+      await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+    }
+  }
+
+  async function handleFirstStartDateChange(value: string) {
+    const updates = cascadeDatesFrom(allFlat, se.id, { start_date: value });
+    for (const u of updates) {
+      await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+    }
+  }
+
+  const incomingEmoji = transportEmoji(row.incomingMode);
+  const hasIncoming = row.globalIndex > 1 && (row.incomingDistanceKm || row.incomingMode);
+
+  function handleDeleteCity() {
+    if (!window.confirm(`Supprimer la ville "${se.city}" ? Cette action est irréversible.`)) return;
+    deleteSousEtape.mutate(se.id);
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn("space-y-2 p-3", isDragging && "opacity-50")}>
+      {hasIncoming && (
+        <p className="flex items-center gap-1 text-[0.7rem] text-muted-foreground">
+          <ArrowDownRight className="h-3 w-3 text-muted-foreground/70" />
+          {incomingEmoji && <span className="text-sm leading-none">{incomingEmoji}</span>}
+          {row.incomingDistanceKm ? `${Math.round(row.incomingDistanceKm).toLocaleString("fr-FR")} km depuis l'étape précédente` : "depuis l'étape précédente"}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <button {...attributes} {...listeners} className="touch-none cursor-grab text-muted-foreground" title="Glisser pour réordonner">
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <span className="flex-shrink-0 text-xs font-medium text-muted-foreground">{row.globalIndex}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{se.city}</span>
+        <SousEtapeDialog
+          etapeId={etapeId}
+          etape={row.etape}
+          nextOrder={0}
+          existing={se}
+          previousPoint={previousPoint}
+          previousRowId={previousRow?.sousEtape.id}
+          nextPoint={nextPoint}
+          isFirstOverall={row.globalIndex === 1}
+          projectId={projectId}
+          referenceCurrency={referenceCurrency}
+          travelStyle={travelStyle}
+          travelerCount={travelerCount}
+          lodgingCount={lodgingCount}
+          trigger={<Pencil className="h-3 w-3 flex-shrink-0 cursor-pointer text-muted-foreground" />}
+        />
+        <button type="button" onClick={handleDeleteCity} title="Supprimer cette ville" className="flex-shrink-0 text-muted-foreground hover:text-destructive">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {tab === "dates" && (
+        <div className="flex flex-wrap items-center gap-3 pl-6 text-xs text-muted-foreground">
+          {row.globalIndex === 1 ? (
+            <label className="flex items-center gap-1.5">
+              Début :
+              <input
+                type="date"
+                defaultValue={se.start_date ?? ""}
+                onBlur={(e) => e.target.value && handleFirstStartDateChange(e.target.value)}
+                className="rounded border border-border bg-background px-1.5 py-0.5 text-xs text-foreground"
+              />
+            </label>
+          ) : (
+            <span title="Calculée automatiquement (= fin de la ville précédente)">Du {formatDate(se.start_date)}</span>
+          )}
+          <span>Au {formatDate(se.end_date)}</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5">
+            <button
+              onClick={() => handleNightsChange(-1)}
+              className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-foreground"
+            >
+              −
+            </button>
+            <span className="min-w-[3rem] text-center text-xs font-semibold text-foreground">{se.duration_days ?? 0} nuits</span>
+            <button
+              onClick={() => handleNightsChange(1)}
+              className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-foreground"
+            >
+              +
+            </button>
+          </span>
+        </div>
+      )}
+
+      {tab === "climat" && (
+        <div className="pl-6">
+          <ClimateBand row={row} />
+        </div>
+      )}
+
+      <button type="button" onClick={onInsertAfter} className="ml-6 text-[0.65rem] text-muted-foreground hover:text-foreground hover:underline">
+        + Ajouter une ville ici
+      </button>
+    </div>
   );
 }
 

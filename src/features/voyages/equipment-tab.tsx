@@ -77,7 +77,67 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun article coché pour l'instant — coche-en ci-dessous.</p>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-border">
+          <>
+          {/* Cartes empilées sur mobile (jamais de tableau à faire défiler horizontalement pour
+              lire un prix) ; le tableau reste la vue desktop, plus dense et déjà éprouvée. */}
+          <div className="space-y-2 sm:hidden">
+            {items.map((item) => {
+              const unitPrice = item.unit_price ?? estimateEquipmentUnitPrice(item.name, item.category);
+              return (
+                <div key={item.id} className={cn("space-y-2 rounded-md border border-border p-3", item.owned && "opacity-50")}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <label className="flex flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <Checkbox checked={item.owned} onCheckedChange={(c) => updateOwned.mutate({ id: item.id, owned: !!c })} />
+                      Possédé
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Quantité</p>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => updateQty.mutate({ id: item.id, quantity: Math.max(1, Number(e.target.value) || 1) })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Prix unitaire</p>
+                      {item.owned ? (
+                        <p className="pt-1.5 text-sm text-muted-foreground">—</p>
+                      ) : (
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          defaultValue={unitPrice}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim() === "" ? null : Math.max(0, Number(e.target.value));
+                            updatePrice.mutate({ id: item.id, unit_price: v });
+                          }}
+                          className="h-8 text-sm"
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Total</p>
+                      <p className="pt-1.5 text-sm font-medium">
+                        {item.owned ? "—" : formatCurrency(item.quantity * unitPrice, referenceCurrency)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3 text-sm font-semibold">
+              <span>Total général (hors déjà possédé)</span>
+              <span>{formatCurrency(totalCost, referenceCurrency)}</span>
+            </div>
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -143,6 +203,7 @@ export function EquipmentTab({ voyageId, referenceCurrency }: { voyageId: string
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
 

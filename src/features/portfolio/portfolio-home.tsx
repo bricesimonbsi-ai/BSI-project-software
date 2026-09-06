@@ -111,7 +111,10 @@ export function PortfolioHome() {
   const upcomingSection = upcomingProjects.length > 0 && (
     <div>
       <h2 className="mb-3 text-lg font-semibold">Prochainement</h2>
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      {/* Empilé pleine largeur sur mobile (jamais de défilement horizontal pour accéder à
+          l'information) ; redevient un bandeau à faire défiler à partir de sm, où ce n'est plus
+          la seule façon d'atteindre le contenu (la page défile déjà verticalement en dessous). */}
+      <div className="grid grid-cols-1 gap-3 sm:flex sm:gap-3 sm:overflow-x-auto sm:pb-1">
         {upcomingProjects.map((p) => {
           const idx = orbitalCategoryIndex.get(p.category_id);
           const orbitalColor =
@@ -119,9 +122,9 @@ export function PortfolioHome() {
               ? orbitalNodeColor(idx, activeCategories.length, orbitalAccent)
               : null;
           return (
-            <Link key={p.id} to={`/projects/${p.id}`} className="flex-shrink-0">
+            <Link key={p.id} to={`/projects/${p.id}`} className="sm:flex-shrink-0">
               <Card
-                className="w-56 transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25"
+                className="w-full transition-shadow hover:shadow-lg hover:shadow-accent/20 dark:hover:shadow-accent/25 sm:w-56"
                 style={orbitalColor ? { borderLeft: `3px solid ${orbitalColor}` } : undefined}
               >
                 <CardContent className="space-y-1 p-4">
