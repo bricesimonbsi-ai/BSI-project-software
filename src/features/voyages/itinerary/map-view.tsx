@@ -180,17 +180,13 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
           </Button>
         </div>
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-          {/* Fond de carte CARTO Voyager plutôt que les tuiles OSM brutes : cartographie plus
-              soignée (couleurs, labels) et tuiles retina (`{r}` = "@2x" sur écran haute densité,
-              via detectRetina) — la carte précédente avait l'air moins nette une fois agrandie en
-              plein écran, faute de tuiles adaptées aux écrans de téléphone modernes. Gratuit, sans
-              clé, même logique "pas de dépendance à un service payant" que le reste du module. */}
+          {/* Retour aux tuiles OpenStreetMap standard : le fond CARTO Voyager essayé ensuite
+              exige en réalité une clé API (constaté en production — tuiles marquées "API KEY
+              REQUIRED"), CARTO ayant fermé son offre de tuiles anonymes gratuites depuis. Reste
+              gratuit et sans clé, quitte à être visuellement plus sobre. */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            subdomains="abcd"
-            maxZoom={20}
-            detectRetina
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
@@ -263,20 +259,33 @@ function StepCard({
   cardRef: (el: HTMLButtonElement | null) => void;
 }) {
   const { data: fallbackPhoto } = useCityPhoto(journalPhotoUrl ? null : row.sousEtape.city);
-  const photoUrl = journalPhotoUrl ?? fallbackPhoto ?? undefined;
+  const rawPhotoUrl = journalPhotoUrl ?? fallbackPhoto ?? undefined;
+  // Filet de sécurité : si l'image échoue au chargement (URL cassée, réseau lent...), on retombe
+  // sur le dégradé plutôt que de laisser une carte vide — sans ça, `photoUrl` restait "vrai" côté
+  // style (donc pas de dégradé) alors que l'<img> elle-même ne s'affichait jamais.
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => setImgFailed(false), [rawPhotoUrl]);
+  const photoUrl = imgFailed ? undefined : rawPhotoUrl;
+
   return (
     <button
       ref={cardRef}
       type="button"
       onClick={onClick}
-      style={{ scrollSnapAlign: "center", background: photoUrl ? undefined : "linear-gradient(135deg, hsl(199 55% 26%), hsl(250 45% 18%))" }}
+      style={{ scrollSnapAlign: "center", background: photoUrl ? undefined : "linear-gradient(135deg, hsl(199 55% 30%), hsl(250 45% 22%))" }}
       className={cn(
         "relative flex h-36 w-52 flex-shrink-0 flex-col justify-end overflow-hidden rounded-xl text-left shadow-sm transition sm:h-40 sm:w-60",
         isActive ? "ring-2 ring-accent ring-offset-2 ring-offset-card" : "ring-1 ring-border hover:ring-accent/50"
       )}
     >
-      {photoUrl && <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+      {photoUrl && (
+        <>
+          <img src={photoUrl} alt="" onError={() => setImgFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+          {/* Overlay de lisibilité du texte : uniquement par-dessus une vraie photo — appliqué
+              aussi sur le dégradé seul, il l'assombrissait presque jusqu'au noir (carte "vide"). */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+        </>
+      )}
       <span className="absolute left-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-black shadow">
         {row.globalIndex}
       </span>

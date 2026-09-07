@@ -12,7 +12,9 @@ async function fetchWikipediaThumbnail(city: string, lang: "fr" | "en"): Promise
     const res = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(city)}`);
     if (!res.ok) return null;
     const data = await res.json();
-    const source: string | undefined = data?.thumbnail?.source ?? data?.originalimage?.source;
+    // Uniquement `thumbnail` (jamais `originalimage`, potentiellement un fichier de plusieurs Mo
+    // — trop lourd pour une simple vignette de carte, surtout sur une connexion mobile lente).
+    const source: string | undefined = data?.thumbnail?.source;
     if (!source) return null;
     // Les vignettes de l'API summary sont assez petites (souvent 320px de large) ; les URLs
     // Wikipédia encodent la largeur dans le chemin (".../320px-Nom.jpg") — l'agrandir donne une
