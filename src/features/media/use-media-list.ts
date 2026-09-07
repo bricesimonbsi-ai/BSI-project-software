@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { fetchWatchProviders, fetchTvSeasonEpisodeCount } from "@/features/media/tmdb";
+import { fetchWatchProviders, fetchTvSeasonEpisodeCount, fetchGenres } from "@/features/media/tmdb";
 import { fetchGameDescription } from "@/features/media/igdb";
 import type { MediaItem, MediaItemWatcher, MediaItemRating, MediaType, Person } from "@/types/database";
 
@@ -56,10 +56,11 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: TmdbAddInput) => {
-      const [position, platforms, seasonEpisode] = await Promise.all([
+      const [position, platforms, seasonEpisode, genres] = await Promise.all([
         nextPosition(projectId, type),
         fetchWatchProviders(type === "film" ? "movie" : "tv", input.external_id),
         type === "serie" ? fetchTvSeasonEpisodeCount(input.external_id) : Promise.resolve({ seasons: null, episodes: null }),
+        fetchGenres(type === "film" ? "movie" : "tv", input.external_id),
       ]);
       const { error } = await supabase.from("media_items").insert({
         project_id: projectId,
@@ -73,6 +74,7 @@ export function useAddTmdbMedia(projectId: string, type: "film" | "serie") {
         platforms,
         season_count: seasonEpisode.seasons,
         episode_count: seasonEpisode.episodes,
+        genres: genres.length > 0 ? genres : null,
         position,
         watched: input.watched ?? false,
         watched_at: input.watched ? new Date().toISOString() : null,
@@ -244,7 +246,7 @@ export function useDeleteMediaItemRating(projectId: string) {
 export function useUpdateMediaItem(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; platforms?: string[] }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; platforms?: string[]; genres?: string[] | null }) => {
       const { error } = await supabase.from("media_items").update(updates).eq("id", id);
       if (error) throw error;
     },

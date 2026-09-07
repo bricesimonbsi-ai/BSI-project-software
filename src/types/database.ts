@@ -298,6 +298,9 @@ export type MediaItem = {
    * ne renvoie pas l'info. */
   season_count: number | null;
   episode_count: number | null;
+  /** Genres (horreur, comédie...) — auto-récupérés via TMDB pour film/série (null si absent/API
+   * indisponible ou jeu vidéo), éditables manuellement. Sert à regrouper "Ma liste"/"Vu". */
+  genres: string[] | null;
   watched: boolean;
   watched_at: string | null;
   position: number;

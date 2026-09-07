@@ -29,8 +29,9 @@ import {
 } from "@/features/media/use-media-list";
 import { useProjectPeople, type ProjectPersonRow } from "@/features/people/use-people";
 import { PersonAvatarBadge } from "@/features/people/person-avatar";
-import { CONSOLES, MEDIA_TYPE_LABELS, mediaPosterUrl } from "@/features/media/media-constants";
+import { CONSOLES, MEDIA_TYPE_LABELS, mediaPosterUrl, SUGGESTED_MEDIA_GENRES } from "@/features/media/media-constants";
 import { PodiumBoard, PersonRankingPanels, type PodiumEntry } from "@/features/shared/rating-podium";
+import { TagEditor } from "@/features/shared/tag-editor";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -59,6 +60,19 @@ type NormalizedResult = {
 
 function toPodiumEntry({ item, avg }: { item: MediaItem; avg: number }): PodiumEntry {
   return { id: item.id, title: item.title, imageUrl: mediaPosterUrl(item), avg };
+}
+
+/** Regroupe par genre (premier tag de `genres`, "Sans catégorie" à défaut), groupes triés
+ * alphabétiquement — même principe que le classement par style des Bars & Restaurants. Les jeux
+ * vidéo n'ont pas de genre auto-récupéré (pas de source configurée) : les appelants ne groupent
+ * que film/série, pas jeu. */
+function groupByGenre<T extends MediaItem>(list: T[]): [string, T[]][] {
+  const map = new Map<string, T[]>();
+  for (const item of list) {
+    const key = item.genres?.[0] ?? "Sans catégorie";
+    map.set(key, [...(map.get(key) ?? []), item]);
+  }
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 function normalizeMovie(m: TmdbMovieResult): NormalizedResult {
@@ -233,6 +247,10 @@ export function MediaTypeSection({
     if (!pendingWatch) return;
     toggleWatched.mutate({ id: pendingWatch.id, watched: true, viewerIds: [...pendingViewers] });
     setPendingWatch(null);
+    // Enchaîne directement sur la fenêtre de notation plutôt que d'obliger un aller-retour par
+    // l'onglet Vu/Joué — copie locale avec watched:true (le cache React Query n'a pas encore eu
+    // le temps de se mettre à jour), sinon ExpandedMediaDetails masquerait la section Notes.
+    setExpanded({ ...pendingWatch, watched: true });
   }
 
   const watcherNamesByItem = new Map<string, string[]>();
@@ -417,7 +435,7 @@ export function MediaTypeSection({
 
           {notWatched.length === 0 && !isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Rien en attente.</p>
-          ) : (
+          ) : isJeu ? (
             <div className="space-y-2">
               {notWatched.map((item) => (
                 <MediaRow
@@ -432,6 +450,28 @@ export function MediaTypeSection({
                 />
               ))}
             </div>
+          ) : (
+            <div className="space-y-4">
+              {groupByGenre(notWatched).map(([genre, genreItems]) => (
+                <div key={genre} className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    {genre} ({genreItems.length})
+                  </p>
+                  {genreItems.map((item) => (
+                    <MediaRow
+                      key={item.id}
+                      item={item}
+                      type={type}
+                      watcherNames={watcherNamesByItem.get(item.id) ?? []}
+                      onToggle={(c) => requestToggle(item, c)}
+                      onEditConsoles={() => setConsolesTarget(item)}
+                      onDelete={() => deleteItem.mutate(item.id)}
+                      onOpen={() => setExpanded(item)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
           )}
         </TabsContent>
 
@@ -442,22 +482,27 @@ export function MediaTypeSection({
             <p className="py-6 text-center text-sm text-muted-foreground">Rien pour l'instant.</p>
           ) : (
             watchedByYear.map(([year, yearItems]) => (
-              <div key={year} className="space-y-2">
+              <div key={year} className="space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground">
                   {year} ({yearItems.length})
                 </p>
-                {yearItems.map((item) => (
-                  <MediaRow
-                    key={item.id}
-                    item={item}
-                    type={type}
-                    watcherNames={watcherNamesByItem.get(item.id) ?? []}
-                    ratingText={ratingSummary(item.id)}
-                    onToggle={(c) => requestToggle(item, c)}
-                    onEditConsoles={() => setConsolesTarget(item)}
-                    onDelete={() => deleteItem.mutate(item.id)}
-                    onOpen={() => setExpanded(item)}
-                  />
+                {(isJeu ? [["", yearItems] as [string, MediaItem[]]] : groupByGenre(yearItems)).map(([genre, genreItems]) => (
+                  <div key={genre || year} className="space-y-2 pl-2">
+                    {genre && <p className="text-[0.7rem] font-medium text-muted-foreground/80">{genre}</p>}
+                    {genreItems.map((item) => (
+                      <MediaRow
+                        key={item.id}
+                        item={item}
+                        type={type}
+                        watcherNames={watcherNamesByItem.get(item.id) ?? []}
+                        ratingText={ratingSummary(item.id)}
+                        onToggle={(c) => requestToggle(item, c)}
+                        onEditConsoles={() => setConsolesTarget(item)}
+                        onDelete={() => deleteItem.mutate(item.id)}
+                        onOpen={() => setExpanded(item)}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             ))
@@ -530,6 +575,9 @@ export function MediaTypeSection({
                 setRating.mutate({ mediaItemId: expanded.id, personId, rating, comment })
               }
               onDeleteRating={(id) => deleteRating.mutate(id)}
+              onUpdateGenres={
+                isJeu ? undefined : (genres) => updateItem.mutate({ id: expanded.id, genres: genres.length > 0 ? genres : null })
+              }
             />
           )}
         </DialogContent>
@@ -836,6 +884,7 @@ function ExpandedMediaDetails({
   ratings,
   onSaveRating,
   onDeleteRating,
+  onUpdateGenres,
 }: {
   item: MediaItem;
   type: MediaType;
@@ -843,6 +892,8 @@ function ExpandedMediaDetails({
   ratings: RatingRow[];
   onSaveRating: (personId: string, rating: number, comment: string | null) => void;
   onDeleteRating: (ratingId: string) => void;
+  /** Absent pour un jeu vidéo (pas de genre auto-récupéré, pas de source configurée). */
+  onUpdateGenres?: (genres: string[]) => void;
 }) {
   const poster = mediaPosterUrl(item);
   const Icon = TYPE_ICON[type];
@@ -878,6 +929,15 @@ function ExpandedMediaDetails({
                 </Badge>
               ))}
             </div>
+          )}
+          {onUpdateGenres && (
+            <TagEditor
+              tags={item.genres ?? []}
+              suggestions={SUGGESTED_MEDIA_GENRES}
+              addLabel="Genre"
+              placeholder="Genre..."
+              onChange={onUpdateGenres}
+            />
           )}
         </div>
       </div>

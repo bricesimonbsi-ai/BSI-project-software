@@ -80,6 +80,18 @@ export async function fetchTvSeasonEpisodeCount(externalId: string): Promise<{ s
   }
 }
 
+/** Genres (horreur, comédie...) d'un film ou d'une série — absents de /search, nécessitent l'appel
+ * détaillé (/movie/{id} ou /tv/{id}), fait une seule fois au moment de l'ajout. Best-effort :
+ * tableau vide en cas d'échec plutôt que de bloquer l'ajout. */
+export async function fetchGenres(mediaKind: "movie" | "tv", externalId: string): Promise<string[]> {
+  try {
+    const data = await tmdbGet(`/${mediaKind}/${externalId}`);
+    return ((data.genres ?? []) as { name: string }[]).map((g) => g.name);
+  } catch {
+    return [];
+  }
+}
+
 /** Plateformes de streaming où regarder un film/série en France (abonnement, sinon location/achat
  * à défaut) — renvoie une liste de noms lisibles ("Netflix", "Canal+"...), vide si non disponible
  * (ou données absentes pour la région). Alimente automatiquement le champ "Où le voir". */
