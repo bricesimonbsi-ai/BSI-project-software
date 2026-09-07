@@ -9,6 +9,18 @@ import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
 import { Button } from "@/components/ui/button";
 import { cn, formatDate } from "@/lib/utils";
 
+/** Fond de carte plus soigné (style MapTiler "Streets" — labels et couleurs proches de l'app de
+ * référence citée par l'utilisateur), utilisé seulement si une clé est configurée (VITE_MAPTILER_API_KEY,
+ * gratuite sur maptiler.com — même logique que VITE_TMDB_API_KEY/VITE_GOOGLE_PLACES_API_KEY ailleurs
+ * dans l'app : actif si la clé est renseignée, repli sur OpenStreetMap standard sinon). */
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY as string | undefined;
+const TILE_URL = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}{r}.png?key=${MAPTILER_KEY}`
+  : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTRIBUTION = MAPTILER_KEY
+  ? '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
 function makePinIcon(label: string, active: boolean) {
   return L.divIcon({
     className: "",
@@ -180,14 +192,7 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
           </Button>
         </div>
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-          {/* Retour aux tuiles OpenStreetMap standard : le fond CARTO Voyager essayé ensuite
-              exige en réalité une clé API (constaté en production — tuiles marquées "API KEY
-              REQUIRED"), CARTO ayant fermé son offre de tuiles anonymes gratuites depuis. Reste
-              gratuit et sans clé, quitte à être visuellement plus sobre. */}
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer key={TILE_URL} attribution={TILE_ATTRIBUTION} url={TILE_URL} detectRetina={!!MAPTILER_KEY} maxZoom={20} />
           {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
           )}

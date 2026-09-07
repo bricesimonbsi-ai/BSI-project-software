@@ -1,32 +1,68 @@
 import { useQuery } from "@tanstack/react-query";
 
-/** Photo représentative d'une ville, tirée de Wikipédia (l'image de tête de l'article, presque
- * toujours un paysage/monument caractéristique) — pas de clé API requise (contrairement à TMDB/
- * RAWG/Google Places ailleurs dans l'app), l'API REST de Wikipédia autorisant les appels directs
- * depuis un navigateur (CORS ouvert). Essai en français puis en anglais si l'article n'existe pas
- * dans cette langue ; renvoie null en silence si aucune des deux ne trouve d'image (l'appelant
- * retombe alors sur un dégradé plutôt que de casser l'affichage).
+/** Photo représentative d'une ville — pas de clé API requise, contrairement à TMDB/RAWG/Google
+ * Places ailleurs dans l'app (l'API REST de Wikipédia et l'API Commons autorisent les appels
+ * directs depuis un navigateur, CORS ouvert). Deux sources essayées en parallèle avec un délai
+ * limite (beaucoup de petites villes n'ont pas de photo de tête sur leur article Wikipédia, d'où
+ * le repli Commons) :
+ *  1. L'image de tête de l'article Wikipédia (FR puis EN) — la plus fiable quand elle existe.
+ *  2. Une recherche d'image géolocalisée sur Wikimedia Commons — filet plus large pour les
+ *     communes sans infobox photo sur leur article.
+ * Renvoie null en silence si rien n'est trouvé (l'appelant retombe alors sur un dégradé).
  */
-async function fetchWikipediaThumbnail(city: string, lang: "fr" | "en"): Promise<string | null> {
+
+const FETCH_TIMEOUT_MS = 7000;
+
+async function fetchJson(url: string): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(city)}`);
+    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) return null;
-    const data = await res.json();
-    // Uniquement `thumbnail` (jamais `originalimage`, potentiellement un fichier de plusieurs Mo
-    // — trop lourd pour une simple vignette de carte, surtout sur une connexion mobile lente).
-    const source: string | undefined = data?.thumbnail?.source;
-    if (!source) return null;
-    // Les vignettes de l'API summary sont assez petites (souvent 320px de large) ; les URLs
-    // Wikipédia encodent la largeur dans le chemin (".../320px-Nom.jpg") — l'agrandir donne une
-    // image nette même en grand sur une carte d'étape plein écran.
-    return source.replace(/\/\d+px-/, "/640px-");
+    return await res.json();
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
+/** Les vignettes de l'API summary sont assez petites (souvent 320px de large) ; les URLs
+ * Wikipédia/Commons encodent la largeur dans le chemin (".../320px-Nom.jpg") — l'agrandir donne
+ * une image nette même en grand sur une carte d'étape plein écran. */
+function upscaleThumbWidth(url: string, width = 640): string {
+  return url.replace(/\/\d+px-/, `/${width}px-`);
+}
+
+async function fetchWikipediaThumbnail(city: string, lang: "fr" | "en"): Promise<string | null> {
+  const data = (await fetchJson(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(city)}`)) as
+    | { thumbnail?: { source?: string } }
+    | null;
+  const source = data?.thumbnail?.source;
+  return source ? upscaleThumbWidth(source) : null;
+}
+
+/** Recherche Commons par mot-clé, filtrée aux fichiers image — filet plus large que l'article
+ * Wikipédia lui-même (beaucoup de communes ont des photos catégorisées sur Commons sans avoir
+ * d'infobox photo sur leur article). `origin=*` active le CORS anonyme de l'API MediaWiki. */
+async function fetchCommonsThumbnail(city: string): Promise<string | null> {
+  const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=1&gsrsearch=${encodeURIComponent(
+    `${city} filetype:bitmap`
+  )}&prop=imageinfo&iiprop=url&iiurlwidth=640`;
+  const data = (await fetchJson(searchUrl)) as { query?: { pages?: Record<string, { imageinfo?: { thumburl?: string }[] }> } } | null;
+  const pages = data?.query?.pages;
+  if (!pages) return null;
+  const first = Object.values(pages)[0];
+  return first?.imageinfo?.[0]?.thumburl ?? null;
+}
+
 async function fetchCityPhoto(city: string): Promise<string | null> {
-  return (await fetchWikipediaThumbnail(city, "fr")) ?? (await fetchWikipediaThumbnail(city, "en"));
+  const [fr, en, commons] = await Promise.all([
+    fetchWikipediaThumbnail(city, "fr"),
+    fetchWikipediaThumbnail(city, "en"),
+    fetchCommonsThumbnail(city),
+  ]);
+  return fr ?? en ?? commons ?? null;
 }
 
 /** `city` à null désactive la requête (ex. une photo du Journal existe déjà pour cette ville,
