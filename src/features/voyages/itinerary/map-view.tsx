@@ -155,13 +155,24 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
     return map;
   }, [journalPosts]);
 
+  // Les coordonnées du PAYS (etape.latitude/longitude) ne sont saisies que via le dialogue manuel
+  // d'édition d'une étape — un itinéraire importé par CSV (le cas le plus courant) ne les remplit
+  // jamais, seulement celles des villes. Sans repli, la vue Pays restait donc vide pour tout
+  // itinéraire importé : on retombe sur la position de la première ville du pays qui a des
+  // coordonnées, cohérent avec la vue Villes qui s'appuie déjà sur ces mêmes coordonnées.
   const countryPoints = useMemo(
     () =>
       groups
-        .filter((g) => g.etape.latitude != null && g.etape.longitude != null)
-        .map((g) => ({
-          lat: g.etape.latitude as number,
-          lng: g.etape.longitude as number,
+        .map((g) => {
+          const firstCityWithCoords = g.rows.find((r) => r.sousEtape.latitude != null && r.sousEtape.longitude != null);
+          const lat = g.etape.latitude ?? firstCityWithCoords?.sousEtape.latitude ?? null;
+          const lng = g.etape.longitude ?? firstCityWithCoords?.sousEtape.longitude ?? null;
+          return { g, lat, lng };
+        })
+        .filter((p): p is { g: CountryGroup; lat: number; lng: number } => p.lat != null && p.lng != null)
+        .map(({ g, lat, lng }) => ({
+          lat,
+          lng,
           label: g.stepRangeLabel,
           name: g.etape.country_region,
           mode: g.rows[0]?.incomingMode ?? null,
