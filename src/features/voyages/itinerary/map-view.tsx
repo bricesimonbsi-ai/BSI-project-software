@@ -2,11 +2,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { estimateCo2Kg, type CountryGroup, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
+import { estimateCo2Kg, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
-import { Button } from "@/components/ui/button";
 import { cn, formatDate } from "@/lib/utils";
 
 /** Fond de carte plus soigné (style MapTiler "Streets" — labels et couleurs proches de l'app de
@@ -101,8 +100,7 @@ function FlyToStep({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
-export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; flat: FlatRow[]; voyageId: string }) {
-  const [level, setLevel] = useState<"pays" | "villes">("villes");
+export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -120,21 +118,7 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
     return map;
   }, [journalPosts]);
 
-  const countryPoints = useMemo(
-    () =>
-      groups
-        .filter((g) => g.etape.latitude != null && g.etape.longitude != null)
-        .map((g) => ({
-          lat: g.etape.latitude as number,
-          lng: g.etape.longitude as number,
-          label: g.stepRangeLabel,
-          name: g.etape.country_region,
-          mode: g.rows[0]?.incomingMode ?? null,
-        })),
-    [groups]
-  );
-
-  const cityPoints = useMemo(
+  const points = useMemo(
     () =>
       flat
         .filter((r) => r.sousEtape.latitude != null && r.sousEtape.longitude != null)
@@ -148,7 +132,6 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
     [flat]
   );
 
-  const points = level === "pays" ? countryPoints : cityPoints;
   const center = points.length > 0 ? ([points[0].lat, points[0].lng] as [number, number]) : ([20, -60] as [number, number]);
   const clampedIndex = Math.min(activeIndex, Math.max(0, flat.length - 1));
   const activeStep = flat[clampedIndex];
@@ -170,30 +153,14 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
   return (
     // Sort du conteneur centré de la page (quel que soit son padding) pour occuper toute la
     // largeur de l'écran — la vue Carte est pensée comme un plein écran immersif, pas une vignette
-    // au milieu d'une page qui défile.
+    // au milieu d'une page qui défile. Hauteur en dvh (pas vh) pour la vraie hauteur visible sur
+    // mobile (la barre d'adresse variable fausse vh) ; le bandeau d'étapes en bas est volontairement
+    // compact pour laisser le plus de place possible à la carte elle-même.
     <div className="relative left-1/2 w-screen -translate-x-1/2">
-      <div className="relative isolate h-[75vh] overflow-hidden sm:h-[80vh]">
-        <div className="absolute right-3 top-3 z-[1000] flex gap-1 rounded-full border border-border bg-card/90 p-1 backdrop-blur">
-          <Button
-            size="sm"
-            variant={level === "pays" ? "default" : "ghost"}
-            className={cn("h-7 rounded-full px-3 text-xs")}
-            onClick={() => setLevel("pays")}
-          >
-            Pays
-          </Button>
-          <Button
-            size="sm"
-            variant={level === "villes" ? "default" : "ghost"}
-            className={cn("h-7 rounded-full px-3 text-xs")}
-            onClick={() => setLevel("villes")}
-          >
-            Villes
-          </Button>
-        </div>
+      <div className="relative isolate h-[85dvh] overflow-hidden sm:h-[90dvh]">
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
           <TileLayer key={TILE_URL} attribution={TILE_ATTRIBUTION} url={TILE_URL} detectRetina={!!MAPTILER_KEY} maxZoom={20} />
-          {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
+          {activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
           )}
           {points.slice(1).map((p, i) => {
@@ -212,17 +179,17 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
             <Marker
               key={i}
               position={[p.lat, p.lng]}
-              icon={makePinIcon(p.label, level === "villes" && i === clampedIndex)}
-              eventHandlers={level === "villes" ? { click: () => setActiveIndex(i) } : undefined}
+              icon={makePinIcon(p.label, i === clampedIndex)}
+              eventHandlers={{ click: () => setActiveIndex(i) }}
             >
               <Tooltip>{p.name}</Tooltip>
             </Marker>
           ))}
         </MapContainer>
 
-        {level === "villes" && activeStep && (
+        {activeStep && (
           <div className="absolute inset-x-0 bottom-0 z-[1000] border-t border-border bg-card/95 backdrop-blur">
-            <div className="flex gap-2 overflow-x-auto px-3 py-3" style={{ scrollSnapType: "x proximity" }}>
+            <div className="flex gap-1.5 overflow-x-auto px-2 py-2" style={{ scrollSnapType: "x proximity" }}>
               {flat.map((row, i) => (
                 <Fragment key={row.sousEtape.id}>
                   <StepCard
@@ -279,7 +246,7 @@ function StepCard({
       onClick={onClick}
       style={{ scrollSnapAlign: "center", background: photoUrl ? undefined : "linear-gradient(135deg, hsl(199 55% 30%), hsl(250 45% 22%))" }}
       className={cn(
-        "relative flex h-36 w-52 flex-shrink-0 flex-col justify-end overflow-hidden rounded-xl text-left shadow-sm transition sm:h-40 sm:w-60",
+        "relative flex h-24 w-36 flex-shrink-0 flex-col justify-end overflow-hidden rounded-xl text-left shadow-sm transition sm:h-28 sm:w-44",
         isActive ? "ring-2 ring-accent ring-offset-2 ring-offset-card" : "ring-1 ring-border hover:ring-accent/50"
       )}
     >
@@ -291,15 +258,15 @@ function StepCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
         </>
       )}
-      <span className="absolute left-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-black shadow">
+      <span className="absolute left-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[0.65rem] font-bold text-black shadow">
         {row.globalIndex}
       </span>
-      <div className="relative z-10 space-y-0.5 p-2.5 text-white">
-        <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+      <div className="relative z-10 space-y-0 p-1.5 text-white">
+        <p className="flex items-center gap-1 truncate text-xs font-bold">
           <CountryFlag name={row.etape.country_region} className="flex-shrink-0" />
           <span className="truncate">{row.sousEtape.city}</span>
         </p>
-        <p className="truncate text-[0.7rem] text-white/85">
+        <p className="truncate text-[0.6rem] text-white/85">
           {formatDate(row.sousEtape.start_date)}
           {row.sousEtape.duration_days ? ` · ${row.sousEtape.duration_days} nuits` : ""}
         </p>
@@ -313,14 +280,14 @@ function StepCard({
 function ConnectorCell({ nextStep }: { nextStep: FlatRow }) {
   const co2 = estimateCo2Kg(nextStep.incomingDistanceKm, nextStep.incomingMode);
   return (
-    <div className="flex h-36 w-20 flex-shrink-0 flex-col items-center justify-center gap-1 sm:h-40 sm:w-24">
-      <span className="text-xl leading-none">{transportEmoji(nextStep.incomingMode)}</span>
+    <div className="flex h-24 w-14 flex-shrink-0 flex-col items-center justify-center gap-0.5 sm:h-28 sm:w-16">
+      <span className="text-base leading-none">{transportEmoji(nextStep.incomingMode)}</span>
       {nextStep.incomingDistanceKm != null && (
-        <span className="whitespace-nowrap text-[0.65rem] text-muted-foreground">
+        <span className="whitespace-nowrap text-[0.6rem] text-muted-foreground">
           {Math.round(nextStep.incomingDistanceKm).toLocaleString("fr-FR")} km
         </span>
       )}
-      {co2 > 0 && <span className="whitespace-nowrap text-[0.6rem] text-emerald-600 dark:text-emerald-400">{co2} kg CO₂</span>}
+      {co2 > 0 && <span className="whitespace-nowrap text-[0.55rem] text-emerald-600 dark:text-emerald-400">{co2} kg CO₂</span>}
     </div>
   );
 }

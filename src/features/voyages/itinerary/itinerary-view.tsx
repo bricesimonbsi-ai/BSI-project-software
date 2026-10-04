@@ -208,7 +208,7 @@ export function ItineraryView({
         insertAtIndex={creatingCountryAt ?? 0}
       />
 
-      {tab === "carte" && <MapView groups={groups} flat={flat} voyageId={voyageId} />}
+      {tab === "carte" && <MapView flat={flat} voyageId={voyageId} />}
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
 
       {(tab === "climat" || tab === "dates") && (

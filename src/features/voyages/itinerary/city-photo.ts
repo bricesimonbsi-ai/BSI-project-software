@@ -79,12 +79,18 @@ async function fetchCityPhoto(city: string): Promise<string | null> {
 }
 
 /** `city` à null désactive la requête (ex. une photo du Journal existe déjà pour cette ville,
- * inutile d'aller en chercher une autre). */
+ * inutile d'aller en chercher une autre).
+ * Le cache React Query est persisté dans le localStorage du navigateur (3 jours, cf.
+ * query-client.tsx) : avec un `staleTime: Infinity` précédent, un premier résultat raté (`null`,
+ * dû aux versions antérieures buguées de ce fichier) restait rejoué indéfiniment depuis ce cache
+ * persistant, y compris après correction du code et redéploiement — la clé est donc versionnée
+ * ("v2") pour forcer un nouveau fetch chez tout le monde une bonne fois, et le staleTime n'est
+ * plus infini pour qu'un éventuel futur résultat raté s'auto-corrige après un jour. */
 export function useCityPhoto(city: string | null) {
   return useQuery({
-    queryKey: ["city-photo", city],
+    queryKey: ["city-photo-v2", city],
     enabled: !!city,
-    staleTime: Infinity,
+    staleTime: 24 * 60 * 60 * 1000,
     queryFn: () => fetchCityPhoto(city as string),
   });
 }
