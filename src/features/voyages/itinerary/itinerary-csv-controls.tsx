@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { Download, Upload, TriangleAlert } from "lucide-react";
+import { Download, Upload, TriangleAlert, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { buildItineraryCsv, parseItineraryCsv, type ImportResult } from "@/features/voyages/itinerary/itinerary-csv";
+import { buildItineraryCsv, buildItineraryCsvTemplate, parseItineraryCsv, type ImportResult } from "@/features/voyages/itinerary/itinerary-csv";
 import { useImportItinerary } from "@/features/voyages/itinerary/use-itinerary-import";
 import type { FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 
@@ -22,6 +22,29 @@ export function ItineraryExportButton({ flat }: { flat: FlatRow[] }) {
   return (
     <Button variant="outline" size="sm" onClick={handleExport} disabled={flat.length === 0}>
       <Download className="mr-1.5 h-4 w-4" /> Exporter
+    </Button>
+  );
+}
+
+/**
+ * Modèle vierge (en-têtes + 2 lignes d'exemple) téléchargeable sans avoir à exporter un voyage
+ * existant — utile pour préparer un import depuis zéro ou comprendre le format attendu.
+ */
+export function ItineraryTemplateButton() {
+  function handleDownload() {
+    const csv = buildItineraryCsvTemplate();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "modele-itineraire-projeko.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <Button variant="ghost" size="sm" onClick={handleDownload}>
+      <FileDown className="mr-1.5 h-4 w-4" /> Modèle vierge
     </Button>
   );
 }

@@ -34,7 +34,7 @@ import {
 import { MapView } from "@/features/voyages/itinerary/map-view";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { CarbonDashboard } from "@/features/voyages/itinerary/carbon-dashboard";
-import { ItineraryExportButton, ItineraryImportButton } from "@/features/voyages/itinerary/itinerary-csv-controls";
+import { ItineraryExportButton, ItineraryImportButton, ItineraryTemplateButton } from "@/features/voyages/itinerary/itinerary-csv-controls";
 import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -187,6 +187,7 @@ export function ItineraryView({
         <div className="flex flex-wrap items-center gap-2">
           <ItineraryExportButton flat={flat} />
           <ItineraryImportButton voyageId={voyageId} />
+          <ItineraryTemplateButton />
           {(tab === "climat" || tab === "dates") && (
             <Button
               size="sm"

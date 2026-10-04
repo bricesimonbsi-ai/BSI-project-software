@@ -84,6 +84,21 @@ export function buildItineraryCsv(flat: FlatRow[]): string {
   return "﻿" + lines.join("\r\n");
 }
 
+/**
+ * Modèle vierge téléchargeable (sans passer par un voyage existant) : les en-têtes attendues +
+ * deux lignes d'exemple réalistes (deux villes du même pays, pour montrer à la fois le format des
+ * dates/nombres et le principe du "transport vers l'étape suivante" sur la dernière ville avant de
+ * changer de pays). Les colonnes facultatives (visa, logement, tarifs...) peuvent rester vides.
+ */
+export function buildItineraryCsvTemplate(): string {
+  const exampleRows = [
+    ["France", "Non", "", "Non", "Nantes", "2026-09-01", "3", "Hôtel du Centre", "Château des ducs de Bretagne", "Train", "2", "45", "EUR", "380", "47.21725", "-1.55336", "90", "35", "15"],
+    ["France", "Non", "", "Non", "Lyon", "2026-09-04", "4", "", "Vieux Lyon, musée des Confluences", "", "", "", "", "", "45.764", "4.8357", "", "", ""],
+  ];
+  const lines = [HEADERS.map(csvCell).join(","), ...exampleRows.map((r) => r.map(csvCell).join(","))];
+  return "﻿" + lines.join("\r\n");
+}
+
 export interface ImportCity {
   city: string;
   duration_days: number;
