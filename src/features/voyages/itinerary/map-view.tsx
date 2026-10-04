@@ -2,10 +2,12 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { estimateCo2Kg, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
+import { Button } from "@/components/ui/button";
 import { cn, formatDate } from "@/lib/utils";
 
 /** Fond de carte plus soigné (style MapTiler "Streets" — labels et couleurs proches de l'app de
@@ -100,9 +102,39 @@ function FlyToStep({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
+/** Leaflet calcule sa taille au montage et ne la recalcule jamais tout seul si son conteneur
+ * change de taille par un autre moyen que son propre resize (ex. passage en plein écran) — sans
+ * ça la carte resterait affichée à sa petite taille d'origine, coupée, le temps d'un pan/zoom. */
+function InvalidateSizeOnChange({ trigger }: { trigger: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    const id = setTimeout(() => map.invalidateSize(), 150);
+    return () => clearTimeout(id);
+  }, [map, trigger]);
+  return null;
+}
+
 export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const fullscreenRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onChange() {
+      setIsFullscreen(document.fullscreenElement === fullscreenRef.current);
+    }
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      fullscreenRef.current?.requestFullscreen();
+    }
+  }
 
   // Réutilise les photos déjà publiées dans le Journal de voyage pour cette ville (première
   // trouvée) plutôt que d'aller chercher une image externe — pas de nouvelle dépendance, et une
@@ -157,9 +189,22 @@ export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string 
     // mobile (la barre d'adresse variable fausse vh) ; le bandeau d'étapes en bas est volontairement
     // compact pour laisser le plus de place possible à la carte elle-même.
     <div className="relative left-1/2 w-screen -translate-x-1/2">
-      <div className="relative isolate h-[85dvh] overflow-hidden sm:h-[90dvh]">
+      <div
+        ref={fullscreenRef}
+        className={cn("relative isolate overflow-hidden bg-background", isFullscreen ? "h-screen" : "h-[85dvh] sm:h-[90dvh]")}
+      >
+        <Button
+          size="icon"
+          variant="outline"
+          className="absolute right-3 top-3 z-[1000] h-8 w-8 rounded-full bg-card/90 backdrop-blur"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
           <TileLayer key={TILE_URL} attribution={TILE_ATTRIBUTION} url={TILE_URL} detectRetina={!!MAPTILER_KEY} maxZoom={20} />
+          <InvalidateSizeOnChange trigger={isFullscreen} />
           {activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
           )}
