@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "reac
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Maximize2, Minimize2 } from "lucide-react";
-import { estimateCo2Kg, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
+import { estimateCo2Kg, type CountryGroup, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
 import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
@@ -22,12 +22,16 @@ const TILE_ATTRIBUTION = MAPTILER_KEY
   ? '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
+/** `label` peut être un simple numéro ("12") en vue Villes ou une plage ("12–19") en vue Pays —
+ * largeur automatique (min 1.75rem, padding latéral) plutôt qu'un cercle à taille fixe, pour que
+ * les plages à deux chiffres ne débordent jamais du pin. */
 function makePinIcon(label: string, active: boolean) {
+  const size = active ? "2.1rem" : "1.75rem";
   return L.divIcon({
     className: "",
-    html: `<div style="background:${active ? "hsl(24 94% 50%)" : "hsl(199 89% 48%)"};color:white;border-radius:9999px;width:${active ? "2.1rem" : "1.75rem"};height:${active ? "2.1rem" : "1.75rem"};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem;box-shadow:0 1px 3px rgba(0,0,0,0.4);${active ? "outline:3px solid white;" : ""}">${label}</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    html: `<div style="background:${active ? "hsl(24 94% 50%)" : "hsl(199 89% 48%)"};color:white;border-radius:9999px;min-width:${size};height:${size};padding:0 0.35rem;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.4);${active ? "outline:3px solid white;" : ""}">${label}</div>`,
+    iconSize: [36, 28],
+    iconAnchor: [18, 14],
   });
 }
 
@@ -114,7 +118,8 @@ function InvalidateSizeOnChange({ trigger }: { trigger: boolean }) {
   return null;
 }
 
-export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string }) {
+export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; flat: FlatRow[]; voyageId: string }) {
+  const [level, setLevel] = useState<"pays" | "villes">("villes");
   const [activeIndex, setActiveIndex] = useState(0);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const fullscreenRef = useRef<HTMLDivElement>(null);
@@ -150,7 +155,22 @@ export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string 
     return map;
   }, [journalPosts]);
 
-  const points = useMemo(
+  const countryPoints = useMemo(
+    () =>
+      groups
+        .filter((g) => g.etape.latitude != null && g.etape.longitude != null)
+        .map((g) => ({
+          lat: g.etape.latitude as number,
+          lng: g.etape.longitude as number,
+          label: g.stepRangeLabel,
+          name: g.etape.country_region,
+          mode: g.rows[0]?.incomingMode ?? null,
+          firstGlobalIndex: g.rows[0]?.globalIndex ?? 1,
+        })),
+    [groups]
+  );
+
+  const cityPoints = useMemo(
     () =>
       flat
         .filter((r) => r.sousEtape.latitude != null && r.sousEtape.longitude != null)
@@ -160,10 +180,12 @@ export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string 
           label: String(r.globalIndex),
           name: r.sousEtape.city,
           mode: r.incomingMode,
+          firstGlobalIndex: r.globalIndex,
         })),
     [flat]
   );
 
+  const points = level === "pays" ? countryPoints : cityPoints;
   const center = points.length > 0 ? ([points[0].lat, points[0].lng] as [number, number]) : ([20, -60] as [number, number]);
   const clampedIndex = Math.min(activeIndex, Math.max(0, flat.length - 1));
   const activeStep = flat[clampedIndex];
@@ -193,19 +215,39 @@ export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string 
         ref={fullscreenRef}
         className={cn("relative isolate overflow-hidden bg-background", isFullscreen ? "h-screen" : "h-[85dvh] sm:h-[90dvh]")}
       >
-        <Button
-          size="icon"
-          variant="outline"
-          className="absolute right-3 top-3 z-[1000] h-8 w-8 rounded-full bg-card/90 backdrop-blur"
-          onClick={toggleFullscreen}
-          title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
-        >
-          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </Button>
+        <div className="absolute right-3 top-3 z-[1000] flex items-center gap-1.5">
+          <div className="flex gap-1 rounded-full border border-border bg-card/90 p-1 backdrop-blur">
+            <Button
+              size="sm"
+              variant={level === "pays" ? "default" : "ghost"}
+              className="h-6 rounded-full px-2.5 text-xs"
+              onClick={() => setLevel("pays")}
+            >
+              Pays
+            </Button>
+            <Button
+              size="sm"
+              variant={level === "villes" ? "default" : "ghost"}
+              className="h-6 rounded-full px-2.5 text-xs"
+              onClick={() => setLevel("villes")}
+            >
+              Villes
+            </Button>
+          </div>
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-8 w-8 rounded-full bg-card/90 backdrop-blur"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+        </div>
         <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
           <TileLayer key={TILE_URL} attribution={TILE_ATTRIBUTION} url={TILE_URL} detectRetina={!!MAPTILER_KEY} maxZoom={20} />
           <InvalidateSizeOnChange trigger={isFullscreen} />
-          {activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
+          {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
           )}
           {points.slice(1).map((p, i) => {
@@ -224,15 +266,24 @@ export function MapView({ flat, voyageId }: { flat: FlatRow[]; voyageId: string 
             <Marker
               key={i}
               position={[p.lat, p.lng]}
-              icon={makePinIcon(p.label, i === clampedIndex)}
-              eventHandlers={{ click: () => setActiveIndex(i) }}
+              icon={makePinIcon(p.label, level === "villes" && i === clampedIndex)}
+              eventHandlers={{
+                click: () => {
+                  if (level === "pays") {
+                    setLevel("villes");
+                    setActiveIndex(p.firstGlobalIndex - 1);
+                  } else {
+                    setActiveIndex(i);
+                  }
+                },
+              }}
             >
               <Tooltip>{p.name}</Tooltip>
             </Marker>
           ))}
         </MapContainer>
 
-        {activeStep && (
+        {level === "villes" && activeStep && (
           <div className="absolute inset-x-0 bottom-0 z-[1000] border-t border-border bg-card/95 backdrop-blur">
             <div className="flex gap-1.5 overflow-x-auto px-2 py-2" style={{ scrollSnapType: "x proximity" }}>
               {flat.map((row, i) => (
@@ -275,7 +326,7 @@ function StepCard({
   onClick: () => void;
   cardRef: (el: HTMLButtonElement | null) => void;
 }) {
-  const { data: fallbackPhoto } = useCityPhoto(journalPhotoUrl ? null : row.sousEtape.city);
+  const { data: fallbackPhoto } = useCityPhoto(journalPhotoUrl ? null : row.sousEtape.city, row.etape.country_region);
   const rawPhotoUrl = journalPhotoUrl ?? fallbackPhoto ?? undefined;
   // Filet de sécurité : si l'image échoue au chargement (URL cassée, réseau lent...), on retombe
   // sur le dégradé plutôt que de laisser une carte vide — sans ça, `photoUrl` restait "vrai" côté
