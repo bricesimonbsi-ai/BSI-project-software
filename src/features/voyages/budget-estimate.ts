@@ -93,6 +93,33 @@ export function estimateTransportLegCost(distanceKm: number | null, mode: string
   return distanceKm * rateForDistance(tiers, distanceKm) * Math.max(1, travelerCount || 1);
 }
 
+/**
+ * Coût (dans la devise de référence) du trajet vers l'étape suivante pour TOUS les voyageurs —
+ * logique PARTAGÉE entre useCityLockedCostsMap (tableau de budget) et SousEtapeDialog (dialogue
+ * d'édition d'une ville), pour qu'ils affichent toujours exactement le même chiffre. Priorité au
+ * coût réel saisi (`transportNextCost`, typiquement importé par CSV) sur l'estimation générique
+ * par distance/mode — avant ce correctif, le tableau de budget ignorait complètement ce champ et
+ * n'affichait QUE l'estimation générique, incohérente avec le "Coût trajet" visible dans l'onglet
+ * Itinéraire. `transportNextCost` est actuellement toujours saisi PAR PERSONNE (voir l'export/
+ * import CSV de l'itinéraire) : multiplié ici par le nombre de voyageurs pour rester cohérent avec
+ * le champ "Montant total du trajet pour tous les voyageurs" qu'il remplace. Ignoré si une devise
+ * différente de la devise de référence est renseignée (pas de conversion de change disponible) :
+ * repli sur l'estimation par distance/mode dans ce cas.
+ */
+export function resolveTransportLegCost(params: {
+  transportNextCost: number | null;
+  transportNextCurrency: string | null;
+  referenceCurrency: string;
+  distanceKm: number | null;
+  mode: string | null;
+  travelerCount: number;
+}): number {
+  const { transportNextCost, transportNextCurrency, referenceCurrency, distanceKm, mode, travelerCount } = params;
+  const travelers = Math.max(1, travelerCount || 1);
+  const hasUsableCost = transportNextCost != null && (!transportNextCurrency || transportNextCurrency === referenceCurrency);
+  return hasUsableCost ? (transportNextCost as number) * travelers : estimateTransportLegCost(distanceKm, mode, travelers);
+}
+
 /** Prix unitaire par défaut (EUR) proposé pour un article de matériel coché — une estimation
  * volontairement grossière (pas de prix par article dans le catalogue de base), à affiner
  * article par article dans l'onglet Équipement une fois les vrais achats/prix connus. */

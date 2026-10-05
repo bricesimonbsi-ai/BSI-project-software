@@ -26,11 +26,13 @@ export function useVoyageBudgetTotals({
   travelStyle,
   travelerCount,
   lodgingCount,
+  referenceCurrency,
 }: {
   voyageId: string | undefined;
   travelStyle: TravelStyle;
   travelerCount: number;
   lodgingCount: number;
+  referenceCurrency: string;
 }) {
   const { data: allExpenses } = useVoyageAllExpenses(voyageId);
   const { data: equipmentItems } = useVoyageEquipment(voyageId);
@@ -43,11 +45,12 @@ export function useVoyageBudgetTotals({
     travelStyle,
     travelerCount,
     lodgingCount,
+    referenceCurrency,
   });
 
   const expenses = (allExpenses ?? []).filter((e) => groupedCategory(e.category) !== "equipement" && !isLegacyLockedPlannedRow(e));
   const equipmentPlannedTotal = computeEquipmentPlannedTotal(equipmentItems ?? []);
-  const lockedPlannedTotal = lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport;
+  const lockedPlannedTotal = lockedTotal.lodging + lockedTotal.food + lockedTotal.localTransport + lockedTotal.transport;
   const adminSantePlannedTotal = computeAdminSantePlannedTotal(expenses, voyageId ?? "");
   const visaPlannedTotal = computeAdminSanteVisaPlannedTotal(expenses);
   const adminSantePlannedTotalWithVisa = adminSantePlannedTotal + visaPlannedTotal;

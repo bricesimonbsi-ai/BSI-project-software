@@ -28,7 +28,7 @@ export function VoyageSynthesis({
 }) {
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
-  const { totalPlanned } = useVoyageBudgetTotals({ voyageId, travelStyle, travelerCount, lodgingCount });
+  const { totalPlanned } = useVoyageBudgetTotals({ voyageId, travelStyle, travelerCount, lodgingCount, referenceCurrency });
 
   const stats = useMemo(() => {
     const sousEtapesByEtape = new Map<string, VoyageSousEtape[]>();

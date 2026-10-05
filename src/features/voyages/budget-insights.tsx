@@ -91,6 +91,7 @@ export function BudgetInsights({ voyage, projectId }: { voyage: Voyage; projectI
     travelStyle: style,
     travelerCount,
     lodgingCount,
+    referenceCurrency: voyage.reference_currency,
   });
 
   const citiesByEtape = useMemo(() => {

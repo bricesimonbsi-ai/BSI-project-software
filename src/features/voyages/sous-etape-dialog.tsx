@@ -139,10 +139,6 @@ export function SousEtapeDialog({
   // ouverture du dialogue pendant le chargement (observé : le nombre de doublons augmentait à
   // chaque visite).
   const onSiteExpensesLoaded = onSiteExpenses !== undefined;
-  // Le trajet vers la ville suivante et le transport sur place partagent la même catégorie
-  // unifiée "transport" mais pas le même sub_category : exclure explicitement "sur_place" ici
-  // (et le cibler précisément plus bas) pour ne jamais les confondre dans le même champ.
-  const plannedTransport = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "transport" && e.sub_category !== "sur_place");
   const plannedActivities = (onSiteExpenses ?? []).find((e) => e.planned && e.category === "activites");
   // Filtre explicite sur !planned (et pas seulement une exclusion par id des 4 lignes structurées
   // ci-dessus) : garantit qu'aucune dépense prévisionnelle ne peut jamais apparaître dans la
@@ -170,6 +166,9 @@ export function SousEtapeDialog({
         nights: Number(nights) || existing?.duration_days || 0,
         distanceKm: effectiveDistanceKm,
         transportMode: transportMode || null,
+        transportNextCost: existing?.transport_next_cost ?? null,
+        transportNextCurrency: existing?.transport_next_currency ?? null,
+        referenceCurrency: referenceCurrency ?? "EUR",
         countryCode: countryCode ?? null,
         style: travelStyle ?? "standard",
         travelerCount: travelerCount ?? 1,
@@ -191,6 +190,9 @@ export function SousEtapeDialog({
     existing?.duration_days,
     effectiveDistanceKm,
     transportMode,
+    existing?.transport_next_cost,
+    existing?.transport_next_currency,
+    referenceCurrency,
     countryCode,
     travelStyle,
     travelerCount,
@@ -410,32 +412,33 @@ export function SousEtapeDialog({
             <div className="space-y-2 border-t border-border pt-4">
               <Label>Dépenses prévisionnelles</Label>
               <p className="text-xs text-muted-foreground">
-                Logement, nourriture et transport sur place se calculent automatiquement (taux journalier x nombre de
-                nuits, voir l'unité sous chaque ligne) et ne se saisissent plus directement ici : ajuste le taux ou le
-                nombre de nuits ci-dessus, le total se recalcule seul. Le taux journalier ne s'applique qu'à cette
-                ville — l'ajuster ne change rien pour les autres villes du pays. Transport (vers la suivante) et
-                Activités restent librement modifiables.
+                Logement, nourriture, transport sur place et transport vers la suivante se calculent
+                automatiquement (taux ou coût x nombre de nuits/voyageurs, voir l'unité sous chaque ligne) et ne
+                se saisissent plus directement ici : ajuste le taux ci-dessous, le total se recalcule seul. Seule
+                Activités reste librement modifiable.
               </p>
               <ul className="divide-y divide-border rounded-md border border-border">
                 <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Transport (vers la suivante)</p>
-                    <p className="text-xs text-muted-foreground">Montant total du trajet pour tous les voyageurs, librement modifiable</p>
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Transport (vers la suivante)</p>
+                      <p className="text-xs text-muted-foreground">Coût par personne x {travelerCount ?? 1} voyageur(s)</p>
+                    </div>
+                    <DailyRateInput
+                      value={existing.transport_next_cost ?? plannedCosts.transport / Math.max(1, travelerCount ?? 1)}
+                      onCommit={(v) =>
+                        updateSousEtape.mutate({
+                          id: existing.id,
+                          transport_next_cost: v,
+                          transport_next_currency: v == null ? null : referenceCurrency ?? "EUR",
+                        })
+                      }
+                      suffix={`${referenceCurrency ?? "EUR"} / personne`}
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">Prévisionnel</Badge>
-                    <EditableExpenseAmount
-                      scope={{ sousEtapeId: existing.id }}
-                      category="transport"
-                      subCategory={transportMode || null}
-                      planned
-                      existing={plannedTransport}
-                      estimate={plannedCosts.transport}
-                      referenceCurrency={referenceCurrency ?? "EUR"}
-                      invalidateKey={["sous-etape-expenses", existing.id]}
-                      dataReady={onSiteExpensesLoaded}
-                      className="w-24"
-                    />
+                    <ComputedCostAmount amount={plannedCosts.transport} className="w-24" />
                   </div>
                 </li>
                 <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">

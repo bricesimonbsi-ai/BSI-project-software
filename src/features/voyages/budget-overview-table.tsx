@@ -13,9 +13,8 @@ import {
 import { useVoyageEquipment } from "@/features/voyages/use-voyage-equipment";
 import { computeEquipmentPlannedTotal } from "@/features/voyages/equipment-pricing";
 import { CountryFlag } from "@/features/voyages/itinerary/location-pickers";
-import { estimateTransportLegCost } from "@/features/voyages/budget-estimate";
 import { useCityLockedCostsMap, isLegacyLockedPlannedRow, type CityLockedCosts } from "@/features/voyages/use-city-locked-costs";
-import { buildFlatRows, cascadeDatesFrom, haversineDistanceKm, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
+import { buildFlatRows, cascadeDatesFrom, type FlatRow } from "@/features/voyages/itinerary/itinerary-model";
 import { EditableExpenseAmount, ComputedCostAmount } from "@/features/voyages/editable-expense-amount";
 import { ExpenseFormFields } from "@/features/voyages/expense-form-fields";
 import { ExpenseFormDialog } from "@/features/voyages/expense-form-dialog";
@@ -64,21 +63,10 @@ export function cityColumnAmount(col: CityColumn, cityRows: VoyageAllExpense[], 
 
 /** Valeur de chaque colonne pour UNE ville côté Prévisionnel — factorisé pour être identique entre
  * la cellule de tableau (desktop) et la carte mobile équivalente, jamais recalculé deux fois avec
- * un risque de diverger. */
-export function computePlannedColumnValues(
-  rows: VoyageAllExpense[],
-  locked: CityLockedCosts | undefined,
-  estimateFor: Record<string, number>
-): { col: CityColumn; amount: number }[] {
-  return CITY_COLUMNS.map((c) => {
-    const existingRow = rows.find((e) => matchesColumn(e, c));
-    const amount = c.locked
-      ? cityColumnAmount(c, rows, locked)
-      : existingRow
-        ? existingRow.amount * existingRow.manual_rate_to_reference
-        : (estimateFor[c.key] ?? 0);
-    return { col: c, amount };
-  });
+ * un risque de diverger. Toutes les colonnes sauf Activités sont verrouillées (voir CITY_COLUMNS) :
+ * seule Activités peut encore afficher une ligne `voyage_expenses` librement saisie. */
+export function computePlannedColumnValues(rows: VoyageAllExpense[], locked: CityLockedCosts | undefined): { col: CityColumn; amount: number }[] {
+  return CITY_COLUMNS.map((c) => ({ col: c, amount: cityColumnAmount(c, rows, locked) }));
 }
 
 /** Même principe côté Réel : une case résume ici TOUTES les lignes correspondantes (pas une
@@ -115,7 +103,7 @@ export function computeCountryColumnAmounts(
 }
 
 export const CITY_COLUMNS: CityColumn[] = [
-  { key: "transport", label: "Transport vers l'étape suivante", category: "transport", excludeSubCategories: ["sur_place"] },
+  { key: "transport", label: "Transport vers l'étape suivante", category: "transport", excludeSubCategories: ["sur_place"], locked: true, lockedField: "transport" },
   { key: "transport_local", label: "Transport sur place", category: "transport", subCategory: "sur_place", locked: true, lockedField: "localTransport" },
   { key: "logement", label: "Logement", category: "logement", locked: true, lockedField: "lodging" },
   { key: "nourriture", label: "Nourriture", category: "nourriture", locked: true, lockedField: "food" },
@@ -192,6 +180,7 @@ export function BudgetOverviewTable({
     travelStyle,
     travelerCount,
     lodgingCount,
+    referenceCurrency,
   });
 
   // L'équipement et les coûts verrouillés (logement/nourriture/transport sur place) ne sont
@@ -239,7 +228,6 @@ export function BudgetOverviewTable({
             cities={citiesByEtape.get(etape.id) ?? []}
             expenses={expenses}
             view={view}
-            travelerCount={travelerCount}
             referenceCurrency={referenceCurrency}
             flat={flat}
             lockedByCity={lockedByCity}
@@ -275,7 +263,6 @@ export function BudgetOverviewTable({
                 cities={citiesByEtape.get(etape.id) ?? []}
                 expenses={expenses}
                 view={view}
-                travelerCount={travelerCount}
                 referenceCurrency={referenceCurrency}
                 flat={flat}
                 lockedByCity={lockedByCity}
@@ -442,7 +429,6 @@ function CountrySection({
   cities,
   expenses,
   view,
-  travelerCount,
   referenceCurrency,
   flat,
   lockedByCity,
@@ -453,7 +439,6 @@ function CountrySection({
   cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
   view: "planned" | "actual";
-  travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   lockedByCity: Record<string, CityLockedCosts>;
@@ -487,7 +472,6 @@ function CountrySection({
             key={se.id}
             se={se}
             rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
-            travelerCount={travelerCount}
             referenceCurrency={referenceCurrency}
             flat={flat}
             locked={lockedByCity[se.id]}
@@ -515,7 +499,6 @@ function CountrySectionMobile({
   cities,
   expenses,
   view,
-  travelerCount,
   referenceCurrency,
   flat,
   lockedByCity,
@@ -526,7 +509,6 @@ function CountrySectionMobile({
   cities: VoyageSousEtape[];
   expenses: VoyageAllExpense[];
   view: "planned" | "actual";
-  travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   lockedByCity: Record<string, CityLockedCosts>;
@@ -553,7 +535,6 @@ function CountrySectionMobile({
               key={se.id}
               se={se}
               rows={expenses.filter((e) => e.sous_etape_id === se.id && e.planned)}
-              travelerCount={travelerCount}
               referenceCurrency={referenceCurrency}
               flat={flat}
               locked={lockedByCity[se.id]}
@@ -624,7 +605,6 @@ function NightsStepper({
 function CityPlannedRow({
   se,
   rows,
-  travelerCount,
   referenceCurrency,
   flat,
   locked,
@@ -632,36 +612,15 @@ function CityPlannedRow({
 }: {
   se: VoyageSousEtape;
   rows: VoyageAllExpense[];
-  travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   locked: CityLockedCosts | undefined;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
-  // Calcul synchrone et pur (pas d'appel réseau) : toujours à jour au rendu, sans effet ni état
-  // local à resynchroniser — la même fonction, avec les mêmes entrées, que celle utilisée dans
-  // SousEtapeDialog, pour garantir une valeur identique partout où elle est affichée. La distance
-  // stockée (`se.distance_km`) n'est recalculée qu'à l'ouverture de l'onglet Itinéraire (auto-
-  // guérison) : on la recalcule ici en direct depuis les coordonnées GPS dès qu'elles sont
-  // connues, pour ne jamais afficher 0 juste parce que l'itinéraire n'a pas encore été rouvert.
-  const currentRow = flat.find((r) => r.sousEtape.id === se.id);
-  const nextRow = currentRow ? flat.find((r) => r.globalIndex === currentRow.globalIndex + 1) : undefined;
-  const liveDistanceKm =
-    se.latitude != null && se.longitude != null && nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
-      ? haversineDistanceKm(se.latitude, se.longitude, nextRow.sousEtape.latitude, nextRow.sousEtape.longitude)
-      : se.distance_km;
-  const transportEstimate = estimateTransportLegCost(liveDistanceKm, se.transport_next_mode, travelerCount);
-  const estimateFor: Record<string, number> = {
-    transport: transportEstimate,
-    activites: 0,
-  };
-  // Transport (vers la suivante) et Activités restent modifiables, mais uniquement dans la
-  // fenêtre de modification de la ville (voir SousEtapeDialog) — ici, en lecture seule, pour que
-  // ce tableau reste une vue d'ensemble sans double point de saisie pour le même montant. Si
-  // aucune ligne n'existe encore (ville jamais ouverte), on affiche l'estimation en direct plutôt
-  // que 0, pour rester cohérent avec ce que la fenêtre de modification créerait.
-  const values = computePlannedColumnValues(rows, locked, estimateFor);
-
+  // Toutes les colonnes sauf Activités sont verrouillées (calculées en direct par
+  // useCityLockedCostsMap, voir `locked`) — lecture seule ici, pour que ce tableau reste une vue
+  // d'ensemble sans double point de saisie pour le même montant.
+  const values = computePlannedColumnValues(rows, locked);
   const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
 
   return (
@@ -685,7 +644,6 @@ function CityPlannedRow({
 function CityPlannedCardMobile({
   se,
   rows,
-  travelerCount,
   referenceCurrency,
   flat,
   locked,
@@ -693,20 +651,12 @@ function CityPlannedCardMobile({
 }: {
   se: VoyageSousEtape;
   rows: VoyageAllExpense[];
-  travelerCount: number;
   referenceCurrency: string;
   flat: FlatRow[];
   locked: CityLockedCosts | undefined;
   updateSousEtape: ReturnType<typeof useUpdateSousEtape>;
 }) {
-  const currentRow = flat.find((r) => r.sousEtape.id === se.id);
-  const nextRow = currentRow ? flat.find((r) => r.globalIndex === currentRow.globalIndex + 1) : undefined;
-  const liveDistanceKm =
-    se.latitude != null && se.longitude != null && nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
-      ? haversineDistanceKm(se.latitude, se.longitude, nextRow.sousEtape.latitude, nextRow.sousEtape.longitude)
-      : se.distance_km;
-  const transportEstimate = estimateTransportLegCost(liveDistanceKm, se.transport_next_mode, travelerCount);
-  const values = computePlannedColumnValues(rows, locked, { transport: transportEstimate, activites: 0 });
+  const values = computePlannedColumnValues(rows, locked);
   const total = CITY_COLUMNS.reduce((sum, c) => sum + cityColumnAmount(c, rows, locked), 0);
 
   return (

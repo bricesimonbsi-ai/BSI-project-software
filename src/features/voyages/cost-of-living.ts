@@ -1,5 +1,5 @@
 import type { TravelStyle } from "@/types/database";
-import { estimateTransportLegCost } from "@/features/voyages/budget-estimate";
+import { resolveTransportLegCost } from "@/features/voyages/budget-estimate";
 
 /** Cache en mémoire (par code pays ISO), pour éviter de répéter les appels pendant la session. */
 const priceLevelCache = new Map<string, number | null>();
@@ -102,6 +102,9 @@ export async function estimateCityPlannedCosts(input: {
   nights: number;
   distanceKm: number | null;
   transportMode: string | null;
+  transportNextCost: number | null;
+  transportNextCurrency: string | null;
+  referenceCurrency: string;
   countryCode: string | null;
   style: TravelStyle;
   travelerCount: number;
@@ -115,7 +118,14 @@ export async function estimateCityPlannedCosts(input: {
   const travelers = Math.max(1, input.travelerCount || 1);
   return {
     rates,
-    transport: estimateTransportLegCost(input.distanceKm, input.transportMode, travelers),
+    transport: resolveTransportLegCost({
+      transportNextCost: input.transportNextCost,
+      transportNextCurrency: input.transportNextCurrency,
+      referenceCurrency: input.referenceCurrency,
+      distanceKm: input.distanceKm,
+      mode: input.transportMode,
+      travelerCount: travelers,
+    }),
     lodging: input.nights * rooms * rates.lodging,
     food: input.nights * travelers * rates.food,
     localTransport: input.nights * travelers * rates.localTransport,
