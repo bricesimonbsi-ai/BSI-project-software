@@ -99,45 +99,60 @@ async function fetchCommonsThumbnail(city: string, country: string | null): Prom
 type PixabayResponse = { hits?: { webformatURL?: string; largeImageURL?: string }[] };
 
 /** Recherche Pixabay (clé gratuite requise, cf. en-tête du fichier) — source principale quand
- * configurée : une vraie API de recherche d'images photo, paramétrée sur la catégorie "places"
- * pour privilégier des vues de ville/paysage plutôt que des portraits ou objets. */
+ * configurée : une vraie API de recherche d'images photo. Pas de filtre d'orientation (la carte
+ * recadre déjà en `object-cover`) : un filtre "paysage uniquement" écarterait de bonnes photos
+ * disponibles seulement parce qu'elles sont au format portrait, pour des destinations moins
+ * connues où peu de photos existent de toute façon. Deux tentatives : "ville pays" d'abord (lève
+ * l'ambiguïté des noms de ville qui existent ailleurs), puis juste "ville" si la première ne
+ * remonte rien (le pays peut nuire à la pertinence pour un nom de lieu déjà unique au monde). */
 async function fetchPixabayPhoto(city: string, country: string | null): Promise<string | null> {
   if (!PIXABAY_KEY) return null;
-  const query = country ? `${city} ${country}` : city;
-  const url = `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(
-    query
-  )}&image_type=photo&category=places&orientation=horizontal&safesearch=true&per_page=3`;
-  const data = (await fetchJson(url)) as PixabayResponse | null;
-  const hit = data?.hits?.[0];
-  return hit?.largeImageURL ?? hit?.webformatURL ?? null;
+  async function search(q: string): Promise<string | null> {
+    const url = `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(
+      q
+    )}&image_type=photo&category=places&safesearch=true&per_page=5`;
+    const data = (await fetchJson(url)) as PixabayResponse | null;
+    const hit = data?.hits?.[0];
+    return hit?.largeImageURL ?? hit?.webformatURL ?? null;
+  }
+  const withCountry = country ? await search(`${city} ${country}`) : null;
+  return withCountry ?? (await search(city));
 }
 
 type PexelsResponse = { photos?: { src?: { large?: string; medium?: string } }[] };
 
 /** Recherche Pexels (clé gratuite requise, cf. en-tête du fichier) — l'autre source principale,
  * indépendante de Pixabay (API différente, authentification par en-tête au lieu de paramètre
- * d'URL) pour servir de repli mutuel si l'une des deux est indisponible ou a atteint son quota. */
+ * d'URL) pour servir de repli mutuel si l'une des deux est indisponible ou a atteint son quota.
+ * Même logique "ville pays puis ville seule", pas de filtre d'orientation (voir fetchPixabayPhoto). */
 async function fetchPexelsPhoto(city: string, country: string | null): Promise<string | null> {
   if (!PEXELS_KEY) return null;
-  const query = country ? `${city} ${country}` : city;
-  const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape`;
-  const data = (await fetchJson(url, { headers: { Authorization: PEXELS_KEY } })) as PexelsResponse | null;
-  const photo = data?.photos?.[0];
-  return photo?.src?.large ?? photo?.src?.medium ?? null;
+  async function search(q: string): Promise<string | null> {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=5`;
+    const data = (await fetchJson(url, { headers: { Authorization: PEXELS_KEY as string } })) as PexelsResponse | null;
+    const photo = data?.photos?.[0];
+    return photo?.src?.large ?? photo?.src?.medium ?? null;
+  }
+  const withCountry = country ? await search(`${city} ${country}`) : null;
+  return withCountry ?? (await search(city));
 }
 
 type UnsplashResponse = { results?: { urls?: { regular?: string; small?: string } }[] };
 
 /** Recherche Unsplash (clé gratuite requise, cf. en-tête du fichier) — très bonne couverture pour
  * des photos de ville/paysage, pas besoin d'approbation pour l'accès "Demo" (50 requêtes/heure,
- * largement suffisant pour un usage perso). */
+ * largement suffisant pour un usage perso). Même logique "ville pays puis ville seule", pas de
+ * filtre d'orientation (voir fetchPixabayPhoto). */
 async function fetchUnsplashPhoto(city: string, country: string | null): Promise<string | null> {
   if (!UNSPLASH_KEY) return null;
-  const query = country ? `${city} ${country}` : city;
-  const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape&client_id=${UNSPLASH_KEY}`;
-  const data = (await fetchJson(url)) as UnsplashResponse | null;
-  const photo = data?.results?.[0];
-  return photo?.urls?.regular ?? photo?.urls?.small ?? null;
+  async function search(q: string): Promise<string | null> {
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=5&client_id=${UNSPLASH_KEY}`;
+    const data = (await fetchJson(url)) as UnsplashResponse | null;
+    const photo = data?.results?.[0];
+    return photo?.urls?.regular ?? photo?.urls?.small ?? null;
+  }
+  const withCountry = country ? await search(`${city} ${country}`) : null;
+  return withCountry ?? (await search(city));
 }
 
 async function fetchCityPhoto(city: string, country: string | null): Promise<string | null> {
@@ -161,11 +176,11 @@ async function fetchCityPhoto(city: string, country: string | null): Promise<str
  * query-client.tsx) : avec un `staleTime: Infinity` précédent, un premier résultat raté (`null`,
  * dû aux versions antérieures buguées de ce fichier) restait rejoué indéfiniment depuis ce cache
  * persistant, y compris après correction du code et redéploiement — la clé est donc versionnée
- * ("v6") pour forcer un nouveau fetch chez tout le monde à chaque évolution de ce fichier, et le
+ * ("v7") pour forcer un nouveau fetch chez tout le monde à chaque évolution de ce fichier, et le
  * staleTime n'est plus infini pour qu'un éventuel futur résultat raté s'auto-corrige après un jour. */
 export function useCityPhoto(city: string | null, country: string | null = null) {
   return useQuery({
-    queryKey: ["city-photo-v6", city, country],
+    queryKey: ["city-photo-v7", city, country],
     enabled: !!city,
     staleTime: 24 * 60 * 60 * 1000,
     queryFn: () => fetchCityPhoto(city as string, country),
