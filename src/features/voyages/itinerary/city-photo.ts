@@ -3,12 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 /** Photo représentative d'une ville.
  * Après plusieurs itérations où l'extraction "gratuite" depuis Wikipédia/Commons (sans clé) s'est
  * montrée peu fiable en production, même pour des villes abondamment illustrées (Rio, Bangkok...),
- * les sources principales sont désormais deux vraies API de recherche d'images à clé gratuite —
- * Pixabay et Pexels (cf. VITE_PIXABAY_API_KEY/VITE_PEXELS_API_KEY plus bas, même logique que
- * VITE_TMDB_API_KEY/VITE_MAPTILER_API_KEY ailleurs dans l'app) — bien plus robustes qu'un "page
- * image scraping". Les deux sont indépendantes et optionnelles : configurer l'une des deux suffit,
- * les configurer toutes les deux donne un repli mutuel si l'une est en panne ou a atteint son
- * quota. Sans aucune clé, on retombe sur la chaîne Wikipédia/Commons (sans clé, best-effort) :
+ * les sources principales sont désormais trois vraies API de recherche d'images à clé gratuite —
+ * Unsplash, Pixabay et Pexels (cf. VITE_UNSPLASH_ACCESS_KEY/VITE_PIXABAY_API_KEY/VITE_PEXELS_API_KEY
+ * plus bas, même logique que VITE_TMDB_API_KEY/VITE_MAPTILER_API_KEY ailleurs dans l'app) — bien
+ * plus robustes qu'un "page image scraping". Les trois sont indépendantes et optionnelles :
+ * configurer UNE SEULE des trois suffit (Pexels a mis en pause la délivrance de nouvelles clés au
+ * moment d'écrire ceci — Unsplash ou Pixabay restent accessibles). En configurer plusieurs donne
+ * un repli mutuel si l'une est en panne ou a atteint son quota. Sans aucune clé, on retombe sur la
+ * chaîne Wikipédia/Commons (sans clé, best-effort) :
  *  1/2. `action=query&prop=pageimages` sur Wikipédia FR puis EN, titre exact.
  *  3/4. Recherche plein texte "<ville> <pays>" (`generator=search`) sur Wikipédia FR puis EN —
  *     désambiguïse par le pays (ex. Valladolid au Yucatán vs. en Espagne).
@@ -18,6 +20,7 @@ import { useQuery } from "@tanstack/react-query";
  * utiles pour diagnostiquer si le problème persiste).
  */
 
+const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY as string | undefined;
 const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY as string | undefined;
 const PEXELS_KEY = import.meta.env.VITE_PEXELS_API_KEY as string | undefined;
 
@@ -123,8 +126,23 @@ async function fetchPexelsPhoto(city: string, country: string | null): Promise<s
   return photo?.src?.large ?? photo?.src?.medium ?? null;
 }
 
+type UnsplashResponse = { results?: { urls?: { regular?: string; small?: string } }[] };
+
+/** Recherche Unsplash (clé gratuite requise, cf. en-tête du fichier) — très bonne couverture pour
+ * des photos de ville/paysage, pas besoin d'approbation pour l'accès "Demo" (50 requêtes/heure,
+ * largement suffisant pour un usage perso). */
+async function fetchUnsplashPhoto(city: string, country: string | null): Promise<string | null> {
+  if (!UNSPLASH_KEY) return null;
+  const query = country ? `${city} ${country}` : city;
+  const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape&client_id=${UNSPLASH_KEY}`;
+  const data = (await fetchJson(url)) as UnsplashResponse | null;
+  const photo = data?.results?.[0];
+  return photo?.urls?.regular ?? photo?.urls?.small ?? null;
+}
+
 async function fetchCityPhoto(city: string, country: string | null): Promise<string | null> {
-  const [pixabay, pexels, fr, en, frSearch, enSearch, commons] = await Promise.all([
+  const [unsplash, pixabay, pexels, fr, en, frSearch, enSearch, commons] = await Promise.all([
+    fetchUnsplashPhoto(city, country),
     fetchPixabayPhoto(city, country),
     fetchPexelsPhoto(city, country),
     fetchWikipediaPageImage(city, "fr"),
@@ -133,7 +151,7 @@ async function fetchCityPhoto(city: string, country: string | null): Promise<str
     fetchWikipediaSearchImage(city, country, "en"),
     fetchCommonsThumbnail(city, country),
   ]);
-  return pixabay ?? pexels ?? fr ?? en ?? frSearch ?? enSearch ?? commons ?? null;
+  return unsplash ?? pixabay ?? pexels ?? fr ?? en ?? frSearch ?? enSearch ?? commons ?? null;
 }
 
 /** `city` à null désactive la requête (ex. une photo du Journal existe déjà pour cette ville,
@@ -143,11 +161,11 @@ async function fetchCityPhoto(city: string, country: string | null): Promise<str
  * query-client.tsx) : avec un `staleTime: Infinity` précédent, un premier résultat raté (`null`,
  * dû aux versions antérieures buguées de ce fichier) restait rejoué indéfiniment depuis ce cache
  * persistant, y compris après correction du code et redéploiement — la clé est donc versionnée
- * ("v5") pour forcer un nouveau fetch chez tout le monde à chaque évolution de ce fichier, et le
+ * ("v6") pour forcer un nouveau fetch chez tout le monde à chaque évolution de ce fichier, et le
  * staleTime n'est plus infini pour qu'un éventuel futur résultat raté s'auto-corrige après un jour. */
 export function useCityPhoto(city: string | null, country: string | null = null) {
   return useQuery({
-    queryKey: ["city-photo-v5", city, country],
+    queryKey: ["city-photo-v6", city, country],
     enabled: !!city,
     staleTime: 24 * 60 * 60 * 1000,
     queryFn: () => fetchCityPhoto(city as string, country),
