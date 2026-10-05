@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -125,6 +125,26 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Sort du conteneur centré de la page pour occuper toute la largeur de l'écran, quel que soit
+  // son padding — la vue Carte est pensée comme un plein écran immersif. Le classique "left-1/2
+  // w-screen -translate-x-1/2" (pourcentages CSS) dépend du conteneur englobant pour la résolution
+  // de `left: 50%`, qui n'est PAS toujours le vrai viewport selon la profondeur d'imbrication de la
+  // page (observé : carte décalée, bord droit tronqué sur certaines largeurs de fenêtre). On mesure
+  // donc directement la position réelle de l'élément via getBoundingClientRect (toujours relative
+  // au viewport, sans ambiguïté) et on applique une largeur/marge en pixels, recalculées au resize.
+  const breakoutRef = useRef<HTMLDivElement>(null);
+  const [bleed, setBleed] = useState<{ width: number; marginLeft: number } | null>(null);
+  useLayoutEffect(() => {
+    function measure() {
+      if (!breakoutRef.current) return;
+      const rect = breakoutRef.current.getBoundingClientRect();
+      setBleed({ width: window.innerWidth, marginLeft: -rect.left });
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
   useEffect(() => {
     function onChange() {
       setIsFullscreen(document.fullscreenElement === fullscreenRef.current);
@@ -202,10 +222,19 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
   const activeStep = flat[clampedIndex];
 
   // Fait défiler le bandeau jusqu'à la carte active quand la sélection change depuis la carte
-  // (clic sur un point) — pas seulement quand on clique une carte du bandeau lui-même.
+  // (clic sur un point) — pas seulement quand on clique une carte du bandeau lui-même. Alignement
+  // "start" (pas "center") pour la toute première étape : la centrer demanderait un scroll négatif
+  // impossible, et le défilement par ancrage (scroll-snap) du bandeau peut alors entrer en
+  // conflit avec cet appel et caler sur une autre carte que la première au chargement. `flat.length`
+  // dans les dépendances : au premier rendu, `flat` peut être encore vide (données pas chargées),
+  // l'effet doit se redéclencher une fois les vraies cartes montées dans le DOM.
   useEffect(() => {
-    cardRefs.current[clampedIndex]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [clampedIndex]);
+    cardRefs.current[clampedIndex]?.scrollIntoView({
+      behavior: "smooth",
+      inline: clampedIndex === 0 ? "start" : "center",
+      block: "nearest",
+    });
+  }, [clampedIndex, flat.length]);
 
   if (points.length === 0) {
     return (
@@ -220,8 +249,11 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
     // largeur de l'écran — la vue Carte est pensée comme un plein écran immersif, pas une vignette
     // au milieu d'une page qui défile. Hauteur en dvh (pas vh) pour la vraie hauteur visible sur
     // mobile (la barre d'adresse variable fausse vh) ; le bandeau d'étapes en bas est volontairement
-    // compact pour laisser le plus de place possible à la carte elle-même.
-    <div className="relative left-1/2 w-screen -translate-x-1/2">
+    // compact pour laisser le plus de place possible à la carte elle-même. `bleed` (mesuré via
+    // getBoundingClientRect, voir plus haut) — tant qu'il n'est pas encore mesuré (tout premier
+    // rendu), pas de style de largeur/marge : le conteneur reste à sa largeur normale un instant
+    // plutôt que de déborder de façon incorrecte.
+    <div ref={breakoutRef} style={bleed ? { width: bleed.width, marginLeft: bleed.marginLeft } : undefined}>
       <div
         ref={fullscreenRef}
         className={cn("relative isolate overflow-hidden bg-background", isFullscreen ? "h-screen" : "h-[85dvh] sm:h-[90dvh]")}
