@@ -19,14 +19,23 @@ function normalizeForSearch(str: string): string {
     .trim();
 }
 
-/** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse
- * ET aux accents, ex. "BRESIL" ou "PEROU" saisis/importés sans accent doivent quand même
- * retrouver "Brésil"/"Pérou" — sans ça, le drapeau de ces pays ne s'affichait jamais nulle part
- * dans l'app, silencieusement, pour toute valeur de country_region qui ne reprenait pas l'accent
- * exact de la référence). */
+/** Comme normalizeForSearch, en retirant en plus tout ce qui n'est pas une lettre/chiffre
+ * (espaces, tirets, apostrophes) — uniquement pour l'égalité stricte de findCountryByName, pas
+ * pour la recherche incrémentale du picker (qui reste sur normalizeForSearch, inchangée). Sans ça,
+ * "VIETNAM" (import CSV en un mot) ne retrouvait pas "Viêt Nam" (deux mots dans la référence), ni
+ * "NOUVELLEZELANDE" "Nouvelle-Zélande" — l'écart n'est pas que l'accent, mais aussi la ponctuation. */
+function normalizeForMatch(str: string): string {
+  return normalizeForSearch(str).replace(/[^a-z0-9]/g, "");
+}
+
+/** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse,
+ * aux accents et à la ponctuation, ex. "BRESIL", "PEROU" ou "VIETNAM" saisis/importés sans accent
+ * ni espace doivent quand même retrouver "Brésil"/"Pérou"/"Viêt Nam" — sans ça, le drapeau de ces
+ * pays ne s'affichait jamais nulle part dans l'app, silencieusement, pour toute valeur de
+ * country_region qui ne reprenait pas exactement l'orthographe de la référence). */
 export function findCountryByName(name: string) {
-  const q = normalizeForSearch(name);
-  return COUNTRIES.find((c) => normalizeForSearch(c.name) === q);
+  const q = normalizeForMatch(name);
+  return COUNTRIES.find((c) => normalizeForMatch(c.name) === q);
 }
 
 /** Emoji drapeau du pays s'il est reconnu dans la référence statique, sinon null. */
