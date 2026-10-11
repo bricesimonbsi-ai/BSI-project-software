@@ -23,6 +23,8 @@ import {
   CalendarDays,
   BedDouble,
   Sparkles,
+  CloudSun,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEtapes, useReorderEtapes, useDeleteEtape } from "@/features/voyages/use-etapes";
@@ -53,6 +55,8 @@ import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
 import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
 import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
+import { estimateClimateByMonth } from "@/features/voyages/itinerary/climate-suggest";
+import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate } from "@/lib/utils";
@@ -104,6 +108,7 @@ export function ItineraryView({
 }) {
   const [tab, setTab] = useState<Tab>("dates");
   const [creatingCountryAt, setCreatingCountryAt] = useState<number | null>(null);
+  const [suggestingAllClimate, setSuggestingAllClimate] = useState(false);
   const { data: etapes } = useEtapes(voyageId);
   const { data: allSousEtapes } = useVoyageSousEtapes(voyageId);
   const reorderEtapes = useReorderEtapes(voyageId);
@@ -203,6 +208,46 @@ export function ItineraryView({
     }
   }
 
+  /**
+   * Remplit le climat de toutes les villes d'un coup (historique météo réel via Open-Meteo,
+   * gratuit, sans clé — même source que le bouton par ville dans SousEtapeDialog) : un import CSV
+   * ne porte pas de données climatiques, donc chaque ville importée retombe sur le repli "favorable
+   * toute l'année" (tableau climatique uniforme, peu utile) tant qu'elle n'a pas été ouverte
+   * manuellement une à une. Par lots de 5 en parallèle pour rester raisonnable sur une API gratuite
+   * sans clé, sans bloquer tout le lot si une ville échoue (coordonnées manquantes, etc.).
+   */
+  async function handleSuggestAllClimate() {
+    const targets = flat.filter((r) => r.sousEtape.latitude != null && r.sousEtape.longitude != null);
+    if (targets.length === 0) return;
+    setSuggestingAllClimate(true);
+    let success = 0;
+    let failed = 0;
+    const BATCH = 5;
+    try {
+      for (let i = 0; i < targets.length; i += BATCH) {
+        const batch = targets.slice(i, i + BATCH);
+        await Promise.all(
+          batch.map(async (row) => {
+            try {
+              const ratings = await estimateClimateByMonth(row.sousEtape.latitude as number, row.sousEtape.longitude as number);
+              await updateAnySousEtape.mutateAsync({ id: row.sousEtape.id, climate_by_month: ratings });
+              success++;
+            } catch {
+              failed++;
+            }
+          })
+        );
+      }
+    } finally {
+      setSuggestingAllClimate(false);
+      toast({
+        title: "Climat suggéré",
+        description: `${success} ville${success > 1 ? "s" : ""} mise${success > 1 ? "s" : ""} à jour${failed > 0 ? `, ${failed} échec${failed > 1 ? "s" : ""}` : ""}.`,
+        variant: failed > 0 && success === 0 ? "destructive" : undefined,
+      });
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -218,6 +263,12 @@ export function ItineraryView({
           <ItineraryExportButton flat={flat} />
           <ItineraryImportButton voyageId={voyageId} />
           <ItineraryTemplateButton />
+          {tab === "climat" && flat.length > 0 && (
+            <Button size="sm" variant="outline" onClick={handleSuggestAllClimate} disabled={suggestingAllClimate}>
+              {suggestingAllClimate ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CloudSun className="mr-1.5 h-4 w-4" />}
+              Suggérer le climat (toutes les villes)
+            </Button>
+          )}
           {(tab === "climat" || tab === "dates") && (
             <Button
               size="sm"
