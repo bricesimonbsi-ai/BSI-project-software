@@ -19,10 +19,14 @@ function normalizeForSearch(str: string): string {
     .trim();
 }
 
-/** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse). */
+/** Retrouve un pays de la référence statique par son nom (recherche exacte insensible à la casse
+ * ET aux accents, ex. "BRESIL" ou "PEROU" saisis/importés sans accent doivent quand même
+ * retrouver "Brésil"/"Pérou" — sans ça, le drapeau de ces pays ne s'affichait jamais nulle part
+ * dans l'app, silencieusement, pour toute valeur de country_region qui ne reprenait pas l'accent
+ * exact de la référence). */
 export function findCountryByName(name: string) {
-  const q = name.trim().toLowerCase();
-  return COUNTRIES.find((c) => c.name.toLowerCase() === q);
+  const q = normalizeForSearch(name);
+  return COUNTRIES.find((c) => normalizeForSearch(c.name) === q);
 }
 
 /** Emoji drapeau du pays s'il est reconnu dans la référence statique, sinon null. */
