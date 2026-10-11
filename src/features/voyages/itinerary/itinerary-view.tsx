@@ -10,7 +10,20 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Stamp, Syringe, IdCard, Plus, ChevronRight, ArrowDownRight, Trash2 } from "lucide-react";
+import {
+  GripVertical,
+  Pencil,
+  Stamp,
+  Syringe,
+  IdCard,
+  Plus,
+  ChevronRight,
+  ArrowDownRight,
+  Trash2,
+  CalendarDays,
+  BedDouble,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEtapes, useReorderEtapes, useDeleteEtape } from "@/features/voyages/use-etapes";
 import {
@@ -26,6 +39,7 @@ import {
   buildReorderUpdates,
   recomputeDistances,
   getPlannedMonthRangePct,
+  estimateCo2Kg,
   CLIMATE_COLOR_CLASS,
   MONTH_LABELS,
   type FlatRow,
@@ -37,6 +51,8 @@ import { CarbonDashboard } from "@/features/voyages/itinerary/carbon-dashboard";
 import { ItineraryExportButton, ItineraryImportButton, ItineraryTemplateButton } from "@/features/voyages/itinerary/itinerary-csv-controls";
 import { EtapeDialog } from "@/features/voyages/etape-dialog";
 import { SousEtapeDialog } from "@/features/voyages/sous-etape-dialog";
+import { useJournalPosts, journalPhotoUrl } from "@/features/voyages/journal/use-journal";
+import { useCityPhoto } from "@/features/voyages/itinerary/city-photo";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate } from "@/lib/utils";
@@ -96,6 +112,20 @@ export function ItineraryView({
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
+
+  // Réutilise les photos déjà publiées dans le Journal de voyage pour cette ville (même logique
+  // que la vue Carte, cf. map-view.tsx) — une vraie photo du voyageur plutôt qu'un stock générique
+  // quand elle existe, calculée une seule fois ici plutôt qu'une requête par carte.
+  const { data: journalPosts } = useJournalPosts(voyageId);
+  const photoBySousEtape = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of journalPosts ?? []) {
+      if (!p.sous_etape_id || map.has(p.sous_etape_id)) continue;
+      const photo = p.voyage_journal_photos[0];
+      if (photo) map.set(p.sous_etape_id, journalPhotoUrl(photo.storage_path));
+    }
+    return map;
+  }, [journalPosts]);
 
   const sousEtapesByEtape = useMemo(() => {
     const map = new Map<string, VoyageSousEtape[]>();
@@ -211,7 +241,47 @@ export function ItineraryView({
       {tab === "carte" && <MapView groups={groups} flat={flat} voyageId={voyageId} />}
       {tab === "carbone" && <CarbonDashboard groups={groups} />}
 
-      {(tab === "climat" || tab === "dates") && (
+      {tab === "dates" && (
+        <div className="space-y-3">
+          {flat.length === 0 && groups.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setCreatingCountryAt(0)}
+              className="w-full rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:text-foreground"
+            >
+              + Ajouter un pays
+            </button>
+          )}
+          <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
+            <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
+              {groups.map((group, colorIndex) => (
+                <CountryCardMobile
+                  key={group.etape.id}
+                  group={group}
+                  tab={tab}
+                  colorIndex={colorIndex}
+                  photoBySousEtape={photoBySousEtape}
+                  projectId={projectId}
+                  onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
+                  allFlat={flat}
+                  travelStyle={travelStyle}
+                  travelerCount={travelerCount}
+                  lodgingCount={lodgingCount}
+                  referenceCurrency={referenceCurrency}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+          {flat.length > 0 && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-bold">
+              <span>{flat.length} étapes</span>
+              <span>{flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0)} nuits</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "climat" && (
         <div className="space-y-3 sm:hidden">
           {flat.length === 0 && groups.length === 0 && (
             <button
@@ -224,11 +294,13 @@ export function ItineraryView({
           )}
           <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
             <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
-              {groups.map((group) => (
+              {groups.map((group, colorIndex) => (
                 <CountryCardMobile
                   key={group.etape.id}
                   group={group}
                   tab={tab}
+                  colorIndex={colorIndex}
+                  photoBySousEtape={photoBySousEtape}
                   projectId={projectId}
                   onInsertCountryAfter={() => setCreatingCountryAt(group.etape.order_index + 1)}
                   allFlat={flat}
@@ -240,50 +312,35 @@ export function ItineraryView({
               ))}
             </SortableContext>
           </DndContext>
-          {tab === "dates" && flat.length > 0 && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-bold">
-              <span>{flat.length} étapes</span>
-              <span>{flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0)} nuits</span>
-            </div>
-          )}
         </div>
       )}
 
-      {(tab === "climat" || tab === "dates") && (
+      {tab === "climat" && (
         <div className="relative hidden overflow-x-auto rounded-md border border-border pl-9 sm:block">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="w-14 px-3 py-3 text-center">Étape</th>
                 <th className="px-3 py-3">Destination</th>
-                {tab === "dates" && (
-                  <>
-                    <th className="px-3 py-3">Du</th>
-                    <th className="px-3 py-3">Au</th>
-                    <th className="px-3 py-3">Nuits</th>
-                  </>
-                )}
-                {tab === "climat" && <th className="px-3 py-3">Climat</th>}
+                <th className="px-3 py-3">Climat</th>
                 <th className="w-10 px-2 py-3"></th>
               </tr>
-              {tab === "climat" && (
-                <tr className="border-b border-border">
-                  <td colSpan={2}></td>
-                  <td className="px-3 py-2">
-                    <div className="flex">
-                      {MONTH_LABELS.map((m, i) => (
-                        <span key={i} className="flex-1 text-center text-[0.7rem] font-semibold text-muted-foreground">
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td></td>
-                </tr>
-              )}
+              <tr className="border-b border-border">
+                <td colSpan={2}></td>
+                <td className="px-3 py-2">
+                  <div className="flex">
+                    {MONTH_LABELS.map((m, i) => (
+                      <span key={i} className="flex-1 text-center text-[0.7rem] font-semibold text-muted-foreground">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td></td>
+              </tr>
             </thead>
             <tbody>
-              <AddButton onClick={() => setCreatingCountryAt(0)} colSpan={tab === "dates" ? 6 : 4} />
+              <AddButton onClick={() => setCreatingCountryAt(0)} colSpan={4} />
               <DndContext sensors={countrySensors} collisionDetection={closestCenter} onDragEnd={handleCountryDragEnd}>
                 <SortableContext items={groups.map((g) => g.etape.id)} strategy={verticalListSortingStrategy}>
                   {groups.map((group, colorIndex) => (
@@ -304,18 +361,6 @@ export function ItineraryView({
                 </SortableContext>
               </DndContext>
             </tbody>
-            {tab === "dates" && flat.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-border bg-muted/50 font-bold">
-                  <td className="px-3 py-3 text-center">{flat.length}</td>
-                  <td className="px-3 py-3">Total</td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3">{flat.reduce((sum, r) => sum + (r.sousEtape.duration_days ?? 0), 0)} nuits</td>
-                  <td className="px-2 py-3"></td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       )}
@@ -783,6 +828,8 @@ function CityRow({
 function CountryCardMobile({
   group,
   tab,
+  colorIndex,
+  photoBySousEtape,
   referenceCurrency,
   projectId,
   onInsertCountryAfter,
@@ -793,6 +840,8 @@ function CountryCardMobile({
 }: {
   group: CountryGroup;
   tab: Tab;
+  colorIndex: number;
+  photoBySousEtape: Map<string, string>;
   referenceCurrency: string;
   projectId: string;
   onInsertCountryAfter: () => void;
@@ -926,7 +975,32 @@ function CountryCardMobile({
         </button>
       )}
 
-      {!collapsed && group.rows.length > 0 && (
+      {!collapsed && group.rows.length > 0 && tab === "dates" && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-3 p-3">
+              {group.rows.map((row) => (
+                <CityTimelineCard
+                  key={row.sousEtape.id}
+                  row={row}
+                  colorIndex={colorIndex}
+                  journalPhotoUrl={photoBySousEtape.get(row.sousEtape.id)}
+                  referenceCurrency={referenceCurrency}
+                  projectId={projectId}
+                  etapeId={group.etape.id}
+                  allFlat={allFlat}
+                  onInsertAfter={() => setCreatingCityAt(row.sousEtape.order_index + 1)}
+                  travelStyle={travelStyle}
+                  travelerCount={travelerCount}
+                  lodgingCount={lodgingCount}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      {!collapsed && group.rows.length > 0 && tab === "climat" && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={group.rows.map((r) => r.sousEtape.id)} strategy={verticalListSortingStrategy}>
             <div className="divide-y divide-border">
@@ -982,6 +1056,204 @@ function CountryCardMobile({
         travelerCount={travelerCount}
         lodgingCount={lodgingCount}
       />
+    </div>
+  );
+}
+
+/**
+ * Carte "timeline" d'une ville (onglet Mode dates, tous écrans) — photo (priorité au Journal de
+ * voyage, sinon une source externe via useCityPhoto, dégradé en dernier recours, cf. StepCard dans
+ * map-view.tsx qui partage ce même principe), avec un indicateur pays double : le drapeau + nom du
+ * pays en médaillon sur la photo (lisible même en défilement rapide, sans avoir à lire le bandeau
+ * d'en-tête du pays plus haut) ET une teinte/bordure de couleur reprise de COUNTRY_COLOR_CLASSES
+ * (même palette cyclique que le tableau desktop), pour repérer un changement de pays d'un coup
+ * d'œil même sans lire le texte. Remplace l'ancienne vue dense CityCardMobile pour cet onglet.
+ */
+function CityTimelineCard({
+  row,
+  colorIndex,
+  journalPhotoUrl: journalPhoto,
+  referenceCurrency,
+  projectId,
+  etapeId,
+  allFlat,
+  onInsertAfter,
+  travelStyle,
+  travelerCount,
+  lodgingCount,
+}: {
+  row: FlatRow;
+  colorIndex: number;
+  journalPhotoUrl: string | undefined;
+  referenceCurrency: string;
+  projectId: string;
+  etapeId: string;
+  allFlat: FlatRow[];
+  onInsertAfter: () => void;
+  travelStyle: TravelStyle;
+  travelerCount: number;
+  lodgingCount: number;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.sousEtape.id });
+  const updateSousEtape = useUpdateSousEtape(etapeId);
+  const deleteSousEtape = useDeleteSousEtape(etapeId);
+  const se = row.sousEtape;
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  const previousRow = allFlat.find((r) => r.globalIndex === row.globalIndex - 1);
+  const previousPoint =
+    previousRow?.sousEtape.latitude != null && previousRow?.sousEtape.longitude != null
+      ? { lat: previousRow.sousEtape.latitude, lng: previousRow.sousEtape.longitude }
+      : null;
+  const nextRow = allFlat.find((r) => r.globalIndex === row.globalIndex + 1);
+  const nextPoint =
+    nextRow?.sousEtape.latitude != null && nextRow?.sousEtape.longitude != null
+      ? { lat: nextRow.sousEtape.latitude, lng: nextRow.sousEtape.longitude }
+      : null;
+
+  const { data: fallbackPhoto } = useCityPhoto(journalPhoto ? null : se.city, row.etape.country_region);
+  const rawPhotoUrl = journalPhoto ?? fallbackPhoto ?? undefined;
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => setImgFailed(false), [rawPhotoUrl]);
+  const photoUrl = imgFailed ? undefined : rawPhotoUrl;
+
+  async function handleNightsChange(delta: number) {
+    const newDuration = Math.max(0, (se.duration_days ?? 0) + delta);
+    const updates = cascadeDatesFrom(allFlat, se.id, { duration_days: newDuration });
+    for (const u of updates) {
+      await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+    }
+  }
+
+  async function handleFirstStartDateChange(value: string) {
+    const updates = cascadeDatesFrom(allFlat, se.id, { start_date: value });
+    for (const u of updates) {
+      await updateSousEtape.mutateAsync({ id: u.id, start_date: u.start_date, end_date: u.end_date, duration_days: u.duration_days });
+    }
+  }
+
+  function handleDeleteCity() {
+    if (!window.confirm(`Supprimer la ville "${se.city}" ? Cette action est irréversible.`)) return;
+    deleteSousEtape.mutate(se.id);
+  }
+
+  // Connecteur vers l'étape suivante : les champs "incoming*" du FlatRow SUIVANT décrivent le
+  // trajet qui y mène depuis CETTE ville (même convention que map-view.tsx/ConnectorCell).
+  const nextIncomingEmoji = nextRow ? transportEmoji(nextRow.incomingMode) : null;
+  const co2 = nextRow ? estimateCo2Kg(nextRow.incomingDistanceKm, nextRow.incomingMode) : 0;
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "opacity-50" : undefined}>
+      <div className="flex gap-2">
+        <div className="flex w-6 flex-shrink-0 flex-col items-center gap-1.5 pt-2">
+          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">
+            {row.globalIndex}
+          </span>
+          <button {...attributes} {...listeners} className="touch-none cursor-grab text-muted-foreground" title="Glisser pour réordonner">
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className={cn("flex-1 overflow-hidden rounded-xl border", COUNTRY_COLOR_CLASSES[colorIndex % COUNTRY_COLOR_CLASSES.length])}>
+          <div
+            className="relative h-28 w-full"
+            style={{ background: photoUrl ? undefined : "linear-gradient(135deg, hsl(199 55% 30%), hsl(250 45% 22%))" }}
+          >
+            {photoUrl && (
+              <img src={photoUrl} alt="" onError={() => setImgFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+            )}
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              <CountryFlag name={row.etape.country_region} className="flex-shrink-0 shadow-sm" />
+              {row.etape.country_region}
+            </span>
+          </div>
+
+          <div className="space-y-2 bg-card p-3">
+            <div className="flex items-center gap-1.5">
+              <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">{se.city}</h3>
+              <SousEtapeDialog
+                etapeId={etapeId}
+                etape={row.etape}
+                nextOrder={0}
+                existing={se}
+                previousPoint={previousPoint}
+                previousRowId={previousRow?.sousEtape.id}
+                nextPoint={nextPoint}
+                isFirstOverall={row.globalIndex === 1}
+                projectId={projectId}
+                referenceCurrency={referenceCurrency}
+                travelStyle={travelStyle}
+                travelerCount={travelerCount}
+                lodgingCount={lodgingCount}
+                trigger={<Pencil className="h-3.5 w-3.5 flex-shrink-0 cursor-pointer text-muted-foreground" />}
+              />
+              <button type="button" onClick={handleDeleteCity} title="Supprimer cette ville" className="flex-shrink-0 text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3 w-3 flex-shrink-0" />
+                {row.globalIndex === 1 ? (
+                  <input
+                    type="date"
+                    defaultValue={se.start_date ?? ""}
+                    onBlur={(e) => e.target.value && handleFirstStartDateChange(e.target.value)}
+                    className="rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
+                  />
+                ) : (
+                  <span title="Calculée automatiquement (= fin de la ville précédente)">{formatDate(se.start_date)}</span>
+                )}
+                → {formatDate(se.end_date)}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5">
+                <button
+                  onClick={() => handleNightsChange(-1)}
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-foreground"
+                >
+                  −
+                </button>
+                <span className="min-w-[3rem] text-center text-xs font-semibold text-foreground">{se.duration_days ?? 0} nuits</span>
+                <button
+                  onClick={() => handleNightsChange(1)}
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-foreground"
+                >
+                  +
+                </button>
+              </span>
+            </div>
+
+            {se.lodging && (
+              <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                <BedDouble className="h-3 w-3 flex-shrink-0" /> {se.lodging}
+              </p>
+            )}
+            {se.activities && (
+              <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                <Sparkles className="h-3 w-3 flex-shrink-0" /> {se.activities}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {nextRow && (
+        <div className="flex items-center gap-2 py-1.5 pl-8">
+          <div className="h-5 w-px bg-border" />
+          {(nextIncomingEmoji || nextRow.incomingDistanceKm != null) && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[0.65rem] text-muted-foreground">
+              {nextIncomingEmoji && <span className="leading-none">{nextIncomingEmoji}</span>}
+              {nextRow.incomingDistanceKm != null && `${Math.round(nextRow.incomingDistanceKm).toLocaleString("fr-FR")} km`}
+              {co2 > 0 && <span className="text-emerald-600 dark:text-emerald-400">{co2} kg CO₂</span>}
+            </span>
+          )}
+        </div>
+      )}
+
+      <button type="button" onClick={onInsertAfter} className="ml-8 mt-1 text-[0.65rem] text-muted-foreground hover:text-foreground hover:underline">
+        + Ajouter une ville ici
+      </button>
     </div>
   );
 }
