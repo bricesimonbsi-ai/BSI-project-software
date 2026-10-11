@@ -106,6 +106,19 @@ function FlyToStep({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
+/** Cadre toute l'enveloppe des étapes au montage et à chaque bascule Pays/Villes — sans ça,
+ * `zoom={2}` (initial, fixe) resterait appliqué tel quel même pour un voyage régional dont les
+ * étapes tiennent largement dans un zoom bien plus serré, avec `maxBounds` qui empêcherait alors
+ * de dézoomer pour voir le vide autour sans jamais recadrer correctement tout seul. */
+function FitBoundsOnLevelChange({ bounds, level }: { bounds: L.LatLngBounds; level: "pays" | "villes" }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds, { padding: [24, 24] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
+  return null;
+}
+
 /** Leaflet calcule sa taille au montage et ne la recalcule jamais tout seul si son conteneur
  * change de taille par un autre moyen que son propre resize (ex. passage en plein écran) — sans
  * ça la carte resterait affichée à sa petite taille d'origine, coupée, le temps d'un pan/zoom. */
@@ -218,6 +231,15 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
 
   const points = level === "pays" ? countryPoints : cityPoints;
   const center = points.length > 0 ? ([points[0].lat, points[0].lng] as [number, number]) : ([20, -60] as [number, number]);
+  // Sans limite, Leaflet permet de glisser la carte à l'infini (les tuiles se répètent sans fin
+  // horizontalement) — on peut vite perdre ses étapes de vue sans aucun repère pour revenir.
+  // `maxBounds` fige le glisser-déposer dans l'enveloppe des étapes (+ marge confortable pour
+  // naviguer autour), `maxBoundsViscosity: 1` empêche totalement de sortir de cette zone plutôt
+  // que de juste "freiner" (comportement par défaut, qui laisse encore sortir brièvement).
+  const maxBounds = useMemo(() => {
+    if (points.length === 0) return undefined;
+    return L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])).pad(0.5);
+  }, [points]);
   const clampedIndex = Math.min(activeIndex, Math.max(0, flat.length - 1));
   const activeStep = flat[clampedIndex];
 
@@ -287,9 +309,17 @@ export function MapView({ groups, flat, voyageId }: { groups: CountryGroup[]; fl
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         </div>
-        <MapContainer center={center} zoom={2} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+        <MapContainer
+          center={center}
+          zoom={2}
+          scrollWheelZoom
+          maxBounds={maxBounds}
+          maxBoundsViscosity={1}
+          style={{ height: "100%", width: "100%" }}
+        >
           <TileLayer key={TILE_URL} attribution={TILE_ATTRIBUTION} url={TILE_URL} detectRetina={!!MAPTILER_KEY} maxZoom={20} />
           <InvalidateSizeOnChange trigger={isFullscreen} />
+          {maxBounds && <FitBoundsOnLevelChange bounds={maxBounds} level={level} />}
           {level === "villes" && activeStep?.sousEtape.latitude != null && activeStep.sousEtape.longitude != null && (
             <FlyToStep lat={activeStep.sousEtape.latitude} lng={activeStep.sousEtape.longitude} />
           )}
