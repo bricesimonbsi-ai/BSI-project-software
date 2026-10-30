@@ -655,7 +655,6 @@ export type VoyagePersonExpenseSummary = {
   total_actual: number | null;
 };
 
-export type GiftOccasion = "anniversaire" | "noel" | "autre";
 export type GiftStatus = "idee" | "achete" | "offert";
 
 /** Une idée de cadeau dans un projet de la catégorie "Cadeaux" — la personne visée (facultative)
@@ -665,7 +664,6 @@ export type GiftItem = {
   project_id: string;
   title: string;
   person_id: string | null;
-  occasion: GiftOccasion;
   status: GiftStatus;
   price_estimate: number | null;
   link: string | null;

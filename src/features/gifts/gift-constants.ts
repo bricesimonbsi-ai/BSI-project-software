@@ -1,10 +1,4 @@
-import type { GiftOccasion, GiftStatus } from "@/types/database";
-
-export const GIFT_OCCASION_LABELS: Record<GiftOccasion, string> = {
-  anniversaire: "🎂 Anniversaire",
-  noel: "🎄 Noël",
-  autre: "✨ Autre",
-};
+import type { GiftStatus } from "@/types/database";
 
 export const GIFT_STATUS_LABELS: Record<GiftStatus, string> = {
   idee: "💡 Idée",

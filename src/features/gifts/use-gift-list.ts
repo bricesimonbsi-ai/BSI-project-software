@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import type { GiftItem, GiftOccasion, GiftStatus } from "@/types/database";
+import type { GiftItem, GiftStatus } from "@/types/database";
 
 function onMutationError(err: unknown) {
   toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
@@ -30,7 +30,6 @@ export function useCreateGiftItem(projectId: string) {
     mutationFn: async (input: {
       title: string;
       person_id: string | null;
-      occasion: GiftOccasion;
       price_estimate: number | null;
       link: string | null;
       notes: string | null;
@@ -60,7 +59,6 @@ export function useUpdateGiftItem(projectId: string) {
       id: string;
       title?: string;
       person_id?: string | null;
-      occasion?: GiftOccasion;
       status?: GiftStatus;
       price_estimate?: number | null;
       link?: string | null;

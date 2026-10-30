@@ -11,7 +11,7 @@ import {
   useUpdateGiftItem,
   useDeleteGiftItem,
 } from "@/features/gifts/use-gift-list";
-import { GIFT_OCCASION_LABELS, GIFT_STATUS_LABELS, nextGiftStatus } from "@/features/gifts/gift-constants";
+import { GIFT_STATUS_LABELS, nextGiftStatus } from "@/features/gifts/gift-constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
 import { toast } from "@/hooks/use-toast";
 import { Trash2, Plus, ExternalLink } from "lucide-react";
-import type { GiftItem, GiftOccasion } from "@/types/database";
+import type { GiftItem } from "@/types/database";
 
 const NONE = "none";
 
@@ -112,7 +112,6 @@ function GiftItems({ projectId }: { projectId: string }) {
 
   const [title, setTitle] = useState("");
   const [personId, setPersonId] = useState(NONE);
-  const [occasion, setOccasion] = useState<GiftOccasion>("anniversaire");
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -120,7 +119,6 @@ function GiftItems({ projectId }: { projectId: string }) {
     await createItem.mutateAsync({
       title: title.trim(),
       person_id: personId === NONE ? null : personId,
-      occasion,
       price_estimate: null,
       link: null,
       notes: null,
@@ -176,18 +174,6 @@ function GiftItems({ projectId }: { projectId: string }) {
                 {(people ?? []).map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={occasion} onValueChange={(v) => setOccasion(v as GiftOccasion)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(GIFT_OCCASION_LABELS) as GiftOccasion[]).map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {GIFT_OCCASION_LABELS[o]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -262,9 +248,6 @@ function GiftItemRow({
         <span className={item.status === "offert" ? "flex-1 truncate text-sm text-muted-foreground line-through" : "flex-1 truncate text-sm"}>
           {item.title}
         </span>
-        <Badge variant="outline" className="flex-shrink-0 font-normal">
-          {GIFT_OCCASION_LABELS[item.occasion]}
-        </Badge>
         <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
