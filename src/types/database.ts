@@ -658,12 +658,15 @@ export type VoyagePersonExpenseSummary = {
 export type GiftStatus = "idee" | "achete" | "offert";
 
 /** Une idée de cadeau dans un projet de la catégorie "Cadeaux" — la personne visée (facultative)
- * vient du répertoire "Personnes" déjà existant, pas d'une table dédiée. */
+ * vient soit du répertoire "Personnes" déjà existant (person_id), soit d'un nom libre
+ * (person_name, pour viser quelqu'un sans l'ajouter au répertoire) — mutuellement exclusifs,
+ * jamais les deux à la fois. */
 export type GiftItem = {
   id: string;
   project_id: string;
   title: string;
   person_id: string | null;
+  person_name: string | null;
   status: GiftStatus;
   price_estimate: number | null;
   link: string | null;

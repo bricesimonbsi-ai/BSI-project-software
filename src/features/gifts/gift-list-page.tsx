@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
 import { EmojiPickerButton } from "@/features/shared/emoji-picker";
 import { Breadcrumb } from "@/features/navigation/breadcrumb";
@@ -27,9 +26,21 @@ import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
 import { toast } from "@/hooks/use-toast";
 import { Trash2, Plus, ExternalLink } from "lucide-react";
-import type { GiftItem } from "@/types/database";
+import type { GiftItem, Person } from "@/types/database";
 
 const NONE = "none";
+const PEOPLE_DATALIST_ID = "gift-people-suggestions";
+
+/** Résout un nom saisi librement vers une personne existante du répertoire (comparaison insensible
+ * à la casse/espaces) si elle correspond exactement, sinon le garde comme nom libre (person_name) —
+ * c'est ce qui permet de viser une idée de cadeau à quelqu'un sans l'ajouter au répertoire
+ * "Personnes". Les deux champs restent mutuellement exclusifs. */
+function resolvePersonInput(raw: string, people: Person[]): { person_id: string | null; person_name: string | null } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { person_id: null, person_name: null };
+  const match = people.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
+  return match ? { person_id: match.id, person_name: null } : { person_id: null, person_name: trimmed };
+}
 
 export function GiftListPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -111,14 +122,14 @@ function GiftItems({ projectId }: { projectId: string }) {
   const deleteItem = useDeleteGiftItem(projectId);
 
   const [title, setTitle] = useState("");
-  const [personId, setPersonId] = useState(NONE);
+  const [personInput, setPersonInput] = useState("");
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
     await createItem.mutateAsync({
       title: title.trim(),
-      person_id: personId === NONE ? null : personId,
+      ...resolvePersonInput(personInput, people ?? []),
       price_estimate: null,
       link: null,
       notes: null,
@@ -129,20 +140,34 @@ function GiftItems({ projectId }: { projectId: string }) {
   const peopleById = useMemo(() => new Map((people ?? []).map((p) => [p.id, p])), [people]);
 
   const groups = useMemo(() => {
-    const byPerson = new Map<string, GiftItem[]>();
+    type GroupEntry = { key: string; person: Person | null; label: string; isNone: boolean; items: GiftItem[] };
+    const byKey = new Map<string, GroupEntry>();
     for (const item of items ?? []) {
-      const key = item.person_id ?? NONE;
-      if (!byPerson.has(key)) byPerson.set(key, []);
-      byPerson.get(key)!.push(item);
+      let key: string;
+      let label: string;
+      let person: Person | null = null;
+      let isNone = false;
+      if (item.person_id) {
+        person = peopleById.get(item.person_id) ?? null;
+        key = `id:${item.person_id}`;
+        label = person?.name ?? "Personne supprimée";
+      } else if (item.person_name) {
+        key = `name:${item.person_name.trim().toLowerCase()}`;
+        label = item.person_name;
+      } else {
+        key = NONE;
+        label = "Sans destinataire";
+        isNone = true;
+      }
+      const entry = byKey.get(key) ?? { key, person, label, isNone, items: [] };
+      entry.items.push(item);
+      byKey.set(key, entry);
     }
-    const entries = [...byPerson.entries()].map(([personKey, groupItems]) => ({
-      person: personKey === NONE ? null : peopleById.get(personKey) ?? null,
-      items: groupItems,
-    }));
+    const entries = [...byKey.values()];
     entries.sort((a, b) => {
-      if (!a.person) return 1;
-      if (!b.person) return -1;
-      return a.person.name.localeCompare(b.person.name);
+      if (a.isNone) return 1;
+      if (b.isNone) return -1;
+      return a.label.localeCompare(b.label);
     });
     return entries;
   }, [items, peopleById]);
@@ -151,6 +176,14 @@ function GiftItems({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Partagée par le champ "Pour qui ?" ci-dessous ET l'édition inline de chaque carte (une
+          seule datalist dans le DOM, référencée par son id, plutôt qu'une par champ). */}
+      <datalist id={PEOPLE_DATALIST_ID}>
+        {(people ?? []).map((p) => (
+          <option key={p.id} value={p.name} />
+        ))}
+      </datalist>
+
       <Card>
         <CardContent className="flex flex-col gap-2 p-4">
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
@@ -165,19 +198,13 @@ function GiftItems({ projectId }: { projectId: string }) {
             </Button>
           </form>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={personId} onValueChange={setPersonId}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Pour qui ?" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>Personne (optionnel)</SelectItem>
-                {(people ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              list={PEOPLE_DATALIST_ID}
+              placeholder="Pour qui ? (nom libre ou personne existante)"
+              value={personInput}
+              onChange={(e) => setPersonInput(e.target.value)}
+              className="w-[260px]"
+            />
           </div>
         </CardContent>
       </Card>
@@ -187,7 +214,7 @@ function GiftItems({ projectId }: { projectId: string }) {
       ) : (
         <div className="space-y-5">
           {groups.map((group) => (
-            <div key={group.person?.id ?? NONE} className="space-y-2">
+            <div key={group.key} className="space-y-2">
               <div className="flex items-center gap-2">
                 {group.person ? (
                   <PersonAvatarBadge
@@ -200,12 +227,13 @@ function GiftItems({ projectId }: { projectId: string }) {
                     className="h-6 w-6 text-xs"
                   />
                 ) : null}
-                <p className="text-xs font-medium text-muted-foreground">{group.person?.name ?? "Sans destinataire"}</p>
+                <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
               </div>
               {group.items.map((item) => (
                 <GiftItemRow
                   key={item.id}
                   item={item}
+                  people={people ?? []}
                   onCycleStatus={() => updateItem.mutate({ id: item.id, status: nextGiftStatus(item.status) })}
                   onUpdate={(patch) => updateItem.mutate({ id: item.id, ...patch })}
                   onDelete={() => deleteItem.mutate(item.id)}
@@ -221,15 +249,19 @@ function GiftItems({ projectId }: { projectId: string }) {
 
 function GiftItemRow({
   item,
+  people,
   onCycleStatus,
   onUpdate,
   onDelete,
 }: {
   item: GiftItem;
+  people: Person[];
   onCycleStatus: () => void;
-  onUpdate: (patch: { price_estimate?: number | null; link?: string | null; notes?: string | null }) => void;
+  onUpdate: (patch: { person_id?: string | null; person_name?: string | null; price_estimate?: number | null; link?: string | null; notes?: string | null }) => void;
   onDelete: () => void;
 }) {
+  const linkedPerson = item.person_id ? people.find((p) => p.id === item.person_id) ?? null : null;
+  const [personText, setPersonText] = useState(linkedPerson?.name ?? item.person_name ?? "");
   const [price, setPrice] = useState(item.price_estimate != null ? String(item.price_estimate) : "");
   const [link, setLink] = useState(item.link ?? "");
   const [notes, setNotes] = useState(item.notes ?? "");
@@ -253,6 +285,14 @@ function GiftItemRow({
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <Input
+          list={PEOPLE_DATALIST_ID}
+          value={personText}
+          onChange={(e) => setPersonText(e.target.value)}
+          onBlur={() => onUpdate(resolvePersonInput(personText, people))}
+          placeholder="Pour qui ? (nom libre ou personne existante)"
+          className="h-8 w-48 flex-shrink-0 text-xs"
+        />
         <Input
           type="number"
           min="0"

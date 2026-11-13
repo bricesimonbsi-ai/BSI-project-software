@@ -30,6 +30,7 @@ export function useCreateGiftItem(projectId: string) {
     mutationFn: async (input: {
       title: string;
       person_id: string | null;
+      person_name: string | null;
       price_estimate: number | null;
       link: string | null;
       notes: string | null;
@@ -59,6 +60,7 @@ export function useUpdateGiftItem(projectId: string) {
       id: string;
       title?: string;
       person_id?: string | null;
+      person_name?: string | null;
       status?: GiftStatus;
       price_estimate?: number | null;
       link?: string | null;
