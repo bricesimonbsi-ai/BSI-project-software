@@ -25,6 +25,7 @@ import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { Trash2, Plus, ExternalLink } from "lucide-react";
 import type { GiftItem, Person } from "@/types/database";
 
@@ -257,10 +258,18 @@ function GiftItemRow({
   item: GiftItem;
   people: Person[];
   onCycleStatus: () => void;
-  onUpdate: (patch: { person_id?: string | null; person_name?: string | null; price_estimate?: number | null; link?: string | null; notes?: string | null }) => void;
+  onUpdate: (patch: {
+    title?: string;
+    person_id?: string | null;
+    person_name?: string | null;
+    price_estimate?: number | null;
+    link?: string | null;
+    notes?: string | null;
+  }) => void;
   onDelete: () => void;
 }) {
   const linkedPerson = item.person_id ? people.find((p) => p.id === item.person_id) ?? null : null;
+  const [title, setTitle] = useState(item.title);
   const [personText, setPersonText] = useState(linkedPerson?.name ?? item.person_name ?? "");
   const [price, setPrice] = useState(item.price_estimate != null ? String(item.price_estimate) : "");
   const [link, setLink] = useState(item.link ?? "");
@@ -277,9 +286,19 @@ function GiftItemRow({
         >
           <Badge variant={item.status === "offert" ? "secondary" : "outline"}>{GIFT_STATUS_LABELS[item.status]}</Badge>
         </button>
-        <span className={item.status === "offert" ? "flex-1 truncate text-sm text-muted-foreground line-through" : "flex-1 truncate text-sm"}>
-          {item.title}
-        </span>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            const trimmed = title.trim();
+            if (trimmed) onUpdate({ title: trimmed });
+            else setTitle(item.title);
+          }}
+          className={cn(
+            "h-7 flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
+            item.status === "offert" && "text-muted-foreground line-through"
+          )}
+        />
         <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
