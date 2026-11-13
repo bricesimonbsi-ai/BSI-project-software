@@ -137,29 +137,24 @@ function GiftItems({ projectId }: { projectId: string }) {
 
   const peopleById = useMemo(() => new Map((people ?? []).map((p) => [p.id, p])), [people]);
 
+  // Regroupe par NOM normalisé (casse/espaces ignorés), pas par origine (personne liée vs nom
+  // libre) : sans ça, une idée visant "Vanessa" via le répertoire et une autre visant "Vanessa"
+  // en texte libre formaient deux groupes "Vanessa" distincts au lieu de fusionner.
   const groups = useMemo(() => {
     type GroupEntry = { key: string; person: Person | null; label: string; isNone: boolean; items: GiftItem[] };
     const byKey = new Map<string, GroupEntry>();
     for (const item of items ?? []) {
-      let key: string;
-      let label: string;
-      let person: Person | null = null;
-      let isNone = false;
-      if (item.person_id) {
-        person = peopleById.get(item.person_id) ?? null;
-        key = `id:${item.person_id}`;
-        label = person?.name ?? "Personne supprimée";
-      } else if (item.person_name) {
-        key = `name:${item.person_name.trim().toLowerCase()}`;
-        label = item.person_name;
+      const linkedPerson = item.person_id ? peopleById.get(item.person_id) ?? null : null;
+      const rawLabel = linkedPerson?.name ?? item.person_name ?? (item.person_id ? "Personne supprimée" : null);
+      const isNone = !rawLabel;
+      const key = isNone ? NONE : rawLabel!.trim().toLowerCase();
+      const entry = byKey.get(key);
+      if (entry) {
+        entry.items.push(item);
+        if (!entry.person && linkedPerson) entry.person = linkedPerson;
       } else {
-        key = NONE;
-        label = "Sans destinataire";
-        isNone = true;
+        byKey.set(key, { key, person: linkedPerson, label: isNone ? "Sans destinataire" : rawLabel!, isNone, items: [item] });
       }
-      const entry = byKey.get(key) ?? { key, person, label, isNone, items: [] };
-      entry.items.push(item);
-      byKey.set(key, entry);
     }
     const entries = [...byKey.values()];
     entries.sort((a, b) => {
@@ -231,7 +226,6 @@ function GiftItems({ projectId }: { projectId: string }) {
                 <GiftItemRow
                   key={item.id}
                   item={item}
-                  people={people ?? []}
                   onCycleStatus={() => updateItem.mutate({ id: item.id, status: nextGiftStatus(item.status) })}
                   onUpdate={(patch) => updateItem.mutate({ id: item.id, ...patch })}
                   onDelete={() => deleteItem.mutate(item.id)}
@@ -247,20 +241,16 @@ function GiftItems({ projectId }: { projectId: string }) {
 
 function GiftItemRow({
   item,
-  people,
   onCycleStatus,
   onUpdate,
   onDelete,
 }: {
   item: GiftItem;
-  people: Person[];
   onCycleStatus: () => void;
-  onUpdate: (patch: { title?: string; person_id?: string | null; person_name?: string | null; link?: string | null }) => void;
+  onUpdate: (patch: { title?: string; link?: string | null }) => void;
   onDelete: () => void;
 }) {
-  const linkedPerson = item.person_id ? people.find((p) => p.id === item.person_id) ?? null : null;
   const [title, setTitle] = useState(item.title);
-  const [personText, setPersonText] = useState(linkedPerson?.name ?? item.person_name ?? "");
   const [link, setLink] = useState(item.link ?? "");
 
   return (
@@ -280,14 +270,6 @@ function GiftItemRow({
           "h-7 min-w-[8rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
           item.status === "offert" && "text-muted-foreground line-through"
         )}
-      />
-      <Input
-        list={PEOPLE_DATALIST_ID}
-        value={personText}
-        onChange={(e) => setPersonText(e.target.value)}
-        onBlur={() => onUpdate(resolvePersonInput(personText, people))}
-        placeholder="Pour qui ?"
-        className="h-7 w-28 flex-shrink-0 border-transparent bg-transparent px-1.5 text-xs text-muted-foreground shadow-none hover:border-border focus-visible:border-border sm:w-36"
       />
       <Input
         value={link}
