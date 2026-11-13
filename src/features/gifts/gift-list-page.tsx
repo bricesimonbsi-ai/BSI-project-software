@@ -15,7 +15,6 @@ import { GIFT_STATUS_LABELS, nextGiftStatus } from "@/features/gifts/gift-consta
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CollaboratorsPanel } from "@/features/projects/collaborators-panel";
@@ -131,9 +130,7 @@ function GiftItems({ projectId }: { projectId: string }) {
     await createItem.mutateAsync({
       title: title.trim(),
       ...resolvePersonInput(personInput, people ?? []),
-      price_estimate: null,
       link: null,
-      notes: null,
     });
     setTitle("");
   }
@@ -258,90 +255,61 @@ function GiftItemRow({
   item: GiftItem;
   people: Person[];
   onCycleStatus: () => void;
-  onUpdate: (patch: {
-    title?: string;
-    person_id?: string | null;
-    person_name?: string | null;
-    price_estimate?: number | null;
-    link?: string | null;
-    notes?: string | null;
-  }) => void;
+  onUpdate: (patch: { title?: string; person_id?: string | null; person_name?: string | null; link?: string | null }) => void;
   onDelete: () => void;
 }) {
   const linkedPerson = item.person_id ? people.find((p) => p.id === item.person_id) ?? null : null;
   const [title, setTitle] = useState(item.title);
   const [personText, setPersonText] = useState(linkedPerson?.name ?? item.person_name ?? "");
-  const [price, setPrice] = useState(item.price_estimate != null ? String(item.price_estimate) : "");
   const [link, setLink] = useState(item.link ?? "");
-  const [notes, setNotes] = useState(item.notes ?? "");
 
   return (
-    <div className="space-y-2 rounded-lg border border-border/60 bg-card px-3 py-2">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onCycleStatus}
-          className="flex-shrink-0 text-xs"
-          title="Cliquer pour changer le statut"
-        >
-          <Badge variant={item.status === "offert" ? "secondary" : "outline"}>{GIFT_STATUS_LABELS[item.status]}</Badge>
-        </button>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => {
-            const trimmed = title.trim();
-            if (trimmed) onUpdate({ title: trimmed });
-            else setTitle(item.title);
-          }}
-          className={cn(
-            "h-7 flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
-            item.status === "offert" && "text-muted-foreground line-through"
-          )}
-        />
-        <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          list={PEOPLE_DATALIST_ID}
-          value={personText}
-          onChange={(e) => setPersonText(e.target.value)}
-          onBlur={() => onUpdate(resolvePersonInput(personText, people))}
-          placeholder="Pour qui ? (nom libre ou personne existante)"
-          className="h-8 w-48 flex-shrink-0 text-xs"
-        />
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          onBlur={() => onUpdate({ price_estimate: price.trim() ? Number(price) : null })}
-          placeholder="Prix estimé"
-          className="h-8 w-28 flex-shrink-0 text-xs"
-        />
-        <Input
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-          onBlur={() => onUpdate({ link: link.trim() || null })}
-          placeholder="Lien (optionnel)"
-          className="h-8 min-w-[8rem] flex-1 text-xs"
-        />
-        {item.link && (
-          <a href={item.link} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-muted-foreground hover:text-foreground">
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-1.5">
+      <button type="button" onClick={onCycleStatus} className="flex-shrink-0 text-xs" title="Cliquer pour changer le statut">
+        <Badge variant={item.status === "offert" ? "secondary" : "outline"}>{GIFT_STATUS_LABELS[item.status]}</Badge>
+      </button>
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={() => {
+          const trimmed = title.trim();
+          if (trimmed) onUpdate({ title: trimmed });
+          else setTitle(item.title);
+        }}
+        className={cn(
+          "h-7 min-w-[8rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
+          item.status === "offert" && "text-muted-foreground line-through"
         )}
-      </div>
-      <Textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={() => onUpdate({ notes: notes.trim() || null })}
-        placeholder="Notes (taille, couleur, où l'acheter...)"
-        className="min-h-[2rem] text-xs"
       />
+      <Input
+        list={PEOPLE_DATALIST_ID}
+        value={personText}
+        onChange={(e) => setPersonText(e.target.value)}
+        onBlur={() => onUpdate(resolvePersonInput(personText, people))}
+        placeholder="Pour qui ?"
+        className="h-7 w-28 flex-shrink-0 border-transparent bg-transparent px-1.5 text-xs text-muted-foreground shadow-none hover:border-border focus-visible:border-border sm:w-36"
+      />
+      <Input
+        value={link}
+        onChange={(e) => setLink(e.target.value)}
+        onBlur={() => onUpdate({ link: link.trim() || null })}
+        placeholder="Lien"
+        className="h-7 w-20 flex-shrink-0 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-border focus-visible:border-border"
+      />
+      {item.link && (
+        <a
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+          title="Ouvrir le lien"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      )}
+      <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onDelete}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

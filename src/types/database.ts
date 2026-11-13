@@ -668,9 +668,7 @@ export type GiftItem = {
   person_id: string | null;
   person_name: string | null;
   status: GiftStatus;
-  price_estimate: number | null;
   link: string | null;
-  notes: string | null;
   position: number;
   created_at: string;
   updated_at: string;

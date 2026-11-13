@@ -31,9 +31,7 @@ export function useCreateGiftItem(projectId: string) {
       title: string;
       person_id: string | null;
       person_name: string | null;
-      price_estimate: number | null;
       link: string | null;
-      notes: string | null;
     }) => {
       const { data: existing } = await supabase
         .from("gift_items")
@@ -62,9 +60,7 @@ export function useUpdateGiftItem(projectId: string) {
       person_id?: string | null;
       person_name?: string | null;
       status?: GiftStatus;
-      price_estimate?: number | null;
       link?: string | null;
-      notes?: string | null;
     }) => {
       const { error } = await supabase.from("gift_items").update(updates).eq("id", id);
       if (error) throw error;
