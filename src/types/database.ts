@@ -657,21 +657,28 @@ export type VoyagePersonExpenseSummary = {
 
 export type GiftStatus = "idee" | "achete" | "offert";
 
-/** Une idée de cadeau dans un projet de la catégorie "Cadeaux" — la personne visée (facultative)
- * vient soit du répertoire "Personnes" déjà existant (person_id), soit d'un nom libre
- * (person_name, pour viser quelqu'un sans l'ajouter au répertoire) — mutuellement exclusifs,
- * jamais les deux à la fois. */
+/** Une idée de cadeau dans un projet de la catégorie "Cadeaux" — les destinataires (zéro, un ou
+ * plusieurs pour un cadeau commun) sont une table à part, gift_item_recipients, pas un champ ici. */
 export type GiftItem = {
   id: string;
   project_id: string;
   title: string;
-  person_id: string | null;
-  person_name: string | null;
   status: GiftStatus;
   link: string | null;
   position: number;
   created_at: string;
   updated_at: string;
+};
+
+/** Un destinataire d'une idée de cadeau — lié au répertoire "Personnes" (person_id) ou en nom
+ * libre (name), jamais les deux à la fois, pour viser quelqu'un sans l'ajouter au répertoire. */
+export type GiftItemRecipient = {
+  id: string;
+  gift_item_id: string;
+  person_id: string | null;
+  name: string | null;
+  position: number;
+  created_at: string;
 };
 
 type Table<Row, InsertShape = Partial<Row>> = {
@@ -717,6 +724,7 @@ export type Database = {
       agenda_event_participants: Table<AgendaEventParticipant>;
       agenda_collaborators: Table<AgendaCollaborator>;
       gift_items: Table<GiftItem>;
+      gift_item_recipients: Table<GiftItemRecipient>;
     };
     Views: {
       voyage_budget_summary: { Row: VoyageBudgetSummary; Relationships: [] };

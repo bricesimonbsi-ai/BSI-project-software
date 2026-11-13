@@ -4,12 +4,14 @@ import { useProject, useUpdateProject, useDeleteProject } from "@/features/proje
 import { ProjectTitleInput } from "@/features/projects/project-title-input";
 import { useThemeStore } from "@/features/theme/theme-store";
 import { usePeople } from "@/features/people/use-people";
-import { PersonAvatarBadge } from "@/features/people/person-avatar";
+import { PersonAvatarBadge, AVATAR_COLOR_CLASSES } from "@/features/people/person-avatar";
 import {
   useGiftItems,
   useCreateGiftItem,
   useUpdateGiftItem,
   useDeleteGiftItem,
+  type GiftItemWithRecipients,
+  type RecipientInput,
 } from "@/features/gifts/use-gift-list";
 import { GIFT_STATUS_LABELS, nextGiftStatus } from "@/features/gifts/gift-constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -23,23 +25,64 @@ import { Breadcrumb } from "@/features/navigation/breadcrumb";
 import { ProjectSwitcher } from "@/features/navigation/project-switcher";
 import { PageHeroCard } from "@/features/shared/page-hero-card";
 import { IconGlow } from "@/features/shared/icon-glow";
+import { TagEditor } from "@/features/shared/tag-editor";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Trash2, Plus, ExternalLink } from "lucide-react";
-import type { GiftItem, Person } from "@/types/database";
+import type { GiftItemRecipient, Person } from "@/types/database";
 
 const NONE = "none";
-const PEOPLE_DATALIST_ID = "gift-people-suggestions";
 
-/** Résout un nom saisi librement vers une personne existante du répertoire (comparaison insensible
- * à la casse/espaces) si elle correspond exactement, sinon le garde comme nom libre (person_name) —
- * c'est ce qui permet de viser une idée de cadeau à quelqu'un sans l'ajouter au répertoire
- * "Personnes". Les deux champs restent mutuellement exclusifs. */
-function resolvePersonInput(raw: string, people: Person[]): { person_id: string | null; person_name: string | null } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { person_id: null, person_name: null };
-  const match = people.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
-  return match ? { person_id: match.id, person_name: null } : { person_id: null, person_name: trimmed };
+/** Index stable (pas vraiment aléatoire mais toujours le même pour un même texte) dans une palette
+ * cyclique — utilisé pour donner un avatar coloré cohérent à un destinataire texte libre, qui n'a
+ * pas de `color_index` enregistré comme une personne du répertoire. */
+function hashToIndex(value: string, mod: number): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  return hash % mod;
+}
+
+/** Résout une liste de noms saisis (tags) vers des destinataires : une personne existante du
+ * répertoire (comparaison insensible à la casse/espaces) si elle correspond exactement, sinon un
+ * nom libre — ce qui permet de viser un cadeau à quelqu'un sans l'ajouter au répertoire
+ * "Personnes", y compris pour un cadeau commun à plusieurs destinataires. */
+function resolveRecipientInputs(names: string[], people: Person[]): RecipientInput[] {
+  return names.map((raw) => {
+    const trimmed = raw.trim();
+    const match = people.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
+    return match ? { person_id: match.id, name: null } : { person_id: null, name: trimmed };
+  });
+}
+
+type RecipientEntry = {
+  key: string;
+  label: string;
+  personId?: string;
+  avatarEmoji?: string | null;
+  avatarConfig?: Person["avatar_config"];
+  colorIndex: number;
+};
+
+/** Donne à chaque destinataire d'un cadeau son identité d'affichage (nom, avatar) — une personne
+ * liée reprend son avatar réel, un nom libre reçoit une couleur stable dérivée de son texte (voir
+ * hashToIndex) de manière à ne pas scintiller d'un rendu à l'autre. */
+function recipientEntry(r: GiftItemRecipient, peopleById: Map<string, Person>): RecipientEntry {
+  if (r.person_id) {
+    const person = peopleById.get(r.person_id);
+    if (person) {
+      return {
+        key: `p:${person.id}`,
+        label: person.name,
+        personId: person.id,
+        avatarEmoji: person.avatar_emoji,
+        avatarConfig: person.avatar_config,
+        colorIndex: person.color_index ?? hashToIndex(person.id, AVATAR_COLOR_CLASSES.length),
+      };
+    }
+    return { key: `p:${r.person_id}`, label: "Personne supprimée", colorIndex: hashToIndex(r.person_id, AVATAR_COLOR_CLASSES.length) };
+  }
+  const name = (r.name ?? "").trim();
+  return { key: `n:${name.toLowerCase()}`, label: name, colorIndex: hashToIndex(name.toLowerCase(), AVATAR_COLOR_CLASSES.length) };
 }
 
 export function GiftListPage() {
@@ -122,39 +165,39 @@ function GiftItems({ projectId }: { projectId: string }) {
   const deleteItem = useDeleteGiftItem(projectId);
 
   const [title, setTitle] = useState("");
-  const [personInput, setPersonInput] = useState("");
+  const [recipientNames, setRecipientNames] = useState<string[]>([]);
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
     await createItem.mutateAsync({
       title: title.trim(),
-      ...resolvePersonInput(personInput, people ?? []),
+      recipients: resolveRecipientInputs(recipientNames, people ?? []),
       link: null,
     });
     setTitle("");
+    setRecipientNames([]);
   }
 
   const peopleById = useMemo(() => new Map((people ?? []).map((p) => [p.id, p])), [people]);
+  const peopleNames = useMemo(() => (people ?? []).map((p) => p.name), [people]);
 
-  // Regroupe par NOM normalisé (casse/espaces ignorés), pas par origine (personne liée vs nom
-  // libre) : sans ça, une idée visant "Vanessa" via le répertoire et une autre visant "Vanessa"
-  // en texte libre formaient deux groupes "Vanessa" distincts au lieu de fusionner.
+  // Regroupe par l'ENSEMBLE des destinataires d'un cadeau (pas un seul nom) : un cadeau commun à
+  // "Papa + Maman" forme son propre groupe, distinct des cadeaux solo pour "Papa" ou pour "Maman".
+  // La clé de chaque destinataire est stable (id de personne, ou nom normalisé en texte libre) pour
+  // qu'une même personne visée via le répertoire ou en texte libre fusionne dans le même groupe.
   const groups = useMemo(() => {
-    type GroupEntry = { key: string; person: Person | null; label: string; isNone: boolean; items: GiftItem[] };
+    type GroupEntry = { key: string; label: string; recipients: RecipientEntry[]; isNone: boolean; items: GiftItemWithRecipients[] };
     const byKey = new Map<string, GroupEntry>();
     for (const item of items ?? []) {
-      const linkedPerson = item.person_id ? peopleById.get(item.person_id) ?? null : null;
-      const rawLabel = linkedPerson?.name ?? item.person_name ?? (item.person_id ? "Personne supprimée" : null);
-      const isNone = !rawLabel;
-      const key = isNone ? NONE : rawLabel!.trim().toLowerCase();
+      const entries = item.recipients.map((r) => recipientEntry(r, peopleById));
+      const sorted = [...entries].sort((a, b) => a.label.localeCompare(b.label));
+      const isNone = sorted.length === 0;
+      const key = isNone ? NONE : sorted.map((e) => e.key).join("|");
+      const label = isNone ? "Sans destinataire" : sorted.map((e) => e.label).join(", ");
       const entry = byKey.get(key);
-      if (entry) {
-        entry.items.push(item);
-        if (!entry.person && linkedPerson) entry.person = linkedPerson;
-      } else {
-        byKey.set(key, { key, person: linkedPerson, label: isNone ? "Sans destinataire" : rawLabel!, isNone, items: [item] });
-      }
+      if (entry) entry.items.push(item);
+      else byKey.set(key, { key, label, recipients: sorted, isNone, items: [item] });
     }
     const entries = [...byKey.values()];
     entries.sort((a, b) => {
@@ -169,14 +212,6 @@ function GiftItems({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Partagée par le champ "Pour qui ?" ci-dessous ET l'édition inline de chaque carte (une
-          seule datalist dans le DOM, référencée par son id, plutôt qu'une par champ). */}
-      <datalist id={PEOPLE_DATALIST_ID}>
-        {(people ?? []).map((p) => (
-          <option key={p.id} value={p.name} />
-        ))}
-      </datalist>
-
       <Card>
         <CardContent className="flex flex-col gap-2 p-4">
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
@@ -190,13 +225,16 @@ function GiftItems({ projectId }: { projectId: string }) {
               <Plus className="mr-1.5 h-4 w-4" /> Ajouter
             </Button>
           </form>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              list={PEOPLE_DATALIST_ID}
-              placeholder="Pour qui ? (nom libre ou personne existante)"
-              value={personInput}
-              onChange={(e) => setPersonInput(e.target.value)}
-              className="w-[260px]"
+          <div>
+            <p className="text-xs text-muted-foreground">
+              Pour qui ? (nom libre ou personne existante — plusieurs pour un cadeau commun)
+            </p>
+            <TagEditor
+              tags={recipientNames}
+              suggestions={peopleNames}
+              addLabel="Destinataire"
+              placeholder="Nom"
+              onChange={setRecipientNames}
             />
           </div>
         </CardContent>
@@ -209,17 +247,22 @@ function GiftItems({ projectId }: { projectId: string }) {
           {groups.map((group) => (
             <div key={group.key} className="space-y-2">
               <div className="flex items-center gap-2">
-                {group.person ? (
-                  <PersonAvatarBadge
-                    name={group.person.name}
-                    avatarEmoji={group.person.avatar_emoji}
-                    avatarConfig={group.person.avatar_config}
-                    personId={group.person.id}
-                    colorIndex={group.person.color_index}
-                    index={0}
-                    className="h-6 w-6 text-xs"
-                  />
-                ) : null}
+                {group.recipients.length > 0 && (
+                  <div className="flex -space-x-1.5">
+                    {group.recipients.map((r) => (
+                      <PersonAvatarBadge
+                        key={r.key}
+                        name={r.label}
+                        avatarEmoji={r.avatarEmoji}
+                        avatarConfig={r.avatarConfig}
+                        personId={r.personId}
+                        colorIndex={r.colorIndex}
+                        index={0}
+                        className="h-6 w-6 border-2 border-background text-xs"
+                      />
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
               </div>
               {group.items.map((item) => (
@@ -245,7 +288,7 @@ function GiftItemRow({
   onUpdate,
   onDelete,
 }: {
-  item: GiftItem;
+  item: GiftItemWithRecipients;
   onCycleStatus: () => void;
   onUpdate: (patch: { title?: string; link?: string | null }) => void;
   onDelete: () => void;
