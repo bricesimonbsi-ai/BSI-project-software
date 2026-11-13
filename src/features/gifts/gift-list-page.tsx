@@ -310,31 +310,36 @@ function GiftItemRow({
           else setTitle(item.title);
         }}
         className={cn(
-          "h-7 min-w-[8rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
+          "h-7 min-w-[5rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
           item.status === "offert" && "text-muted-foreground line-through"
         )}
       />
-      <Input
-        value={link}
-        onChange={(e) => setLink(e.target.value)}
-        onBlur={() => onUpdate({ link: link.trim() || null })}
-        placeholder="Lien"
-        className="h-7 w-20 flex-shrink-0 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-border focus-visible:border-border"
-      />
-      {item.link && (
-        <a
-          href={item.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-shrink-0 text-muted-foreground hover:text-foreground"
-          title="Ouvrir le lien"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      )}
-      <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onDelete}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      {/* Groupés ensemble (pas des enfants flex séparés du conteneur principal) pour que le bouton
+          de suppression ne se retrouve jamais seul sur sa propre ligne quand ça wrappe — il wrappe
+          alors avec le champ lien, jamais isolé. */}
+      <div className="flex flex-shrink-0 items-center gap-1">
+        <Input
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onBlur={() => onUpdate({ link: link.trim() || null })}
+          placeholder="Lien"
+          className="h-7 w-20 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-border focus-visible:border-border"
+        />
+        {item.link && (
+          <a
+            href={item.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+            title="Ouvrir le lien"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+        <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }
