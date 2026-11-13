@@ -294,52 +294,70 @@ function GiftItemRow({
   onDelete: () => void;
 }) {
   const [title, setTitle] = useState(item.title);
-  const [link, setLink] = useState(item.link ?? "");
+  const [description, setDescription] = useState(item.link ?? "");
+  const [addingDescription, setAddingDescription] = useState(false);
+  const trimmedDescription = description.trim();
+  const isLink = /^https?:\/\//i.test(trimmedDescription);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-1.5">
-      <button type="button" onClick={onCycleStatus} className="flex-shrink-0 text-xs" title="Cliquer pour changer le statut">
-        <Badge variant={item.status === "offert" ? "secondary" : "outline"}>{GIFT_STATUS_LABELS[item.status]}</Badge>
-      </button>
-      <Input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => {
-          const trimmed = title.trim();
-          if (trimmed) onUpdate({ title: trimmed });
-          else setTitle(item.title);
-        }}
-        className={cn(
-          "h-7 min-w-[5rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
-          item.status === "offert" && "text-muted-foreground line-through"
-        )}
-      />
-      {/* Groupés ensemble (pas des enfants flex séparés du conteneur principal) pour que le bouton
-          de suppression ne se retrouve jamais seul sur sa propre ligne quand ça wrappe — il wrappe
-          alors avec le champ lien, jamais isolé. */}
-      <div className="flex flex-shrink-0 items-center gap-1">
+    <div className="space-y-1 rounded-lg border border-border/60 bg-card px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onCycleStatus} className="flex-shrink-0 text-xs" title="Cliquer pour changer le statut">
+          <Badge variant={item.status === "offert" ? "secondary" : "outline"}>{GIFT_STATUS_LABELS[item.status]}</Badge>
+        </button>
         <Input
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-          onBlur={() => onUpdate({ link: link.trim() || null })}
-          placeholder="Lien"
-          className="h-7 w-20 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-border focus-visible:border-border"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            const trimmed = title.trim();
+            if (trimmed) onUpdate({ title: trimmed });
+            else setTitle(item.title);
+          }}
+          className={cn(
+            "h-7 min-w-[5rem] flex-1 border-transparent bg-transparent px-1.5 text-sm shadow-none hover:border-border focus-visible:border-border",
+            item.status === "offert" && "text-muted-foreground line-through"
+          )}
         />
-        {item.link && (
-          <a
-            href={item.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 text-muted-foreground hover:text-foreground"
-            title="Ouvrir le lien"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
         <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+      {/* Sur sa propre ligne, pleine largeur, pour que la description (ou le lien qu'elle contient)
+          reste entièrement lisible au lieu d'être compressée dans un petit champ en bout de ligne. */}
+      {addingDescription || trimmedDescription ? (
+        <div className="flex items-center gap-1.5 pl-1">
+          <Input
+            autoFocus={addingDescription && !trimmedDescription}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => {
+              onUpdate({ link: description.trim() || null });
+              setAddingDescription(false);
+            }}
+            placeholder="Description ou lien (ex. taille, couleur, URL...)"
+            className="h-7 flex-1 border-transparent bg-transparent px-1.5 text-xs text-muted-foreground shadow-none hover:border-border focus-visible:border-border"
+          />
+          {isLink && (
+            <a
+              href={trimmedDescription}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Ouvrir le lien"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingDescription(true)}
+          className="pl-1 text-[0.65rem] text-muted-foreground hover:text-foreground"
+        >
+          + Ajouter une description
+        </button>
+      )}
     </div>
   );
 }
